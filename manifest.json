@@ -1,7 +1,7 @@
 {
   "name": "SSCo Engineers Report",
   "short_name": "Engineers Report",
-  "start_url": "EngineersReport2.html",
+  "start_url": "/ssco-engineers-report/",
   "display": "standalone",
   "background_color": "#0f0f10",
   "theme_color": "#0f0f10",
