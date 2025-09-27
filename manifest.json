@@ -1,0 +1,20 @@
+{
+  "name": "SSCo Engineers Report",
+  "short_name": "Engineers Report",
+  "start_url": "EngineersReport2.html",
+  "display": "standalone",
+  "background_color": "#0f0f10",
+  "theme_color": "#0f0f10",
+  "icons": [
+    {
+      "src": "bottle.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "maintenance.jpg",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
