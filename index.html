@@ -201,7 +201,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         </div>
         <div>
           <label>Project number</label>
-          <input id="project" type="text" placeholder="Project number">
+          <input id="project" type="text" placeholder="PJ number">
         </div>
       </div>
     </div>
@@ -591,7 +591,7 @@ function buildPdf(){
     .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
   `;
 
-  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report</title><style>'+printCss+'</style></head><body>';
+  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report - '+ projectNo +' - + formattedDate</title><style>'+printCss+'</style></head><body>';
 
   // Banner only on first page
   if(MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0){
@@ -778,7 +778,7 @@ document.getElementById("sendEmail").addEventListener("click", e => {
   const custName = document.getElementById("custName").value.trim() || "Customer";
   const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
 
-  let body = `Hi ${custName},\n\nPlease find your engineers report attached.\n\n----------------------------------------\n`;
+  let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
 
   const report = document.getElementById("report").value.trim();
   if (report) {
@@ -792,7 +792,7 @@ document.getElementById("sendEmail").addEventListener("click", e => {
 
   const partsReq = document.getElementById("partsReq").value.trim();
   if (partsReq) {
-    body += `PARTS REQUIRED:\n${partsReq}\n\n----------------------------------------\n`;
+    body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
   }
 
   body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
