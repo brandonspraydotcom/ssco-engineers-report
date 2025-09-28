@@ -7,6 +7,8 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f0f10">
 <script>
+let lastGeneratedPdf = null; // store the latest PDF as a Blob
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(console.error);
   }
@@ -330,6 +332,9 @@ $('beforeInput').addEventListener('change', e=> previewFiles(e.target,'beforeThu
 $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumbs'));
 
 /* ---------- Prepare clone for PDF (light theme) ---------- */
+<script>
+let lastGeneratedPdf = null; // store the latest PDF as a Blob
+
 function prepareForPdf(clone, sigData){
   // strip all <label> to avoid duplication
   clone.querySelectorAll('label').forEach(el=>el.remove());
@@ -423,7 +428,7 @@ function prepareForPdf(clone, sigData){
   const sigWraps = clone.querySelectorAll('.sigWrap');
   if(sigWraps[0]) sigWraps[0].style.marginBottom = '20px';
 
-  // ✅ NEW: Replace sig1Name and sig2Name inputs with plain text
+  // ✅ Replace sig1Name and sig2Name inputs with plain text
   const sig1Name = document.getElementById("sig1Name").value || "";
   const sig2Name = document.getElementById("sig2Name").value || "";
 
@@ -480,6 +485,45 @@ function prepareForPdf(clone, sigData){
 
   return clone;
 }
+
+// -------- SAVE PDF --------
+document.getElementById("savePdf").addEventListener("click", function () {
+  const sig1 = $('sig1').toDataURL();
+  const sig2 = $('sig2').toDataURL();
+  const sigData = [sig1, sig2];
+
+  const clone = $('formContainer').cloneNode(true);
+  const prepared = prepareForPdf(clone, sigData);
+
+  const pdf = new jspdf.jsPDF({ unit: "pt", format: "a4" });
+  pdf.html(prepared, {
+    callback: function (doc) {
+      lastGeneratedPdf = doc.output("blob"); // store for email
+      const blobUrl = URL.createObjectURL(lastGeneratedPdf);
+      window.open(blobUrl, "_blank"); // open in new tab, keep form intact
+    },
+    x: 20,
+    y: 20
+  });
+});
+
+// -------- SEND EMAIL --------
+document.getElementById("sendEmail").addEventListener("click", function () {
+  if (!lastGeneratedPdf) {
+    alert("Please save the PDF first before sending email.");
+    return;
+  }
+
+  const email = document.getElementById("custEmail").value || "";
+  const subject = "SSCo Engineers Report";
+  const body = "Please find attached the engineer's report.";
+
+  // ⚠️ Mailto cannot attach PDFs, just opens draft
+  window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  // 🔹 If you have a backend, you can send `lastGeneratedPdf` via fetch() here
+});
+</script>
 
 
 /* ---------- Build printable doc (light) and open it ---------- */
