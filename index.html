@@ -110,17 +110,33 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 /* Main report date */
 #date {
+  flex: 0 0 auto;        /* stop flexbox from stretching */
   width: 140px !important;   /* narrower, fits neatly beside engineer name */
 }
 
 /* Time Records date inside time slots */
 .daySlot input[type="date"] {
+  flex: 0 0 auto;        /* stop flexbox from stretching */
   width: 140px !important;   /* same width for consistency */
 }
 
 /* Time fields (Departed, Arrived, etc.) */
 .daySlot input[type="time"] {
+  flex: 0 0 auto;        /* stop flexbox from stretching */
   width: 80px !important;   /* compact but tappable on iPhone */
+}
+
+/* --- Mobile Overrides (iPhone / iPad) --- */
+@media (max-width: 800px) {
+  #date {
+    width: 120px !important;
+  }
+  .daySlot input[type="date"] {
+    width: 120px !important;
+  }
+  .daySlot input[type="time"] {
+    width: 70px !important;
+  }
 }
 
 </style>
