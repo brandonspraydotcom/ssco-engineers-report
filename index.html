@@ -601,6 +601,14 @@ function buildPdf(){
   doc += '<div style="text-align:center;font-weight:700;margin-bottom:6px">'+sscoTitle+'</div>';
   doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
   doc += prepared.innerHTML;
+  
+  // Certification line here
+  doc += `
+    <div style="margin:12px 0;font-size:13px;">
+      Please sign to certify that this report and time record is accurate
+      and the work carried out has been completed/progressed to your satisfaction.
+    </div>
+  `;
 
   // photos section
   function photosHtml(arr,label){
