@@ -104,9 +104,25 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
   .sigWrap {
     width: 100% !important;  
-  } 
+  }  
 
 }
+
+/* Main report date */
+#date {
+  width: 180px;   /* narrower, fits neatly beside engineer name */
+}
+
+/* Time Records date inside time slots */
+.daySlot input[type="date"] {
+  width: 180px;   /* same width for consistency */
+}
+
+/* Time fields (Departed, Arrived, etc.) */
+.daySlot input[type="time"] {
+  width: 120px;   /* compact but tappable on iPhone */
+}
+
 </style>
 </head>
 <body>
