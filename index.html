@@ -40,7 +40,7 @@
   .photoWrap{position:relative;display:inline-block}
   .thumb{width:120px;height:88px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
   .removePhoto{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:24px;text-align:center}
-  canvas.signature{width:100%;height:160px;border-radius:8px;background:#fff;border:1px solid #000;touch-action:none}
+  canvas.signature{width:100%;height:200px;border-radius:8px;background:#fff;border:1px solid #000;touch-action:none}
   .sigRow{display:flex;gap:12px}
   .sigWrap{flex:1}
   .timeBox{background:#0f1011;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.06)}
@@ -193,26 +193,26 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <div class="card">
       <label>Signatures</label>
-      <div class="sigRow">
-        <div class="sigWrap">
-          <div class="small">Engineer signature</div>
-          <canvas id="sig1" class="signature"></canvas>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="btn ghost" data-clear="sig1" type="button">Clear</button>
-            <input id="sig1Name" placeholder="Engineer full name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#101010;color:#eee">
-          </div>
-        </div>
 
-        <div class="sigWrap">
-          <div class="small">Point of contact signature</div>
-          <canvas id="sig2" class="signature"></canvas>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button class="btn ghost" data-clear="sig2" type="button">Clear</button>
-            <input id="sig2Name" placeholder="Point of contact full name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#101010;color:#eee">
-          </div>
+      <div class="sigWrap" style="margin-bottom:20px">
+        <div class="small">Engineer signature</div>
+        <canvas id="sig1" class="signature"></canvas>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn ghost" data-clear="sig1">Clear</button>
+          <input id="sig1Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
+        </div>
+      </div>
+
+      <div class="sigWrap">
+        <div class="small">Customer signature</div>
+        <canvas id="sig2" class="signature"></canvas>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn ghost" data-clear="sig2">Clear</button>
+          <input id="sig2Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
         </div>
       </div>
     </div>
+
 
     <footer class="appFooter">
       <button id="savePdf" class="btn" type="button" style="flex:1">Save PDF</button>
@@ -423,7 +423,7 @@ function prepareForPdf(clone, sigData){
   const sigWraps = clone.querySelectorAll('.sigWrap');
   if(sigWraps[0]) sigWraps[0].style.marginBottom = '20px';
 
-  // ✅ NEW: Replace sig1Name and sig2Name inputs with plain text
+  // NEW: Replace sig1Name and sig2Name inputs with plain text
   const sig1Name = document.getElementById("sig1Name").value || "";
   const sig2Name = document.getElementById("sig2Name").value || "";
 
