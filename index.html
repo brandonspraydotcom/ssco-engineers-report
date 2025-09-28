@@ -603,6 +603,137 @@ $('sendEmail').addEventListener('click', e => {
   window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });
 
+/* ---------- Auto-Save + Restore Form Data ---------- */
+
+// Save simple fields
+function saveField(el) {
+  localStorage.setItem(el.id, el.value);
+}
+
+// Restore simple fields
+function restoreFields() {
+  document.querySelectorAll("input, textarea, select").forEach(el => {
+    if (el.id && localStorage.getItem(el.id)) {
+      el.value = localStorage.getItem(el.id);
+    }
+  });
+}
+
+// Save signatures
+function saveSignature(id) {
+  const c = document.getElementById(id);
+  localStorage.setItem("sig_" + id, c.toDataURL());
+}
+
+function restoreSignatures() {
+  ["sig1", "sig2"].forEach(id => {
+    const data = localStorage.getItem("sig_" + id);
+    if (data) {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.getElementById(id);
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+      };
+      img.src = data;
+    }
+  });
+}
+
+// Save photos
+function savePhotos() {
+  ["beforeThumbs", "afterThumbs"].forEach(listId => {
+    const imgs = Array.from(document.querySelectorAll(`#${listId} img`))
+      .map(img => img.src);
+    localStorage.setItem(listId, JSON.stringify(imgs));
+  });
+}
+
+function restorePhotos() {
+  ["beforeThumbs", "afterThumbs"].forEach(listId => {
+    const data = localStorage.getItem(listId);
+    if (data) {
+      const imgs = JSON.parse(data);
+      const c = document.getElementById(listId);
+      imgs.forEach(src => {
+        const wrap = document.createElement("div");
+        wrap.className = "photoWrap";
+        const img = document.createElement("img");
+        img.className = "thumb";
+        img.src = src;
+        const btn = document.createElement("button");
+        btn.className = "removePhoto";
+        btn.textContent = "✖";
+        btn.onclick = () => { wrap.remove(); savePhotos(); };
+        wrap.appendChild(img);
+        wrap.appendChild(btn);
+        c.appendChild(wrap);
+      });
+    }
+  });
+}
+
+// Save on every input change
+document.querySelectorAll("input, textarea, select").forEach(el => {
+  el.addEventListener("input", () => {
+    if (el.type !== "file") saveField(el);
+  });
+});
+
+// Save signatures when changed
+["sig1", "sig2"].forEach(id => {
+  const c = document.getElementById(id);
+  c.addEventListener("mouseup", () => saveSignature(id));
+  c.addEventListener("touchend", () => saveSignature(id));
+});
+
+// Save photos whenever list changes
+document.getElementById("beforeInput").addEventListener("change", savePhotos);
+document.getElementById("afterInput").addEventListener("change", savePhotos);
+
+// Restore everything on load
+window.addEventListener("DOMContentLoaded", () => {
+  restoreFields();
+  restoreSignatures();
+  restorePhotos();
+});
+
+// Send Email (with clear after)
+document.getElementById("sendEmail").addEventListener("click", e => {
+  e.preventDefault();
+
+  const to = document.getElementById("custEmail").value || "";
+  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
+
+  const custName = document.getElementById("custName").value.trim() || "Customer";
+  const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
+
+  let body = `Hi ${custName},\n\nPlease find your engineers report attached.\n\n----------------------------------------\n`;
+
+  const report = document.getElementById("report").value.trim();
+  if (report) {
+    body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
+  }
+
+  const partsUsed = document.getElementById("partsUsed").value.trim();
+  if (partsUsed) {
+    body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
+  }
+
+  const partsReq = document.getElementById("partsReq").value.trim();
+  if (partsReq) {
+    body += `PARTS REQUIRED:\n${partsReq}\n\n----------------------------------------\n`;
+  }
+
+  body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
+
+  // Launch email client
+  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  // Clear saved data after sending
+  localStorage.clear();
+});
+
 </script>
 </body>
 </html>
