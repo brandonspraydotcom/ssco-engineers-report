@@ -53,9 +53,16 @@
 
 /* Mobile overrides */
 @media (max-width: 800px) {
-  #date { width: 120px !important; }
-  .daySlot input[type="date"] { width: 120px !important; }
-  .daySlot input[type="time"] { width: 70px !important; }
+  #date,
+  .daySlot input[type="date"],
+  .daySlot input[type="time"] {
+    flex: 0 0 auto !important;
+    width: 120px !important;  /* main date & time record date */
+  }
+
+  .daySlot input[type="time"] {
+    width: 70px !important;   /* time inputs */
+  }
 }
 
   .btn{display:inline-block;padding:12px 16px;border-radius:10px;background:var(--primary);color:white;text-align:center;font-weight:700;cursor:pointer;border:none;font-size:16px}
