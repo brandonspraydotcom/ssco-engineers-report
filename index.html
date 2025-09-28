@@ -47,7 +47,7 @@
 }
 
 /* Desktop defaults */
-#date { flex:1;max-width:350px }
+#date { flex:1;max-width:345px }
 .daySlot input[type="date"] { flex:1;max-width:600px }
 .daySlot input[type="time"] { flex:1;max-width:140px }
 
@@ -208,9 +208,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <div class="card">
       <label>Customer</label>
-      <input id="custName" type="text" placeholder="Point of Contact Name">
+      <input id="custName" type="text" placeholder="Site Contact Name">
       <div style="height:8px"></div>
-      <input id="custEmail" type="text" placeholder="Point of Contact Email Address">
+      <input id="custEmail" type="text" placeholder="Site Contact Email Address">
       <div style="height:8px"></div>
       <input id="custCompany" type="text" placeholder="Company">
       <div class="row" style="margin-top:10px">
@@ -262,9 +262,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <div class="card">
       <label>Signatures</label>
+	  <label>Please sign to certify that this report and time record is accurate and the work carried out has been completed/progressed to your satisfaction.</label>
 
       <div class="sigWrap" style="margin-bottom:20px">
-        <div class="small">Engineer signature</div>
+        <div class="small">Engineer Signature</div>
         <canvas id="sig1" class="signature"></canvas>
         <div style="display:flex;gap:8px;margin-top:6px">
           <button class="btn ghost" data-clear="sig1">Clear</button>
@@ -273,7 +274,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       </div>
 
       <div class="sigWrap">
-        <div class="small">Customer signature</div>
+        <div class="small">Site Contact Signature</div>
         <canvas id="sig2" class="signature"></canvas>
         <div style="display:flex;gap:8px;margin-top:6px">
           <button class="btn ghost" data-clear="sig2">Clear</button>
