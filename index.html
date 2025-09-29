@@ -31,41 +31,6 @@
   textarea{resize:none;line-height:1.55;overflow:hidden;min-height:56px}
   .row{display:flex;gap:12px;flex-wrap:wrap}
   .row > *{flex:1;min-width:140px}
-  /* Only let text inputs, selects, and textareas flex */
-.row > input[type="text"],
-.row > select,
-.row > textarea {
-  flex: 1;
-  min-width: 140px;
-}
-
-/* Prevent date and time inputs from stretching */
-#date,
-.daySlot input[type="date"],
-.daySlot input[type="time"] {
-  flex: 0 0 auto;   /* respect their width */
-}
-
-/* Desktop defaults */
-#date { flex:1;max-width:345px }
-.daySlot input[type="date"] { flex:1;max-width:600px }
-.daySlot input[type="time"] { flex:1;max-width:140px }
-
-/* Mobile overrides */
-@media (max-width: 800px) {
-  #date,
-  .daySlot input[type="date"],
-  .daySlot input[type="time"] {
-    flex: 0 0 auto !important;
-    width: 180px !important;  /* main date & time record date */
-  }
-
-  .daySlot input[type="time"] {
-    width: 180px !important;   /* time inputs */
-	height: 40px !important;
-  }
-}
-
   .btn{display:inline-block;padding:12px 16px;border-radius:10px;background:var(--primary);color:white;text-align:center;font-weight:700;cursor:pointer;border:none;font-size:16px}
   .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.12)}
   .btn.green{background:var(--accent)}
@@ -75,7 +40,7 @@
   .photoWrap{position:relative;display:inline-block}
   .thumb{width:120px;height:88px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
   .removePhoto{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:24px;text-align:center}
-  canvas.signature{width:100%;height:200px;border-radius:8px;background:#fff;border:1px solid #000;touch-action:none}
+  canvas.signature{width:100%;height:160px;border-radius:8px;background:#fff;border:1px solid #000;touch-action:none}
   .sigRow{display:flex;gap:12px}
   .sigWrap{flex:1}
   .timeBox{background:#0f1011;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.06)}
@@ -139,43 +104,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
   .sigWrap {
     width: 100% !important;  
-  }  
+  } 
 
 }
-
-/* Main report date */
-#date {
-  flex: 0 0 auto;        /* stop flexbox from stretching */
-  width: 110px !important;   /* narrower, fits neatly beside engineer name */
-}
-
-/* Time Records date inside time slots */
-.daySlot input[type="date"] {
-  flex: 0 0 auto;        /* stop flexbox from stretching */
-  width: 180px !important;   /* same width for consistency */
-}
-
-/* Time fields (Departed, Arrived, etc.) */
-.daySlot input[type="time"] {
-  flex: 0 0 auto;        /* stop flexbox from stretching */
-  width: 130px !important;   /* compact but tappable on iPhone */
-}
-
-/* --- Mobile Overrides (iPhone / iPad) --- */
-@media (max-width: 800px) {
-  #date {
-    width: 100px !important;
-  }
-  .daySlot input[type="date"] {
-    width: 180px !important;
-	height: 50px !important;
-  }
-  .daySlot input[type="time"] {
-    width: 130px !important;
-	height: 80px !important;
-  }
-}
-
 </style>
 </head>
 <body>
@@ -201,23 +132,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         </div>
         <div>
           <label>Project number</label>
-          <input id="project" type="text" placeholder="PJ number">
+          <input id="project" type="text" placeholder="Project number">
         </div>
       </div>
-    </div>
-	
-	<div class="card">
-      <label>Sales Engineer</label>
-      <input id="salesName" type="text" placeholder="Sales engineer name">
-      <div style="height:8px"></div>
-      <input id="salesEmail" type="text" placeholder="Sales engineer email address">
     </div>
 
     <div class="card">
       <label>Customer</label>
-      <input id="custName" type="text" placeholder="Site Contact Name">
+      <input id="custName" type="text" placeholder="Point of Contact Name">
       <div style="height:8px"></div>
-      <input id="custEmail" type="text" placeholder="Site Contact Email Address">
+      <input id="custEmail" type="text" placeholder="Point of Contact Email Address">
       <div style="height:8px"></div>
       <input id="custCompany" type="text" placeholder="Company">
       <div class="row" style="margin-top:10px">
@@ -253,14 +177,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <div class="card">
       <label>Photos — Before</label>
-      <input id="beforeInput" type="file" accept="image/*" multiple style="display:none">
+      <input id="beforeInput" type="file" accept="image/*" capture="environment" multiple style="display:none">
       <div class="controls">
         <label class="uploadBtn" for="beforeInput">Upload / Camera</label>
         <div id="beforeThumbs" class="photos"></div>
       </div>
 
       <label style="margin-top:10px">Photos — After</label>
-      <input id="afterInput" type="file" accept="image/*" multiple style="display:none">
+      <input id="afterInput" type="file" accept="image/*" capture="environment" multiple style="display:none">
       <div class="controls">
         <label class="uploadBtn" for="afterInput">Upload / Camera</label>
         <div id="afterThumbs" class="photos"></div>
@@ -269,27 +193,26 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <div class="card">
       <label>Signatures</label>
-	  <label>Please sign to certify that this report and time record is accurate and the work carried out has been completed/progressed to your satisfaction.</label>
-
-      <div class="sigWrap" style="margin-bottom:20px">
-        <div class="small">Engineer Signature</div>
-        <canvas id="sig1" class="signature"></canvas>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn ghost" data-clear="sig1">Clear</button>
-          <input id="sig1Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
+      <div class="sigRow">
+        <div class="sigWrap">
+          <div class="small">Engineer signature</div>
+          <canvas id="sig1" class="signature"></canvas>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn ghost" data-clear="sig1" type="button">Clear</button>
+            <input id="sig1Name" placeholder="Engineer full name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#101010;color:#eee">
+          </div>
         </div>
-      </div>
 
-      <div class="sigWrap">
-        <div class="small">Site Contact Signature</div>
-        <canvas id="sig2" class="signature"></canvas>
-        <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn ghost" data-clear="sig2">Clear</button>
-          <input id="sig2Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
+        <div class="sigWrap">
+          <div class="small">Point of contact signature</div>
+          <canvas id="sig2" class="signature"></canvas>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn ghost" data-clear="sig2" type="button">Clear</button>
+            <input id="sig2Name" placeholder="Point of contact full name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:#101010;color:#eee">
+          </div>
         </div>
       </div>
     </div>
-
 
     <footer class="appFooter">
       <button id="savePdf" class="btn" type="button" style="flex:1">Save PDF</button>
@@ -442,8 +365,6 @@ function prepareForPdf(clone, sigData){
   const contact = $('custName').value || '';
   const email = $('custEmail').value || '';
   const company = $('custCompany').value || '';
-  const sales = $('salesName').value || '';
-  const salesemail = $('salesEmail').value || '';
 
   const addrFields = [
     $('addr1').value, $('addr2').value,
@@ -462,12 +383,10 @@ function prepareForPdf(clone, sigData){
     { id:'engineer', label:'SSCo Engineer', val:engineer },
     { id:'date', label:'Date Entered', val:date },
     { id:'visit', label:'Visit Type', val:visit },
-    { id:'project', label:'Project Number', val:project },
+    { id:'project', label:'Project number', val:project },
     { id:'custName', label:'Point of Contact', val:contact },
-    { id:'custEmail', label:'Point of Contact Email', val:email },
-    { id:'custCompany', label:'Company', val:company },
-	{ id:'salesName', label:'Sales Engineers', val:sales },
-    { id:'salesEmail', label:'Sales Engineer Email', val:salesemail }
+    { id:'custEmail', label:'Customer Email', val:email },
+    { id:'custCompany', label:'Company', val:company }
   ];
   
   replacements.forEach(r=>{
@@ -504,7 +423,7 @@ function prepareForPdf(clone, sigData){
   const sigWraps = clone.querySelectorAll('.sigWrap');
   if(sigWraps[0]) sigWraps[0].style.marginBottom = '20px';
 
-  // NEW: Replace sig1Name and sig2Name inputs with plain text
+  // ✅ NEW: Replace sig1Name and sig2Name inputs with plain text
   const sig1Name = document.getElementById("sig1Name").value || "";
   const sig2Name = document.getElementById("sig2Name").value || "";
 
@@ -602,7 +521,7 @@ function buildPdf(){
     .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
   `;
 
-  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report - '+ projectNo +' - '+ formattedDate+'</title><style>'+printCss+'</style></head><body>';
+  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report</title><style>'+printCss+'</style></head><body>';
 
   // Banner only on first page
   if(MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0){
@@ -612,14 +531,6 @@ function buildPdf(){
   doc += '<div style="text-align:center;font-weight:700;margin-bottom:6px">'+sscoTitle+'</div>';
   doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
   doc += prepared.innerHTML;
-  
-  // Certification line here
-  doc += `
-    <div style="margin:12px 0;font-size:13px;">
-      Please sign to certify that this report and time record is accurate
-      and the work carried out has been completed/progressed to your satisfaction.
-    </div>
-  `;
 
   // photos section
   function photosHtml(arr,label){
@@ -653,17 +564,14 @@ function buildPdf(){
 
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
-// $('sendEmail').addEventListener('click', e => {
-  // e.preventDefault();
+$('sendEmail').addEventListener('click', e => {
+  e.preventDefault();
 
-  // const to = document.getElementById("custEmail").value || "";
-  // const cc = document.getElementById("salesEmail").value || "";  // from input field
-  // const bcc = "info.uk@spray.com"; // fixed hardcoded address
-  // const subject = `Engineers Report — ${$('project').value || ''} — ${$('date').value || ''}`;
+  const to = $('custEmail').value || '';
+  const subject = `Engineers Report — ${$('project').value || ''} — ${$('date').value || ''}`;
 
-  // const custName = $('custName').value.trim() || 'Customer';
-  // const engineer = $('engineer').value.trim() || 'Your SSCo Engineer';
-  // const salesName = $('SalesName').value.trim() || '';
+  const custName = $('custName').value.trim() || 'Customer';
+  const engineer = $('engineer').value.trim() || 'Your SSCo Engineer';
 
   // Build email body
   let body = `Hi ${custName},\n\n`;
@@ -692,145 +600,9 @@ $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
   }
 
   // Encode for mailto
-  // window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&cc=${encodeURIComponent(CC)}&bcc=${encodeURIComponent(BCC)}`;
-  // window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-// });
-
-/* ---------- Auto-Save + Restore Form Data ---------- */
-
-// Save simple fields
-function saveField(el) {
-  localStorage.setItem(el.id, el.value);
-}
-
-// Restore simple fields
-function restoreFields() {
-  document.querySelectorAll("input, textarea, select").forEach(el => {
-    if (el.id && localStorage.getItem(el.id)) {
-      el.value = localStorage.getItem(el.id);
-    }
-  });
-}
-
-// Save signatures
-function saveSignature(id) {
-  const c = document.getElementById(id);
-  localStorage.setItem("sig_" + id, c.toDataURL());
-}
-
-function restoreSignatures() {
-  ["sig1", "sig2"].forEach(id => {
-    const data = localStorage.getItem("sig_" + id);
-    if (data) {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.getElementById(id);
-        const ctx = c.getContext("2d");
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-      };
-      img.src = data;
-    }
-  });
-}
-
-// Save photos
-function savePhotos() {
-  ["beforeThumbs", "afterThumbs"].forEach(listId => {
-    const imgs = Array.from(document.querySelectorAll(`#${listId} img`))
-      .map(img => img.src);
-    localStorage.setItem(listId, JSON.stringify(imgs));
-  });
-}
-
-function restorePhotos() {
-  ["beforeThumbs", "afterThumbs"].forEach(listId => {
-    const data = localStorage.getItem(listId);
-    if (data) {
-      const imgs = JSON.parse(data);
-      const c = document.getElementById(listId);
-      imgs.forEach(src => {
-        const wrap = document.createElement("div");
-        wrap.className = "photoWrap";
-        const img = document.createElement("img");
-        img.className = "thumb";
-        img.src = src;
-        const btn = document.createElement("button");
-        btn.className = "removePhoto";
-        btn.textContent = "✖";
-        btn.onclick = () => { wrap.remove(); savePhotos(); };
-        wrap.appendChild(img);
-        wrap.appendChild(btn);
-        c.appendChild(wrap);
-      });
-    }
-  });
-}
-
-// Save on every input change
-document.querySelectorAll("input, textarea, select").forEach(el => {
-  el.addEventListener("input", () => {
-    if (el.type !== "file") saveField(el);
-  });
+  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });
 
-// Save signatures when changed
-["sig1", "sig2"].forEach(id => {
-  const c = document.getElementById(id);
-  c.addEventListener("mouseup", () => saveSignature(id));
-  c.addEventListener("touchend", () => saveSignature(id));
-});
-
-// Save photos whenever list changes
-document.getElementById("beforeInput").addEventListener("change", savePhotos);
-document.getElementById("afterInput").addEventListener("change", savePhotos);
-
-// Restore everything on load
-window.addEventListener("DOMContentLoaded", () => {
-  restoreFields();
-  restoreSignatures();
-  restorePhotos();
-});
 </script>
-
-<script>
-// Send Email (with clear after)
-document.getElementById("sendEmail").addEventListener("click", e => {
-  e.preventDefault();
-
-  const to = document.getElementById("custEmail").value || "";
-  const cc = document.getElementById("salesEmail").value || "";   // Sales Engineer
-  const bcc = "info.uk@spray.com";                               // Hardcoded
-  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
-
-  const custName = document.getElementById("custName").value.trim() || "Customer";
-  const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
-
-  let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
-
-  const report = document.getElementById("report").value.trim();
-  if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
-
-  const partsUsed = document.getElementById("partsUsed").value.trim();
-  if (partsUsed) body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
-
-  const partsReq = document.getElementById("partsReq").value.trim();
-  if (partsReq) body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
-
-  body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
-
-  // Build mailto link
-  let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
-  if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
-
-  console.log("Generated mailto link:", mailtoLink);
-  window.location.href = mailtoLink;
-
-  // Clear saved form data
-  localStorage.clear();
-});
-</script>
-
 </body>
 </html>
