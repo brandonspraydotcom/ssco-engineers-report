@@ -83,8 +83,8 @@
   .small{font-size:13px;color:var(--muted)}
   .dayTotal{margin-top:8px;font-size:14px;color:#ccc}
   footer.appFooter{display:flex;gap:12px;align-items:center;margin-top:10px}
-  .photo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
-  figure{margin:0;text-align:center}
+  .photo-grid img{max-width:45%;height:auto;object-fit: contain}
+  figure{page-break-inside:avoid;break-inside: avoid}
   figcaption{font-size:12px;color:#888;margin-top:6px}
   table.timeTable{border-collapse:collapse;margin-top:8px;width:100%}
   table.timeTable th,table.timeTable td{border:1px solid #444;padding:8px;text-align:center}
@@ -206,13 +206,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       </div>
     </div>
 	
-	<div class="card">
+    <div class="card">
       <label>Sales Engineer</label>
       <input id="salesName" type="text" placeholder="Full name">
       <div style="height:8px"></div>
       <input id="salesEmail" type="text" placeholder="Email address">
     </div>
 
+	
     <div class="card">
       <label>Customer</label>
       <input id="custName" type="text" placeholder="Site Contact Name">
@@ -392,26 +393,6 @@ function addTimeSlot(){
 $('addTime').addEventListener('click', e=>{ e.preventDefault(); addTimeSlot(); });
 
 /* ---------- Photo previews (with remove) ---------- */
-// Compress image before preview
-function compressImage(file, callback){
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const img=new Image();
-    img.onload=()=>{
-      const canvas=document.createElement('canvas');
-      const ctx=canvas.getContext('2d');
-      const maxW=1200;
-      const scale=Math.min(1,maxW/img.width);
-      canvas.width=img.width*scale;
-      canvas.height=img.height*scale;
-      ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      callback(canvas.toDataURL('image/jpeg',0.6));
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
 function previewFiles(inputEl, targetId){
   const target = $(targetId);
   Array.from(inputEl.files).forEach((file, i)=>{
@@ -462,6 +443,8 @@ function prepareForPdf(clone, sigData){
   const contact = $('custName').value || '';
   const email = $('custEmail').value || '';
   const company = $('custCompany').value || '';
+  const salesName = $('salesName').value|| '';
+  const salesEmail = $('salesEmail').value|| '';
 
   const addrFields = [
     $('addr1').value, $('addr2').value,
@@ -483,9 +466,9 @@ function prepareForPdf(clone, sigData){
     { id:'project', label:'Project number', val:project },
     { id:'custName', label:'Point of Contact', val:contact },
     { id:'custEmail', label:'Customer Email', val:email },
-    { id:'custCompany', label:'Company', val:company }
-	{ id:'salesName', label:'Sales Engineer', val:email},
-	{ id:'salesEmail', label:'Sales Engineer Email'val:sales},
+    { id:'custCompany', label:'Company', val:company },
+	{ id:'salesName', label:'Sales Engineer', val:salesName},
+	{ id:'salesEmail', label:'Sales Engineer Email', val:salesEmail},
   ];
   
   replacements.forEach(r=>{
@@ -671,7 +654,6 @@ function buildPdf(){
 
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
-$('sendEmail').addEventListener('click', e => {
   e.preventDefault();
 
   const to = $('custEmail').value || '';
@@ -807,59 +789,48 @@ window.addEventListener("DOMContentLoaded", () => {
 
 // Send Email (with clear after)
 document.getElementById("sendEmail").addEventListener("click", e => {
-  e.preventDefault();
+    e.preventDefault();
 
-  const to = document.getElementById("custEmail").value || "";
-  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
+    const to = document.getElementById("custEmail").value.trim() || "";
+    const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
+    const custName = document.getElementById("custName").value.trim() || "Customer";
+    const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
+    const salesEmail = document.getElementById("salesEmail").value.trim() || "";
 
-  const custName = document.getElementById("custName").value.trim() || "Customer";
-  const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
-  const salesEmail = (document.getElementById("salesEmail").value || '').trim();
+    // Build email body
+    let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
 
-  let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
+    const report = document.getElementById("report").value.trim();
+    if (report) {
+        body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
+    }
 
-  const report = document.getElementById("report").value.trim();
-  if (report) {
-    body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
-  }
+    const partsUsed = document.getElementById("partsUsed").value.trim();
+    if (partsUsed) {
+        body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
+    }
 
-  const partsUsed = document.getElementById("partsUsed").value.trim();
-  if (partsUsed) {
-    body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
-  }
+    const partsReq = document.getElementById("partsReq").value.trim();
+    if (partsReq) {
+        body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
+    }
 
-  const partsReq = document.getElementById("partsReq").value.trim();
-  if (partsReq) {
-    body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
-  }
+    body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
 
-  body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
-  
-  // Build mailto with CC + always BCC
-  const params = [];
-  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
-  if (body) params.push(`body=${encodeURIComponent(body)}`);
-  if (salesEmail) params.push(`cc=${encodeURIComponent(salesEmail)}`);
-  params.push(`bcc=${encodeURIComponent("info.uk@spray.com")}`);
+    // Build mailto URL safely
+    let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-  const mailto = `mailto:${encodeURIComponent(to)}?${params.join("&")}`;
+    if (salesEmail) {
+        mailtoLink += `&cc=${encodeURIComponent(salesEmail)}`;
+    }
 
-  // Launch email client
-  window.location.href = mailto;
+    // Add BCC
+    mailtoLink += `&bcc=${encodeURIComponent("info.uk@spray.com")}`;
 
-  // Clear storage after slight delay to avoid wiping too early
-  setTimeout(() => {
-    try { localStorage.clear(); } catch(e){}
-  }, 800);
+    // Launch email client
+    window.location.href = mailtoLink;
+
+    // Optional: clear saved localStorage after sending
+    localStorage.clear();
 });
 
-  // Launch email client
- // window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&cc=${encodeURIComponent(salesEmail)}`;
-
-  // Clear saved data after sending
- // localStorage.clear();
-// });
-
-</script>
-</body>
-</html>
