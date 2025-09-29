@@ -12,6 +12,7 @@
   }
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SSCo Engineers Report">
 <link rel="apple-touch-icon" href="bottle2.png">
@@ -654,7 +655,12 @@ function buildPdf(){
 
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
-  e.preventDefault();
+
+document.getElementById("savePdf").addEventListener("click", e => {
+    e.preventDefault();
+    console.log("Save PDF clicked");
+    buildPdf();
+});
 
   const to = $('custEmail').value || '';
   const subject = `Engineers Report — ${$('project').value || ''} — ${$('date').value || ''}`;
@@ -687,10 +693,6 @@ $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
     body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n`;
     body += `----------------------------------------\n`;
   }
-
-  // Encode for mailto
-  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-});
 
 /* ---------- Auto-Save + Restore Form Data ---------- */
 
