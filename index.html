@@ -12,7 +12,6 @@
   }
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SSCo Engineers Report">
 <link rel="apple-touch-icon" href="bottle2.png">
@@ -84,8 +83,8 @@
   .small{font-size:13px;color:var(--muted)}
   .dayTotal{margin-top:8px;font-size:14px;color:#ccc}
   footer.appFooter{display:flex;gap:12px;align-items:center;margin-top:10px}
-  .photo-grid img{max-width:45%;height:auto;object-fit: contain}
-  figure{page-break-inside:avoid;break-inside: avoid}
+  .photo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+  figure{margin:0;text-align:center}
   figcaption{font-size:12px;color:#888;margin-top:6px}
   table.timeTable{border-collapse:collapse;margin-top:8px;width:100%}
   table.timeTable th,table.timeTable td{border:1px solid #444;padding:8px;text-align:center}
@@ -207,14 +206,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       </div>
     </div>
 	
-    <div class="card">
+	<div class="card">
       <label>Sales Engineer</label>
-      <input id="salesName" type="text" placeholder="Full name">
+      <input id="salesName" type="text" placeholder="Sales engineer name">
       <div style="height:8px"></div>
-      <input id="salesEmail" type="text" placeholder="Email address">
+      <input id="salesEmail" type="text" placeholder="Sales engineer email address">
     </div>
 
-	
     <div class="card">
       <label>Customer</label>
       <input id="custName" type="text" placeholder="Site Contact Name">
@@ -444,8 +442,8 @@ function prepareForPdf(clone, sigData){
   const contact = $('custName').value || '';
   const email = $('custEmail').value || '';
   const company = $('custCompany').value || '';
-  const salesName = $('salesName').value|| '';
-  const salesEmail = $('salesEmail').value|| '';
+  const sales = $('salesName').value || '';
+  const salesemail = $('salesEmail').value || '';
 
   const addrFields = [
     $('addr1').value, $('addr2').value,
@@ -464,12 +462,12 @@ function prepareForPdf(clone, sigData){
     { id:'engineer', label:'SSCo Engineer', val:engineer },
     { id:'date', label:'Date Entered', val:date },
     { id:'visit', label:'Visit Type', val:visit },
-    { id:'project', label:'Project number', val:project },
+    { id:'project', label:'Project Number', val:project },
     { id:'custName', label:'Point of Contact', val:contact },
-    { id:'custEmail', label:'Customer Email', val:email },
+    { id:'custEmail', label:'Point of Contact Email', val:email },
     { id:'custCompany', label:'Company', val:company },
-	{ id:'salesName', label:'Sales Engineer', val:salesName},
-	{ id:'salesEmail', label:'Sales Engineer Email', val:salesEmail},
+	{ id:'salesName', label:'Sales Engineers', val:sales },
+    { id:'salesEmail', label:'Sales Engineer Email', val:salesemail }
   ];
   
   replacements.forEach(r=>{
@@ -655,18 +653,17 @@ function buildPdf(){
 
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
+// $('sendEmail').addEventListener('click', e => {
+  // e.preventDefault();
 
-document.getElementById("savePdf").addEventListener("click", e => {
-    e.preventDefault();
-    console.log("Save PDF clicked");
-    buildPdf();
-});
+  // const to = document.getElementById("custEmail").value || "";
+  // const cc = document.getElementById("salesEmail").value || "";  // from input field
+  // const bcc = "info.uk@spray.com"; // fixed hardcoded address
+  // const subject = `Engineers Report — ${$('project').value || ''} — ${$('date').value || ''}`;
 
-  const to = $('custEmail').value || '';
-  const subject = `Engineers Report — ${$('project').value || ''} — ${$('date').value || ''}`;
-
-  const custName = $('custName').value.trim() || 'Customer';
-  const engineer = $('engineer').value.trim() || 'Your SSCo Engineer';
+  // const custName = $('custName').value.trim() || 'Customer';
+  // const engineer = $('engineer').value.trim() || 'Your SSCo Engineer';
+  // const salesName = $('SalesName').value.trim() || '';
 
   // Build email body
   let body = `Hi ${custName},\n\n`;
@@ -693,6 +690,12 @@ document.getElementById("savePdf").addEventListener("click", e => {
     body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n`;
     body += `----------------------------------------\n`;
   }
+
+  // Encode for mailto
+  // window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&cc=${encodeURIComponent(CC)}&bcc=${encodeURIComponent(BCC)}`;
+  // window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+// });
 
 /* ---------- Auto-Save + Restore Form Data ---------- */
 
@@ -788,51 +791,46 @@ window.addEventListener("DOMContentLoaded", () => {
   restoreSignatures();
   restorePhotos();
 });
+</script>
 
+<script>
 // Send Email (with clear after)
 document.getElementById("sendEmail").addEventListener("click", e => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const to = document.getElementById("custEmail").value.trim() || "";
-    const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
-    const custName = document.getElementById("custName").value.trim() || "Customer";
-    const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
-    const salesEmail = document.getElementById("salesEmail").value.trim() || "";
+  const to = document.getElementById("custEmail").value || "";
+  const cc = document.getElementById("salesEmail").value || "";   // Sales Engineer
+  const bcc = "info.uk@spray.com";                               // Hardcoded
+  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
 
-    // Build email body
-    let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
+  const custName = document.getElementById("custName").value.trim() || "Customer";
+  const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
 
-    const report = document.getElementById("report").value.trim();
-    if (report) {
-        body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
-    }
+  let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
 
-    const partsUsed = document.getElementById("partsUsed").value.trim();
-    if (partsUsed) {
-        body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
-    }
+  const report = document.getElementById("report").value.trim();
+  if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
 
-    const partsReq = document.getElementById("partsReq").value.trim();
-    if (partsReq) {
-        body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
-    }
+  const partsUsed = document.getElementById("partsUsed").value.trim();
+  if (partsUsed) body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
 
-    body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
+  const partsReq = document.getElementById("partsReq").value.trim();
+  if (partsReq) body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
 
-    // Build mailto URL safely
-    let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
 
-    if (salesEmail) {
-        mailtoLink += `&cc=${encodeURIComponent(salesEmail)}`;
-    }
+  // Build mailto link
+  let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
+  if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
 
-    // Add BCC
-    mailtoLink += `&bcc=${encodeURIComponent("info.uk@spray.com")}`;
+  console.log("Generated mailto link:", mailtoLink);
+  window.location.href = mailtoLink;
 
-    // Launch email client
-    window.location.href = mailtoLink;
-
-    // Optional: clear saved localStorage after sending
-    localStorage.clear();
+  // Clear saved form data
+  localStorage.clear();
 });
+</script>
 
+</body>
+</html>
