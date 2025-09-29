@@ -205,6 +205,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         </div>
       </div>
     </div>
+	
+	<div class="card">
+      <label>Sales Engineer</label>
+      <input id="salesName" type="text" placeholder="Full name">
+      <div style="height:8px"></div>
+      <input id="salesEmail" type="text" placeholder="Email address">
+    </div>
 
     <div class="card">
       <label>Customer</label>
@@ -385,6 +392,26 @@ function addTimeSlot(){
 $('addTime').addEventListener('click', e=>{ e.preventDefault(); addTimeSlot(); });
 
 /* ---------- Photo previews (with remove) ---------- */
+// Compress image before preview
+function compressImage(file, callback){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const canvas=document.createElement('canvas');
+      const ctx=canvas.getContext('2d');
+      const maxW=1200;
+      const scale=Math.min(1,maxW/img.width);
+      canvas.width=img.width*scale;
+      canvas.height=img.height*scale;
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      callback(canvas.toDataURL('image/jpeg',0.6));
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function previewFiles(inputEl, targetId){
   const target = $(targetId);
   Array.from(inputEl.files).forEach((file, i)=>{
@@ -457,6 +484,8 @@ function prepareForPdf(clone, sigData){
     { id:'custName', label:'Point of Contact', val:contact },
     { id:'custEmail', label:'Customer Email', val:email },
     { id:'custCompany', label:'Company', val:company }
+	{ id:'salesName', label:'Sales Engineer', val:email},
+	{ id:'salesEmail', label:'Sales Engineer Email'val:sales},
   ];
   
   replacements.forEach(r=>{
@@ -785,6 +814,7 @@ document.getElementById("sendEmail").addEventListener("click", e => {
 
   const custName = document.getElementById("custName").value.trim() || "Customer";
   const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
+  const salesEmail = (document.getElementById("salesEmail").value || '').trim();
 
   let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
 
@@ -804,13 +834,31 @@ document.getElementById("sendEmail").addEventListener("click", e => {
   }
 
   body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
+  
+  // Build mailto with CC + always BCC
+  const params = [];
+  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+  if (body) params.push(`body=${encodeURIComponent(body)}`);
+  if (salesEmail) params.push(`cc=${encodeURIComponent(salesEmail)}`);
+  params.push(`bcc=${encodeURIComponent("info.uk@spray.com")}`);
+
+  const mailto = `mailto:${encodeURIComponent(to)}?${params.join("&")}`;
 
   // Launch email client
-  window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailto;
+
+  // Clear storage after slight delay to avoid wiping too early
+  setTimeout(() => {
+    try { localStorage.clear(); } catch(e){}
+  }, 800);
+});
+
+  // Launch email client
+ // window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&cc=${encodeURIComponent(salesEmail)}`;
 
   // Clear saved data after sending
-  localStorage.clear();
-});
+ // localStorage.clear();
+// });
 
 </script>
 </body>
