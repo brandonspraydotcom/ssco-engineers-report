@@ -208,24 +208,28 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 	
       <!-- Sales Engineer (searchable with datalist) -->
 <div class="card">
-  <label for="salesName">Sales Engineer</label>
-  <input list="salesEngineers" id="salesName" name="salesName" class="form-control">
-  <datalist id="salesEngineers">
-    <option value="Adam Mulvaney">
-    <option value="Jim McGarrey">
-    <option value="Shaun Murdock">
-    <option value="David Yates">
-    <option value="Joe Traynor">
-    <option value="Sandra Waight">
-    <option value="Zoe Locke">
-    <option value="Lorraine Sherwin">
-  </datalist>
-</div>
-
+	<div class="row">
+  		<label for="salesName">Sales Engineer</label>
+		
+  		<input list="salesEngineers" id="salesName" name="salesName" type="text">
+  			<datalist id="salesEngineers">
+			<select id="salesEngineers">
+    			<option value="Adam Mulvaney">
+    			<option value="Jim McGarrey">
+    			<option value="Shaun Murdock">
+    			<option value="David Yates">
+    			<option value="Joe Traynor">
+    			<option value="Sandra Waight">
+    			<option value="Zoe Locke">
+    			<option value="Lorraine Sherwin"></select>
+	</div>
+  			</datalist>
+<div style="height:20px"></div>
 <!-- Sales Engineer Email (auto-filled but editable) -->
-<div class="card">
-  <label for="salesEmail">Sales Engineer Email</label>
-  <input type="email" id="salesEmail" name="salesEmail" class="form-control">
+	<div class="row">
+    <label for="salesEmail">Sales Engineer Email</label>
+    <input type="text" id="salesEmail" name="salesEmail">
+	</div>
 </div>
 
     <div class="card">
