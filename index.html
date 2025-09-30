@@ -466,7 +466,7 @@ function prepareForPdf(clone, sigData){
     { id:'custName', label:'Point of Contact', val:contact },
     { id:'custEmail', label:'Point of Contact Email', val:email },
     { id:'custCompany', label:'Company', val:company },
-	{ id:'salesName', label:'Sales Engineers', val:sales },
+    { id:'salesName', label:'Sales Engineer', val:sales },
     { id:'salesEmail', label:'Sales Engineer Email', val:salesemail }
   ];
   
@@ -476,6 +476,23 @@ function prepareForPdf(clone, sigData){
       const div = document.createElement('div');
       div.style.marginTop = '4px';
       div.innerHTML = `<strong>${r.label}:</strong> ${escapeHtml(r.val)}`;
+
+      // Add row-specific classes for spacing control
+      switch (r.label) {
+        case 'Project Number':
+          div.classList.add('row-project-number');
+          break;
+        case 'Sales Engineer':
+          div.classList.add('row-sales-engineer');
+          break;
+        case 'Sales Engineer Email':
+          div.classList.add('row-sales-email');
+          break;
+        case 'Point of Contact':
+          div.classList.add('row-point-contact');
+          break;
+      }
+
       el.replaceWith(div);
     }
   });
@@ -504,7 +521,7 @@ function prepareForPdf(clone, sigData){
   const sigWraps = clone.querySelectorAll('.sigWrap');
   if(sigWraps[0]) sigWraps[0].style.marginBottom = '20px';
 
-  // NEW: Replace sig1Name and sig2Name inputs with plain text
+  // Replace sig1Name and sig2Name inputs with plain text
   const sig1Name = document.getElementById("sig1Name").value || "";
   const sig2Name = document.getElementById("sig2Name").value || "";
 
@@ -600,6 +617,12 @@ function buildPdf(){
     .footer{position:fixed;left:0;right:0;bottom:1px;font-size:12px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
     .footer .page:before{content:"Page " counter(page) " of " counter(pages);}
     .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
+
+    /* Custom spacing for specific fields */
+    .row-project-number { margin-bottom: 12px; display:block; }
+    .row-sales-engineer { margin-bottom: 0; display:block; }
+    .row-sales-email { margin-bottom: 12px; display:block; }
+    .row-point-contact { margin-bottom: 0; display:block; }
   `;
 
   let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report - '+ projectNo +' - '+ formattedDate+'</title><style>'+printCss+'</style></head><body>';
