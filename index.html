@@ -809,9 +809,10 @@ function restorePhotos() {
 
 // Save on every input change
 document.querySelectorAll("input, textarea, select").forEach(el => {
-  el.addEventListener("input", () => {
-    if (el.type !== "file") saveField(el);
-  });
+  if (el.type !== "file") {
+    el.addEventListener("input", () => saveField(el));
+    el.addEventListener("change", () => saveField(el)); // <-- catches programmatic & dropdown changes
+  }
 });
 
 // Save signatures when changed
