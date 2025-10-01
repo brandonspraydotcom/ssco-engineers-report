@@ -197,7 +197,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       <div class="row" style="margin-top:10px">
         <div>
           <label>Visit type</label>
-          <select id="visit"><option>Service</option><option>Installation</option><option>Training</option><option>Inspection</option><option>Commissioning</option><option>Site Visit</option><option>Warranty</option></select>
+          <select id="visit"><option value="">-- Select --</option><option>Service</option><option>Installation</option><option>Training</option><option>Inspection</option><option>Commissioning</option><option>Site Visit</option><option>Warranty</option></select>
         </div>
         <div>
           <label>Project number</label>
@@ -238,7 +238,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       <div style="height:8px"></div>
       <input id="custCompany" type="text" placeholder="Company">
       <div class="row" style="margin-top:10px">
-        <input id="addr1" type="text" placeholder="Address Line 1">
+        <input id="addr1" type="text" placeholder="Address Line 1" autocomplete="off">
         <input id="addr2" type="text" placeholder="Address Line 2">
       </div>
       <div class="row" style="margin-top:8px">
@@ -917,6 +917,81 @@ document.getElementById("salesName").addEventListener("change", function () {
     }
   });
 })("salesName");
+</script>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
+
+<script>
+function fillAddress(place) {
+  const addr1Field = document.getElementById("addr1");
+  const addr2Field = document.getElementById("addr2");
+  const cityField = document.getElementById("city");
+  const regionField = document.getElementById("region");
+  const postalField = document.getElementById("postal");
+  const countryField = document.getElementById("country");
+
+  // Reset fields first
+  addr1Field.value = "";
+  addr2Field.value = "";
+  cityField.value = "";
+  regionField.value = "";
+  postalField.value = "";
+  countryField.value = "";
+
+  if (!place.address_components) return;
+
+  place.address_components.forEach(component => {
+    const types = component.types;
+    if (types.includes("street_number")) {
+      addr1Field.value = component.long_name + " " + addr1Field.value;
+    }
+    if (types.includes("route")) {
+      addr1Field.value = (addr1Field.value.trim() + " " + component.long_name).trim();
+    }
+    if (types.includes("subpremise")) {
+      addr2Field.value = component.long_name;
+    }
+    if (types.includes("locality")) {
+      cityField.value = component.long_name;
+    }
+    if (types.includes("administrative_area_level_1")) {
+      regionField.value = component.long_name;
+    }
+    if (types.includes("postal_code")) {
+      postalField.value = component.long_name;
+    }
+    if (types.includes("country")) {
+      countryField.value = component.long_name;
+    }
+  });
+}
+
+function initAutocomplete() {
+  const addr1Field = document.getElementById("addr1");
+  const companyField = document.getElementById("custCompany");
+
+  // Autocomplete for addresses (addr1)
+  const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
+    fields: ["address_components", "geometry", "name"],
+    types: ["geocode"]
+  });
+  addressAutocomplete.addListener("place_changed", () => {
+    const place = addressAutocomplete.getPlace();
+    fillAddress(place);
+  });
+
+  // Autocomplete for companies (custCompany)
+  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
+    fields: ["address_components", "geometry", "name"],
+    types: ["establishment"]
+  });
+  companyAutocomplete.addListener("place_changed", () => {
+    const place = companyAutocomplete.getPlace();
+    fillAddress(place);
+  });
+}
+
+window.addEventListener("load", initAutocomplete);
 </script>
 
 </body>
