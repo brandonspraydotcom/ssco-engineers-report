@@ -20,8 +20,12 @@
 <title>SSCo — Engineers Report</title>
 <style>
 #annotatorModal .btn.ghost { background: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.06); }
-#annotatorModal .btn.remove { background: #cc0102; color: #fff; }
-#annotatorModal .btn.green { background: var(--accent); color: #fff; }
+#annotatorModal .btn.bluepen { background: #2b6cff; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Blue pen */
+#annotatorModal .btn.greenpen { background: #1ea64a; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Green pen */
+#annotatorModal .btn.yellowpen { background: #ffcc00; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Yellow pen */
+#annotatorModal .btn.blackpen { background: #000000; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Black pen */
+#annotatorModal .btn.remove { background: #cc0102; color: #fff; } /* clear button */
+#annotatorModal .btn.green { background: var(--accent); color: #fff; } /* save button */
 #annotatorModal button { font-weight:700; }
   :root{--bg:#0f0f10;--card:#1e1e1f;--muted:#bdbdbd;--accent:#1ea64a;--primary:#2b6cff}
   *{box-sizing:border-box}
@@ -196,6 +200,12 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   }
 }
 
+#annotatorModal #annotatorColors button.active {
+  outline: 3px solid #1ea64a;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 </style>
 </head>
 <body>
@@ -336,8 +346,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 
     <footer class="appFooter">
-      <button id="savePdf" class="btn" type="button" style="flex:1">Save PDF</button>
-      <button id="sendEmail" class="btn green" type="button" style="flex:1">Send Email</button>
+      <button id="savePdf" class="btn" type="button" style="flex:1">💾 PDF</button>
+      <button id="sendEmail" class="btn green" type="button" style="flex:1">📧 Email</button>
     </footer>
   
 		<!-- Image Annotator Modal (INSERT: just before closing </div> of #formContainer) -->
@@ -347,10 +357,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 					<div style="background:var(--card);padding:8px;display:flex;align-items:center;gap:8px;justify-content:space-between">
 						<div style="display:flex;gap:8px;align-items:center">
 							<div id="annotatorColors" style="display:flex;gap:6px;align-items:center">
-								<button class="btn ghost" data-color="#2b6cff" title="Blue" style="padding:8px;border-radius:8px">●</button>
-								<button class="btn ghost" data-color="#1ea64a" title="Green" style="padding:8px;border-radius:8px">●</button>
-								<button class="btn ghost" data-color="#ffcc00" title="Yellow" style="padding:8px;border-radius:8px">●</button>
-								<button class="btn ghost" data-color="#000000" title="Black" style="padding:8px;border-radius:8px">●</button>
+								<button class="btn ghost" data-color="#2b6cff" title="Blue" style="padding:8px;border-radius:8px">🔵</button>
+								<button class="btn ghost" data-color="#1ea64a" title="Green" style="padding:8px;border-radius:8px">🟢</button>
+								<button class="btn ghost" data-color="#ffcc00" title="Yellow" style="padding:8px;border-radius:8px">🟡</button>
+								<button class="btn ghost" data-color="#000000" title="Black" style="padding:8px;border-radius:8px">⚫</button>
 							</div>
 							<button id="annotatorEraser" class="btn ghost" title="Eraser" style="padding:8px;border-radius:8px">🧽</button>
 							<button id="annotatorUndo" class="btn ghost" title="Undo" style="padding:8px;border-radius:8px">↶</button>
@@ -358,8 +368,8 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 						</div>
 
 						<div style="display:flex;gap:8px">
-							<button id="annotatorClose" class="btn ghost">CLOSE</button>
-							<button id="annotatorSave" class="btn green">SAVE</button>
+							<button id="annotatorClose" class="btn ghost">❌</button>
+							<button id="annotatorSave" class="btn green">💾</button>
 						</div>
 					</div>
 
@@ -374,7 +384,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 					</div>
 
 					<div style="background:var(--card);padding:8px;text-align:center;font-size:12px;color:var(--muted)">
-						<div id="annotatorHint">Use finger or stylus to draw. Pinch/zoom not required — draw directly. Saved image preserves resolution for PDF.</div>
+						<div id="annotatorHint">Use finger or stylus to draw.</div>
 					</div>
 				</div>
 			</div>
@@ -610,7 +620,7 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
     const p = eventPos(e);
     if(eraser){
       drawCtx.globalCompositeOperation = 'destination-out';
-      drawCtx.lineWidth = strokeWidth * 1.6;
+      drawCtx.lineWidth = strokeWidth * 3;
       drawCtx.strokeStyle = 'rgba(0,0,0,1)';
     } else {
       drawCtx.globalCompositeOperation = 'source-over';
@@ -695,7 +705,7 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
       strokeColor = b.dataset.color;
       drawCtx.strokeStyle = strokeColor;
       colorButtons.forEach(x=>x.classList.remove('green'));
-      b.classList.add('green');
+	  b.classList.add('green');
     });
   });
 
