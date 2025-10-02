@@ -19,6 +19,10 @@
 
 <title>SSCo — Engineers Report</title>
 <style>
+#annotatorModal .btn.ghost { background: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.06); }
+#annotatorModal .btn.remove { background: #cc0102; color: #fff; }
+#annotatorModal .btn.green { background: var(--accent); color: #fff; }
+#annotatorModal button { font-weight:700; }
   :root{--bg:#0f0f10;--card:#1e1e1f;--muted:#bdbdbd;--accent:#1ea64a;--primary:#2b6cff}
   *{box-sizing:border-box}
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:linear-gradient(#070708,#0f0f10);color:#eee;padding:16px}
@@ -336,6 +340,47 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       <button id="sendEmail" class="btn green" type="button" style="flex:1">Send Email</button>
     </footer>
   
+		<!-- Image Annotator Modal (INSERT: just before closing </div> of #formContainer) -->
+			<div id="annotatorModal" style="display:none;position:fixed;inset:0;z-index:1200;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">
+			<div id="annotatorBackdrop" style="position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,0.7),rgba(0,0,0,0.85))"></div>
+				<div style="position:relative;max-width:980px;margin:36px auto;height:calc(100vh - 72px);display:flex;flex-direction:column;border-radius:12px;overflow:hidden">
+					<div style="background:var(--card);padding:8px;display:flex;align-items:center;gap:8px;justify-content:space-between">
+						<div style="display:flex;gap:8px;align-items:center">
+							<div id="annotatorColors" style="display:flex;gap:6px;align-items:center">
+								<button class="btn ghost" data-color="#2b6cff" title="Blue" style="padding:8px;border-radius:8px">●</button>
+								<button class="btn ghost" data-color="#1ea64a" title="Green" style="padding:8px;border-radius:8px">●</button>
+								<button class="btn ghost" data-color="#ffcc00" title="Yellow" style="padding:8px;border-radius:8px">●</button>
+								<button class="btn ghost" data-color="#000000" title="Black" style="padding:8px;border-radius:8px">●</button>
+							</div>
+							<button id="annotatorEraser" class="btn ghost" title="Eraser" style="padding:8px;border-radius:8px">🧽</button>
+							<button id="annotatorUndo" class="btn ghost" title="Undo" style="padding:8px;border-radius:8px">↶</button>
+							<button id="annotatorClear" class="btn remove" title="Clear" style="padding:8px;border-radius:8px">CLEAR</button>
+						</div>
+
+						<div style="display:flex;gap:8px">
+							<button id="annotatorClose" class="btn ghost">CLOSE</button>
+							<button id="annotatorSave" class="btn green">SAVE</button>
+						</div>
+					</div>
+
+					<div style="flex:1;display:flex;align-items:center;justify-content:center;background:#111;padding:12px">
+						<!-- container where image + drawing canvas are inserted -->
+						<div id="annotatorStage" style="position:relative;max-width:100%;max-height:100%;display:flex;align-items:center;justify-content:center">
+							<!-- the code will create two stacked canvases here:
+								- imgCanvas: draws the base image at native resolution
+								- drawCanvas: drawing layer for strokes (same resolution)
+							-->
+						</div>
+					</div>
+
+					<div style="background:var(--card);padding:8px;text-align:center;font-size:12px;color:var(--muted)">
+						<div id="annotatorHint">Use finger or stylus to draw. Pinch/zoom not required — draw directly. Saved image preserves resolution for PDF.</div>
+					</div>
+				</div>
+			</div>
+			<!-- /Annotator Modal -->
+
+  
   </div>
 
 <script>
@@ -433,6 +478,7 @@ function addTimeSlot(){
 $('addTime').addEventListener('click', e=>{ e.preventDefault(); addTimeSlot(); });
 
 /* ---------- Photo previews (with remove) ---------- */
+/* ---------- Photo previews (with remove) — ENHANCED: click to annotate ---------- */
 function previewFiles(inputEl, targetId){
   const target = $(targetId);
   Array.from(inputEl.files).forEach((file, i)=>{
@@ -440,12 +486,270 @@ function previewFiles(inputEl, targetId){
     const wrap = document.createElement('div'); wrap.className='photoWrap';
     const img = document.createElement('img'); img.className='thumb'; img.src = url; img.alt = file.name || `photo-${i+1}`;
     const btn = document.createElement('button'); btn.type='button'; btn.className='removePhoto'; btn.textContent='✖';
-    btn.addEventListener('click', ()=>{ URL.revokeObjectURL(url); wrap.remove(); });
+    btn.addEventListener('click', ()=>{ URL.revokeObjectURL(url); wrap.remove(); savePhotos(); });
+    // Open annotator on tap/click
+    img.style.cursor = 'zoom-in';
+    img.addEventListener('click', ()=> openAnnotator(img, targetId));
     wrap.appendChild(img); wrap.appendChild(btn); target.appendChild(wrap);
   });
+  // persist list
+  savePhotos();
 }
+
 $('beforeInput').addEventListener('change', e=> previewFiles(e.target,'beforeThumbs'));
 $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumbs'));
+
+/* ---------- Image Annotator (mobile/touch friendly) ---------- */
+(function(){
+  const modal = document.getElementById('annotatorModal');
+  const stage = document.getElementById('annotatorStage');
+  const btnSave = document.getElementById('annotatorSave');
+  const btnClose = document.getElementById('annotatorClose');
+  const btnUndo = document.getElementById('annotatorUndo');
+  const btnClear = document.getElementById('annotatorClear');
+  const btnEraser = document.getElementById('annotatorEraser');
+  const colorButtons = document.querySelectorAll('#annotatorColors button');
+  let imgCanvas, drawCanvas, imgCtx, drawCtx;
+  let currentImgEl = null;
+  let drawing = false;
+  let last = {x:0,y:0};
+  let stack = []; // undo stack (dataURLs of drawCanvas)
+  let eraser = false;
+  let strokeColor = '#2b6cff';
+  const strokeWidth = 6; // feels good on mobile
+
+  function mkCanvases(img){
+    // clear stage
+    stage.innerHTML = '';
+    // create an image canvas sized to the image natural size (to preserve resolution for save/print)
+    imgCanvas = document.createElement('canvas');
+    drawCanvas = document.createElement('canvas');
+
+    // compute max size that fits stage while keeping aspect ratio
+    const maxW = Math.min(img.naturalWidth, Math.max(320, window.innerWidth - 48));
+    const maxH = Math.min(img.naturalHeight, Math.max(240, window.innerHeight - 220));
+    // scale factor to fit viewport
+    const scale = Math.min((window.innerWidth - 80) / img.naturalWidth, (window.innerHeight - 200) / img.naturalHeight, 1);
+
+    const displayW = Math.round(img.naturalWidth * scale);
+    const displayH = Math.round(img.naturalHeight * scale);
+
+    // pixel-ratio aware canvases — we keep the backing store at image natural pixels to avoid distortion
+    imgCanvas.width = img.naturalWidth;
+    imgCanvas.height = img.naturalHeight;
+    drawCanvas.width = img.naturalWidth;
+    drawCanvas.height = img.naturalHeight;
+
+    imgCanvas.style.width = displayW + 'px';
+    imgCanvas.style.height = displayH + 'px';
+    drawCanvas.style.width = displayW + 'px';
+    drawCanvas.style.height = displayH + 'px';
+
+    imgCanvas.style.display = 'block';
+    drawCanvas.style.position = 'absolute';
+    drawCanvas.style.left = '0';
+    drawCanvas.style.top = '0';
+    drawCanvas.style.touchAction = 'none'; // allow pointer events
+
+    imgCtx = imgCanvas.getContext('2d');
+    drawCtx = drawCanvas.getContext('2d');
+
+    // draw base image using natural size to backing canvas
+    imgCtx.clearRect(0,0,imgCanvas.width,imgCanvas.height);
+    imgCtx.drawImage(img, 0, 0, imgCanvas.width, imgCanvas.height);
+
+    // drawing defaults
+    drawCtx.lineJoin = 'round';
+    drawCtx.lineCap = 'round';
+    drawCtx.lineWidth = strokeWidth;
+    drawCtx.strokeStyle = strokeColor;
+
+    // append to stage using wrapper that matches display size and centers it
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.width = displayW + 'px';
+    wrapper.style.height = displayH + 'px';
+    wrapper.appendChild(imgCanvas);
+    wrapper.appendChild(drawCanvas);
+    stage.appendChild(wrapper);
+
+    // reset stack
+    stack = [];
+    pushStack(); // push initial blank state
+  }
+
+  function pushStack(){
+    // push a copy of drawCanvas (as dataURL)
+    stack.push(drawCanvas.toDataURL());
+    // limit stack length
+    if(stack.length > 30) stack.shift();
+  }
+
+  function eventPos(e){
+    const rect = drawCanvas.getBoundingClientRect();
+    // account for touch or mouse
+    const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : (e.clientX !== undefined ? e.clientX : e.pageX);
+    const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : (e.clientY !== undefined ? e.clientY : e.pageY);
+    // convert from display coords to backing pixel coords
+    const x = ( (clientX - rect.left) * (drawCanvas.width / rect.width) );
+    const y = ( (clientY - rect.top) * (drawCanvas.height / rect.height) );
+    return {x,y};
+  }
+
+  function onStart(e){
+    e.preventDefault();
+    drawing = true;
+    const p = eventPos(e);
+    last.x = p.x; last.y = p.y;
+    drawCtx.beginPath();
+    drawCtx.moveTo(last.x, last.y);
+  }
+  function onMove(e){
+    if(!drawing) return;
+    e.preventDefault();
+    const p = eventPos(e);
+    if(eraser){
+      drawCtx.globalCompositeOperation = 'destination-out';
+      drawCtx.lineWidth = strokeWidth * 1.6;
+      drawCtx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      drawCtx.globalCompositeOperation = 'source-over';
+      drawCtx.lineWidth = strokeWidth;
+      drawCtx.strokeStyle = strokeColor;
+    }
+    drawCtx.lineTo(p.x, p.y);
+    drawCtx.stroke();
+    last.x = p.x; last.y = p.y;
+  }
+  function onEnd(e){
+    if(!drawing) return;
+    drawing = false;
+    drawCtx.closePath();
+    pushStack();
+  }
+
+  // Attach pointer/touch events
+  function attachDrawing(){
+    // pointer events preferred
+    drawCanvas.addEventListener('pointerdown', onStart);
+    drawCanvas.addEventListener('pointermove', onMove);
+    drawCanvas.addEventListener('pointerup', onEnd);
+    drawCanvas.addEventListener('pointercancel', onEnd);
+    // fallback for touch
+    drawCanvas.addEventListener('touchstart', onStart, {passive:false});
+    drawCanvas.addEventListener('touchmove', onMove, {passive:false});
+    drawCanvas.addEventListener('touchend', onEnd);
+    // mouse fallback
+    drawCanvas.addEventListener('mousedown', onStart);
+    drawCanvas.addEventListener('mousemove', onMove);
+    drawCanvas.addEventListener('mouseup', onEnd);
+  }
+
+  // Open annotator with clicked thumbnail image element
+  window.openAnnotator = function(thumbnailImgEl, thumbListId){
+    currentImgEl = thumbnailImgEl;
+    modal.style.display = 'block';
+    // create a new Image() at full resolution if src already loaded
+    const base = new Image();
+    base.onload = ()=>{
+      mkCanvases(base);
+      attachDrawing();
+    };
+    // ensure cross-origin safe (images are dataURL or blob urls from file input or local storage)
+    base.crossOrigin = 'anonymous';
+    base.src = thumbnailImgEl.src;
+  };
+
+  // undo
+  btnUndo.addEventListener('click', ()=> {
+    if(stack.length <= 1) {
+      // clear
+      drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+      stack = [drawCanvas.toDataURL()];
+      return;
+    }
+    // pop current
+    stack.pop();
+    const lastState = stack[stack.length - 1];
+    const img = new Image();
+    img.onload = ()=> {
+      drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+      drawCtx.drawImage(img, 0, 0, drawCanvas.width, drawCanvas.height);
+    };
+    img.src = lastState;
+  });
+
+  btnClear.addEventListener('click', ()=> {
+    drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+    pushStack();
+  });
+
+  btnEraser.addEventListener('click', ()=>{
+    eraser = !eraser;
+    btnEraser.classList.toggle('green', eraser);
+  });
+
+  colorButtons.forEach(b=>{
+    b.addEventListener('click', ()=>{
+      eraser = false; btnEraser.classList.remove('green');
+      strokeColor = b.dataset.color;
+      drawCtx.strokeStyle = strokeColor;
+      colorButtons.forEach(x=>x.classList.remove('green'));
+      b.classList.add('green');
+    });
+  });
+
+  btnClose.addEventListener('click', ()=> {
+    modal.style.display = 'none';
+    stage.innerHTML = '';
+    currentImgEl = null;
+  });
+
+  btnSave.addEventListener('click', ()=> {
+    // Merge imgCanvas + drawCanvas into a single dataURL preserving natural resolution
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = imgCanvas.width;
+    outCanvas.height = imgCanvas.height;
+    const outCtx = outCanvas.getContext('2d');
+    // draw base
+    outCtx.drawImage(imgCanvas, 0, 0);
+    // draw annotations (drawCanvas)
+    outCtx.drawImage(drawCanvas, 0, 0);
+    // create dataURL (jpeg to keep size reasonable; use quality 0.92)
+    let annotatedDataUrl = outCanvas.toDataURL('image/jpeg', 0.92);
+
+    // Replace thumbnail image src with annotated dataURL
+    if(currentImgEl){
+      currentImgEl.src = annotatedDataUrl;
+      // ensure the remove button still works; also persist
+      savePhotos();
+    }
+    // close modal
+    modal.style.display = 'none';
+    stage.innerHTML = '';
+    currentImgEl = null;
+  });
+
+  // Close when clicking backdrop
+  document.getElementById('annotatorBackdrop').addEventListener('click', ()=> {
+    // behave like close without saving
+    modal.style.display = 'none';
+    stage.innerHTML = '';
+    currentImgEl = null;
+  });
+
+  // small keyboard / orientation handling: recalc on resize
+  window.addEventListener('resize', ()=> {
+    if(modal.style.display === 'block' && currentImgEl){
+      // reopen to re-render with new size
+      const src = currentImgEl.src;
+      modal.style.display='none';
+      setTimeout(()=> openAnnotator(currentImgEl),100);
+    }
+  });
+
+})();
+
 
 /* ---------- Prepare clone for PDF (light theme) ---------- */
 function prepareForPdf(clone, sigData){
