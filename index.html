@@ -69,6 +69,8 @@
   .btn{display:inline-block;padding:12px 16px;border-radius:10px;background:var(--primary);color:white;text-align:center;font-weight:700;cursor:pointer;border:none;font-size:16px}
   .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.12)}
   .btn.green{background:var(--accent)}
+  .btn.remove{background:#CC0102;border:1px solid rgba(255,255,255,.12)} /* Clear buttons */
+  .btn.add{background:#19a84a;border:1px solid rgba(255,255,255,.12)} /* Add time slot */
   .controls{display:flex;gap:12px;align-items:center}
   .uploadBtn{display:inline-block;padding:10px 12px;border-radius:8px;background:#19a84a;color:white;cursor:pointer;font-weight:700}
   .photos{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
@@ -78,7 +80,7 @@
   canvas.signature{width:100%;height:200px;border-radius:8px;background:#fff;border:1px solid #000;touch-action:none}
   .sigRow{display:flex;gap:12px}
   .sigWrap{flex:1}
-  .timeBox{background:#0f1011;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.06)}
+  .timeBox{background:var(--card);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.06)}
   .timeRow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
   .small{font-size:13px;color:var(--muted)}
   .dayTotal{margin-top:8px;font-size:14px;color:#ccc}
@@ -218,9 +220,16 @@ input[type="time"]::-webkit-calendar-picker-indicator {
           <input id="project" type="text" placeholder="PJ number">
         </div>
       </div>
+	  <div class="row" style="margin-top:10px">
+	    <div>
+	      <label>Purchase Order Number</label>
+		  <input id="ponumber" type="text" placeholder="PO Number"
+	    </div>
+	  </div>
+	  </div>
     </div>
-	
-      <!-- Sales Engineer (searchable with datalist) -->
+
+<!-- Sales Engineer (searchable with datalist) -->
 <div class="card">
  <div class="row" style="margin-top:10px">
   <div>
@@ -278,7 +287,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       <label>Time Records</label>
       <div id="timeList"></div>
       <div class="controls" style="margin-top:8px">
-        <button id="addTime" type="button" class="btn ghost">+ Add time slot</button>
+        <button id="addTime" type="button" class="btn add">+ Add Time Slot</button>
       </div>
     </div>
 
@@ -306,7 +315,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         <div class="small">Engineer Signature</div>
         <canvas id="sig1" class="signature"></canvas>
         <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn ghost" data-clear="sig1">Clear</button>
+          <button class="btn remove" data-clear="sig1">CLEAR</button>
           <input id="sig1Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
         </div>
       </div>
@@ -315,7 +324,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
         <div class="small">Site Contact Signature</div>
         <canvas id="sig2" class="signature"></canvas>
         <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn ghost" data-clear="sig2">Clear</button>
+          <button class="btn remove" data-clear="sig2">CLEAR</button>
           <input id="sig2Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
         </div>
       </div>
@@ -324,8 +333,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <footer class="appFooter">
       <button id="savePdf" class="btn" type="button" style="flex:1">Save PDF</button>
-      <button id="sendEmail" class="btn green" type="button" style="flex:1">Send email</button>
+      <button id="sendEmail" class="btn green" type="button" style="flex:1">Send Email</button>
     </footer>
+  
   </div>
 
 <script>
@@ -403,7 +413,7 @@ function addTimeSlot(){
       <div><label>Arrival</label><input type="time"></div>
     </div>
     <div class="dayTotal">Total time for this day: 0h 0m</div>
-    <button class="btn ghost" type="button" style="margin-top:8px">Remove this day</button>
+    <button class="btn remove" type="button" style="margin-top:8px">Remove This Day</button>
   `;
   const times = wrap.querySelectorAll('input[type=time]');
   const totalBox = wrap.querySelector('.dayTotal');
@@ -475,6 +485,7 @@ function prepareForPdf(clone, sigData){
   const company = $('custCompany').value || '';
   const sales = $('salesName').value || '';
   const salesemail = $('salesEmail').value || '';
+  const ponumber = $('ponumber').value || '';
 
   const addrFields = [
     $('addr1').value, $('addr2').value,
@@ -498,7 +509,8 @@ function prepareForPdf(clone, sigData){
     { id:'custEmail', label:'Point of Contact Email', val:email },
     { id:'custCompany', label:'Company', val:company },
     { id:'salesName', label:'Sales Engineer', val:sales },
-    { id:'salesEmail', label:'Sales Engineer Email', val:salesemail }
+    { id:'salesEmail', label:'Sales Engineer Email', val:salesemail },
+	{ id:'ponumber', label:'Purchase Order Number', val:ponumber }
   ];
   
   replacements.forEach(r=>{
@@ -512,6 +524,9 @@ function prepareForPdf(clone, sigData){
       switch (r.label) {
         case 'Project Number':
           div.classList.add('row-project-number');
+          break;
+	    case 'Purchase Order Number':
+          div.classList.add('row-purchase-order-number');
           break;
         case 'Sales Engineer':
           div.classList.add('row-sales-engineer');
@@ -625,6 +640,7 @@ function buildPdf(){
   const afterImgs = Array.from(document.querySelectorAll('#afterThumbs img')).map(i=>i.src);
 
   const projectNo = escapeHtml($('project').value || '—');
+  const poNo = escapeHtml($('ponumber').value || '—');
   const dateVal = $('date').value || new Date().toISOString().slice(0,10);
   const formattedDate = formatDateWithOrdinal(dateVal);
   const company = escapeHtml($('custCompany').value || '—');
@@ -650,7 +666,8 @@ function buildPdf(){
     .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
 
     /* Custom spacing for specific fields */
-    .row-project-number { margin-bottom: 12px; display:block; }
+    .row-project-number { margin-bottom: 0px; display:block; }
+	.row-purchase-order-number { margin-bottom: 12px; display:block; }
     .row-sales-engineer { margin-bottom: 0px; display:block; }
     .row-sales-email { margin-bottom: 10px; display:block; }
     .row-point-contact { margin-bottom: -10px; display:block; }
@@ -870,12 +887,14 @@ document.getElementById("sendEmail").addEventListener("click", e => {
   const to = document.getElementById("custEmail").value || "";
   const cc = document.getElementById("salesEmail").value || "";   // Sales Engineer
   const bcc = "info.uk@spray.com";                               // Hardcoded
-  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("date").value || ""}`;
+  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("ponumber").value || ""} - ${document.getElementById("date").value || ""}`;
 
   const custName = document.getElementById("custName").value.trim() || "Customer";
   const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
+  const project = document.getElementById("project").value.trim() || "your project";
+  const ponumber = document.getElementById("ponumber").value.trim() || "";
 
-  let body = `Hi ${custName},\n\nPlease find your engineers report attached and some key details below.\n\n----------------------------------------\n`;
+  let body = `Hi ${custName},\n\nPlease find your engineers report related to ${project} attached and some key details below.\n\n----------------------------------------\n`;
 
   const report = document.getElementById("report").value.trim();
   if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
