@@ -25,7 +25,7 @@
 #annotatorModal .btn.yellowpen { background: #ffcc00; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Yellow pen */
 #annotatorModal .btn.blackpen { background: #000000; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Black pen */
 #annotatorModal .btn.remove { background: #cc0102; color: #fff; } /* clear button */
-#annotatorModal .btn.green { background: var(--accent); color: #fff; } /* save button */
+#annotatorModal .btn.green { background: var(--accent); color: #fff; text-align: center; padding: 2px;} /* save button */
 #annotatorModal button { font-weight:700; }
   :root{--bg:#0f0f10;--card:#1e1e1f;--muted:#bdbdbd;--accent:#1ea64a;--primary:#2b6cff}
   *{box-sizing:border-box}
@@ -350,7 +350,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       <button id="sendEmail" class="btn green" type="button" style="flex:1">📧 Email</button>
     </footer>
   
-		<!-- Image Annotator Modal (INSERT: just before closing </div> of #formContainer) -->
+		<!-- Image Annotator Modal -->
 			<div id="annotatorModal" style="display:none;position:fixed;inset:0;z-index:1200;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">
 			<div id="annotatorBackdrop" style="position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,0.7),rgba(0,0,0,0.85))"></div>
 				<div style="position:relative;max-width:980px;margin:36px auto;height:calc(100vh - 72px);display:flex;flex-direction:column;border-radius:12px;overflow:hidden">
@@ -369,7 +369,6 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 						<div style="display:flex;gap:8px">
 							<button id="annotatorClose" class="btn ghost">❌</button>
-							<button id="annotatorSave" class="btn green">💾</button>
 						</div>
 					</div>
 
@@ -383,8 +382,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 						</div>
 					</div>
 
-					<div style="background:var(--card);padding:8px;text-align:center;font-size:12px;color:var(--muted)">
-						<div id="annotatorHint">Use finger or stylus to draw.</div>
+					<div style="background:var(--card);padding:0px;display:flex;align-items:center;gap:8px;justify-content:space-between">
+						<button id="annotatorSave" class="btn green" style="font-size: 30px">💾</button>
+						     <div id="annotatorHint">Use finger or stylus to draw.</div>
 					</div>
 				</div>
 			</div>
