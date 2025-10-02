@@ -617,7 +617,7 @@ function buildPdf(){
   const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
 
   const printCss = `
-    @page { counter-increment: page; }
+    @page { counter-increment: page}
     body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:20px;counter-reset:page}
     .banner{width:100%;height:auto;margin-bottom:12px}
     .title{font-size:18px;font-weight:700;text-align:center;margin:6px 0}
@@ -627,12 +627,12 @@ function buildPdf(){
     th,td{border:1px solid #ddd;padding:8px;text-align:center}
     th{background:#f7f7f7}
     .sig-img{max-width:320px;border:1px solid #000;border-radius:6px}
-    .photo-page{page-break-before:always;height:100vh;display:flex;flex-direction:column;justify-content:space-between;padding:20px}
-    .photo-half{display:flex;flex-direction:column;align-items:center;justify-content:center;height:48vh}
-    .photo-half img{max-width:100%;max-height:48vh;object-fit:contain;border-radius:6px}
-    .photo-caption{text-align:center;color:#666;margin-top:6px}
-    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:12px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
-    .footer .page:before{content:"Page " counter(page) " of " counter(pages);}
+    .photo-page {display: flex;flex-direction: column;justify-content: space-around;align-items: centre;padding: 20px;gap: 12px}
+    .photo-half{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:centre;width:100%}
+    .photo-half img{max-width:100%;height:auto;max-height:45vh;object-fit:contain;border-radius:6px}
+    .photo-caption{text-align:center;color:#000;margin-top:-20px;font-size:12px}
+    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:8px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
+    .footer .page:before{content:"Page " counter(page) " of " counter(pages)}
     .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
 
     /* Custom spacing for specific fields */
@@ -668,13 +668,12 @@ function buildPdf(){
       out += '<div class="photo-page">';
       out += '<div class="photo-half"><img src="'+arr[i]+'"><div class="photo-caption">'+label+' '+(i+1)+'</div></div>';
       if(arr[i+1]) out += '<div class="photo-half"><img src="'+arr[i+1]+'"><div class="photo-caption">'+label+' '+(i+2)+'</div></div>';
-      else out += '<div class="photo-half"></div>';
       out += '</div>';
     }
     return out;
   }
-  if(beforeImgs.length) doc += '<div style="page-break-before:always"><h3>Before Photos</h3></div>'+photosHtml(beforeImgs,'Before photo');
-  if(afterImgs.length) doc += '<div style="page-break-before:always"><h3>After Photos</h3></div>'+photosHtml(afterImgs,'After photo');
+  if(beforeImgs.length) doc += '<div style="page-break-before:always"><h3>Before Photos</h3></div>'+photosHtml(beforeImgs,'Before Photo');
+  if(afterImgs.length) doc += '<div style="page-break-before:always"><h3>After Photos</h3></div>'+photosHtml(afterImgs,'After Photo');
 
   // Footer slogan + dynamic page numbers + Bottle.png on later pages
   doc += '<div class="footer"><div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div><div class="page"></div></div>';
@@ -743,7 +742,7 @@ $('savePdf').addEventListener('click', e=>{ e.preventDefault(); buildPdf(); });
 function saveField(el) {
   localStorage.setItem(el.id, el.value);
 }
-
+	
 // Restore simple fields
 function restoreFields() {
   document.querySelectorAll("input, textarea, select").forEach(el => {
@@ -767,7 +766,8 @@ function restoreSignatures() {
       img.onload = () => {
         const c = document.getElementById(id);
         const ctx = c.getContext("2d");
-        ctx.drawImage(img, 0, 0, c.width, c.height);
+        ctx.clearRect(0, 0, c.width, c.height);
+		ctx.drawImage(img, 0, 0, c.width, c.height);
       };
       img.src = data;
     }
@@ -806,6 +806,20 @@ function restorePhotos() {
     }
   });
 }
+
+function resizeSignatureCanvases() {
+  document.querySelectorAll("canvas.signature").forEach(c => {
+    c.width = c.offsetWidth;
+    c.height = c.offsetHeight;
+  });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  resizeSignatureCanvases();   // ✅ ensure buffer = CSS size
+  restoreFields();
+  restoreSignatures();
+  restorePhotos();
+});
 
 // Save on every input change
 document.querySelectorAll("input, textarea, select").forEach(el => {
@@ -891,6 +905,7 @@ document.getElementById("salesName").addEventListener("change", function () {
   } else {
     emailField.value = "";
   }
+  saveField(emailField);
 });
 
 // Make the <select> searchable with full substring matching
