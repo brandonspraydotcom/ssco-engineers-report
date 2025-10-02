@@ -176,6 +176,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   }
 }
 
+@media print {
+  body::after {
+    content: "";
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 35px;   /* adjust if Safari footer is taller */
+    background: white;
+    z-index: 9999;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -197,7 +211,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
       <div class="row" style="margin-top:10px">
         <div>
           <label>Visit type</label>
-          <select id="visit"><option value="">-- Select --</option><option>Service</option><option>Installation</option><option>Training</option><option>Inspection</option><option>Commissioning</option><option>Site Visit</option><option>Warranty</option></select>
+          <select id="visit"><option value="">-- Select --</option><option>Service</option><option>Installation</option><option>Training</option><option>Testing</option><option>Inspection</option><option>Commissioning</option><option>Site Visit</option><option>Warranty</option></select>
         </div>
         <div>
           <label>Project number</label>
@@ -1008,6 +1022,15 @@ function initAutocomplete() {
 }
 
 window.addEventListener("load", initAutocomplete);
+</script>
+
+<script>
+// Set a clean title so Safari doesn't print the URL
+window.addEventListener("DOMContentLoaded", () => {
+  const project = document.getElementById("project")?.value || "";
+  const date = document.getElementById("date")?.value || "";
+  document.title = `Engineers Report ${project ? "— " + project : ""} ${date ? "— " + date : ""}`;
+});
 </script>
 
 </body>
