@@ -33,7 +33,7 @@
   .container{max-width:820px;margin:0 auto}
   h1{font-size:22px;text-align:center;margin:6px 0;font-weight:700}
   h2{font-size:14px;color:var(--muted);text-align:center;margin:0 0 12px}
-  .card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 6px 20px rgba(0,0,0,.6)}
+ .card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 6px 20px rgba(0,0,0,.6)}
   label{display:block;font-size:15px;color:var(--muted);margin-bottom:6px}
   input[type=text], input[type=date], input[type=time], select, textarea{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:#161616;color:#eee;font-size:16px}
   textarea{resize:none;line-height:1.55;overflow:hidden;min-height:56px}
@@ -206,6 +206,37 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   border-radius: 8px;
 }
 
+/* Fix placeholder font for textareas */
+textarea::placeholder {
+  font-family: inherit !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  font-style: normal !important; /* stops Safari/Firefox italics */
+  color: var(--muted); /* matches your gray label color */
+  opacity: 1;
+}
+
+/* Cross-browser fallbacks */
+textarea::-webkit-input-placeholder {
+  font-family: inherit !important;
+  font-style: normal !important;
+}
+
+textarea:-moz-placeholder { /* Firefox 18- */
+  font-family: inherit !important;
+  font-style: normal !important;
+}
+
+textarea::-moz-placeholder { /* Firefox 19+ */
+  font-family: inherit !important;
+  font-style: normal !important;
+}
+
+textarea:-ms-input-placeholder { /* IE 10+ */
+  font-family: inherit !important;
+  font-style: normal !important;
+}
+
 </style>
 </head>
 <body>
@@ -290,10 +321,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
     <div class="card">
       <label>Report details</label>
-      <textarea id="report" rows="4" placeholder="Start typing report details…"></textarea>
+      <textarea id="report" type="text" rows="4" placeholder="Start typing report details..."></textarea>
       <div class="row" style="margin-top:10px">
-        <textarea id="partsUsed" rows="3" placeholder="List any parts used…"></textarea>
-        <textarea id="partsReq" rows="3" placeholder="List any parts required…"></textarea>
+        <textarea id="partsUsed" type="text" rows="3" placeholder="List any parts used..."></textarea>
+        <textarea id="partsReq" type="text" rows="3" placeholder="List any parts required..."></textarea>
       </div>
     </div>
 
@@ -388,6 +419,13 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 					</div>
 				</div>
 			</div>
+     <!-- Zoom Indicator -->
+	<div id="zoomIndicator"
+     style="display:none;position:absolute;top:16px;right:16px;
+            background:rgba(0,0,0,0.7);color:white;padding:6px 12px;
+            border-radius:8px;font-size:14px;font-weight:500;
+            z-index:9999;transition:opacity 0.3s ease;">
+	</div>
 			<!-- /Annotator Modal -->
 
   
@@ -519,6 +557,34 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
   const btnClear = document.getElementById('annotatorClear');
   const btnEraser = document.getElementById('annotatorEraser');
   const colorButtons = document.querySelectorAll('#annotatorColors button');
+    // --- Pan / Zoom state ---
+  let zoom = 1;
+  let offsetX = 0, offsetY = 0;
+  let panStart = {x:0, y:0};
+  let isPanning = false;
+  let lastPinchDist = 0;
+
+  function applyTransform(animated = false, springy = false) {
+  const wrapperEl = stage.firstElementChild;
+  if (!wrapperEl) return;
+
+  if (animated) {
+    wrapperEl.style.transition = springy
+      ? 'transform 0.4s cubic-bezier(0.22, 1.15, 0.55, 1.0)'  // natural “spring” bounce
+      : 'transform 0.25s ease-out';
+  } else {
+    wrapperEl.style.transition = 'none';
+  }
+
+  wrapperEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+  wrapperEl.style.transformOrigin = 'center center';
+}
+
+  function getTouchDist(touches){
+    const dx = touches[0].pageX - touches[1].pageX;
+    const dy = touches[0].pageY - touches[1].pageY;
+    return Math.hypot(dx, dy);
+  }
   let imgCanvas, drawCanvas, imgCtx, drawCtx;
   let currentImgEl = null;
   let drawing = false;
@@ -586,6 +652,131 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
     // reset stack
     stack = [];
     pushStack(); // push initial blank state
+
+    // enable transform and gestures
+    wrapper.style.transition = 'transform 0.05s ease-out';
+    wrapper.style.touchAction = 'none';
+    zoom = 1; offsetX = 0; offsetY = 0; applyTransform();
+
+    // --- Mouse wheel zoom ---
+    wrapper.addEventListener('wheel', e => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 1.1 : 0.9;
+      zoom = Math.min(Math.max(zoom * delta, 0.75), 3.5);
+      applyTransform();
+      showZoomIndicator(zoom);
+      bump('info');
+    }, { passive:false });
+
+// --- Zoom Overlay Indicator ---
+let zoomIndicatorTimeout;
+function showZoomIndicator(level) {
+  const el = document.getElementById('zoomIndicator');
+  if (!el) return;
+
+  el.textContent = `${Math.round(level * 100)}%`;
+  el.style.opacity = '1';
+  clearTimeout(zoomIndicatorTimeout);
+
+  zoomIndicatorTimeout = setTimeout(() => {
+    el.style.opacity = '0';
+  }, 1000); // fade out after 1 s
+}
+
+    // --- Touch and pan / pinch ---
+// --- Touch and pan / pinch (2-finger) ---
+let lastTouches = [];
+
+wrapper.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    // start drawing
+    drawing = true;
+    lastTouches = [];
+  } else if (e.touches.length === 2) {
+    drawing = false;
+    lastTouches = [...e.touches].map(t => ({ x: t.pageX, y: t.pageY }));
+    isPanning = true;
+    lastPinchDist = getTouchDist(e.touches);
+  }
+}, { passive:false });
+
+wrapper.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && drawing) return; // drawing handled elsewhere
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const newTouches = [...e.touches].map(t => ({ x: t.pageX, y: t.pageY }));
+
+    // --- pinch zoom ---
+    const dist = getTouchDist(e.touches);
+    if (lastPinchDist) {
+      const delta = dist / lastPinchDist;
+      zoom = Math.min(Math.max(zoom * delta, 0.75), 3.5);
+      applyTransform();
+      showZoomIndicator(zoom);
+      bump('info');
+    }
+    lastPinchDist = dist;
+	 if (Math.abs(zoom * 100 - 100) % 50 < 2) bump(15);
+
+    // --- pan ---
+    const dx = (newTouches[0].x + newTouches[1].x) / 2 - (lastTouches[0].x + lastTouches[1].x) / 2;
+    const dy = (newTouches[0].y + newTouches[1].y) / 2 - (lastTouches[0].y + lastTouches[1].y) / 2;
+    offsetX += dx;
+    offsetY += dy;
+    lastTouches = newTouches;
+
+    applyTransform();
+    showZoomIndicator(zoom);
+    bump('info');
+  }
+}, { passive:false });
+
+wrapper.addEventListener('touchend', e => {
+  if (e.touches.length < 2) {
+    isPanning = false;
+    lastPinchDist = 0;
+    lastTouches = [];
+  }
+});
+
+   // --- Double-tap / click reset (ignore multi-touch) ---
+let lastTap = 0;
+let multiTouchActive = false;
+
+wrapper.addEventListener('touchstart', e => {
+  // Track if multi-touch gesture is in progress
+  multiTouchActive = e.touches.length > 1;
+}, { passive: true });
+
+wrapper.addEventListener('touchend', e => {
+  // If a pinch/pan just ended, ignore this touchend
+  if (multiTouchActive) {
+    multiTouchActive = false;
+    lastTap = 0;
+    return;
+  }
+
+  // Single-finger double-tap detection
+  const now = Date.now();
+  if (now - lastTap < 300 && e.touches.length === 0) {
+    zoom = 1;
+    offsetX = 0;
+    offsetY = 0;
+    applyTransform(true, true);
+    bump('info');
+    showToast('View reset', 'info');
+  }
+  lastTap = now;
+});
+
+wrapper.addEventListener('dblclick', () => {
+  zoom = 1;
+  offsetX = 0;
+  offsetY = 0;
+  applyTransform(true, true);
+  bump('info');
+  showToast('View reset', 'info');
+});
   }
 
   function pushStack(){
@@ -659,6 +850,9 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
   window.openAnnotator = function(thumbnailImgEl, thumbListId){
     currentImgEl = thumbnailImgEl;
     modal.style.display = 'block';
+    bump('info');
+    showToast('Annotator opened', 'info');
+
     // create a new Image() at full resolution if src already loaded
     const base = new Image();
     base.onload = ()=>{
@@ -715,30 +909,48 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
     currentImgEl = null;
   });
 
-  btnSave.addEventListener('click', ()=> {
-    // Merge imgCanvas + drawCanvas into a single dataURL preserving natural resolution
-    const outCanvas = document.createElement('canvas');
-    outCanvas.width = imgCanvas.width;
-    outCanvas.height = imgCanvas.height;
-    const outCtx = outCanvas.getContext('2d');
-    // draw base
-    outCtx.drawImage(imgCanvas, 0, 0);
-    // draw annotations (drawCanvas)
-    outCtx.drawImage(drawCanvas, 0, 0);
-    // create dataURL (jpeg to keep size reasonable; use quality 0.92)
-    let annotatedDataUrl = outCanvas.toDataURL('image/jpeg', 0.92);
+  btnSave.addEventListener('click', () => {
+    // Immediately start haptic + toast
+ setTimeout(() => {
+  bump('info');
+  showToast('Saving annotation…', 'info');
+  setTimeout(() => {
+    bump('success');
+    showToast('Annotation saved!', 'success')
+  }, 900);
+ }, 600);
+  
+  // Merge imgCanvas + drawCanvas into a single dataURL preserving natural resolution
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = imgCanvas.width;
+  outCanvas.height = imgCanvas.height;
+  const outCtx = outCanvas.getContext('2d');
+  outCtx.drawImage(imgCanvas, 0, 0);
+  outCtx.drawImage(drawCanvas, 0, 0);
+  let annotatedDataUrl = outCanvas.toDataURL('image/jpeg', 0.92);
 
-    // Replace thumbnail image src with annotated dataURL
-    if(currentImgEl){
-      currentImgEl.src = annotatedDataUrl;
-      // ensure the remove button still works; also persist
-      savePhotos();
-    }
-    // close modal
-    modal.style.display = 'none';
-    stage.innerHTML = '';
-    currentImgEl = null;
-  });
+  // Replace thumbnail image src with annotated dataURL
+  if (currentImgEl) {
+    currentImgEl.src = annotatedDataUrl;
+    savePhotos();
+  }
+
+  // Close modal and clear stage
+  modal.style.display = 'none';
+  stage.innerHTML = '';
+  currentImgEl = null;
+
+  // Two-stage feedback (after modal close)
+  setTimeout(() => {
+    bump('info');
+    showToast('Saving annotation…', 'info');
+
+    setTimeout(() => {
+      bump('success');
+      showToast('Annotation saved!', 'success');
+    }, 1200);
+  }, 600);
+});
 
   // Close when clicking backdrop
   document.getElementById('annotatorBackdrop').addEventListener('click', ()=> {
@@ -759,6 +971,21 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
   });
 
 })();
+
+  const zoomIndicator = document.getElementById('zoomIndicator');
+  let zoomTimeout;
+
+  function showZoomIndicator(level) {
+    if (!zoomIndicator) return;
+    zoomIndicator.textContent = Math.round(level * 100) + '%';
+    zoomIndicator.style.display = 'block';
+    zoomIndicator.style.opacity = '1';
+    clearTimeout(zoomTimeout);
+    zoomTimeout = setTimeout(() => {
+      zoomIndicator.style.opacity = '0';
+      setTimeout(() => zoomIndicator.style.display = 'none', 300);
+    }, 800);
+  }
 
 
 /* ---------- Prepare clone for PDF (light theme) ---------- */
@@ -1191,47 +1418,36 @@ window.addEventListener("DOMContentLoaded", () => {
   restoreSignatures();
   restorePhotos();
 });
-</script>
 
-<script>
-// Send Email (with clear after)
-document.getElementById("sendEmail").addEventListener("click", e => {
-  e.preventDefault();
+// Exit reminder
+(function(){
+  let allowExit = false;
+  const modal = document.getElementById('exitModal');
 
-  const to = document.getElementById("custEmail").value || "";
-  const cc = document.getElementById("salesEmail").value || "";   // Sales Engineer
-  const bcc = "info.uk@spray.com";                               // Hardcoded
-  const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("ponumber").value || ""} - ${document.getElementById("date").value || ""}`;
+  window.addEventListener('beforeunload', (e) => {
+    if (allowExit) return;
+    e.preventDefault();
+    e.returnValue = '';
+    modal.style.display = 'flex';
+    return '';
+  });
 
-  const custName = document.getElementById("custName").value.trim() || "Customer";
-  const engineer = document.getElementById("engineer").value.trim() || "Your SSCo Engineer";
-  const project = document.getElementById("project").value.trim() || "your project";
-  const ponumber = document.getElementById("ponumber").value.trim() || "";
+  document.getElementById('exitSave').addEventListener('click', () => {
+    allowExit = true;
+    document.getElementById('savePdf')?.click();
+    modal.style.display = 'none';
+  });
 
-  let body = `Hi ${custName},\n\nPlease find your engineers report related to ${project} attached and some key details below.\n\n----------------------------------------\n`;
+  document.getElementById('exitClose').addEventListener('click', () => {
+    allowExit = true;
+    window.close();
+  });
 
-  const report = document.getElementById("report").value.trim();
-  if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
+  document.getElementById('exitCancel').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+})();
 
-  const partsUsed = document.getElementById("partsUsed").value.trim();
-  if (partsUsed) body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
-
-  const partsReq = document.getElementById("partsReq").value.trim();
-  if (partsReq) body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
-
-  body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
-
-  // Build mailto link
-  let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
-  if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
-
-  console.log("Generated mailto link:", mailtoLink);
-  window.location.href = mailtoLink;
-
-  // Clear saved form data
-  localStorage.clear();
-});
 </script>
 
 <script>
@@ -1364,6 +1580,276 @@ window.addEventListener("DOMContentLoaded", () => {
   const date = document.getElementById("date")?.value || "";
   document.title = `Engineers Report ${project ? "— " + project : ""} ${date ? "— " + date : ""}`;
 });
+</script>
+
+<!-- Exit-Save Modal -->
+<div id="exitModal" class="modal" style="display:none;">
+  <div class="modal-box">
+    <p>Remember to save the report before closing.<br>Do you want to save now?</p>
+    <button id="exitSave" class="btn green">💾 Save PDF</button>
+    <button id="exitClose" class="btn remove">❌ Close</button>
+    <button id="exitCancel" class="btn ghost">Cancel</button>
+  </div>
+</div>
+
+<!-- Email Reminder Modal -->
+<div id="emailModal" style="display:none;position:fixed;inset:0;z-index:4000;
+  background:rgba(0,0,0,0.6);align-items:center;justify-content:center">
+  <div style="background:#1e1e1f;padding:20px;border-radius:14px;
+    max-width:320px;text-align:center;box-shadow:0 12px 30px rgba(0,0,0,.5)">
+    <p>📎 Remember to attach the PDF to the email manually.</p>
+    <button id="emailOk" class="btn green">OK</button>
+  </div>
+</div>
+
+<script>
+// --- Haptics Helper ---
+function bump(type = 'default') {
+  if (!('vibrate' in navigator)) return; // skip if not supported
+
+  const patterns = {
+    default: 15,            // single short pulse
+    success: [15, 30, 15],  // double tap
+    error: [50, 30, 50],    // two strong buzzes
+    info: 20                // short single
+  };
+
+  navigator.vibrate(patterns[type] || patterns.default);
+}
+</script>
+
+<script>
+// --- Toast Helper ---
+function showToast(message, type = 'success') {
+  const el = document.getElementById('toast');
+  if (!el) return;
+
+  const colors = {
+    success: '#1ea64a',
+    error:   '#e43c3c',
+    info:    '#1f6feb'
+  };
+
+  el.textContent = message;
+  el.style.background = colors[type] || colors.success;
+
+// Haptic feedback based on type
+  bump(type);
+
+  // Start visible + slightly lifted
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+
+  // Hide after 3s
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(20px)';
+  }, 3000);
+}
+</script>
+
+<script>
+// --- Save PDF with Haptics + Toast ---
+document.addEventListener("DOMContentLoaded", () => {
+  const saveBtn = document.getElementById("savePdf");
+  if (!saveBtn) return;
+
+  saveBtn.addEventListener("click", () => {
+    // Give tactile tap
+    bump('info');
+
+    // Show toast message
+    showToast("Saving PDF…", "info");
+
+    // Call your existing PDF save logic
+    // If you have a function for it, call it here:
+    // generatePdf();
+    // Or if your button already triggers a PDF via a hidden form or script:
+    // document.getElementById("savePdf")?.click();
+  });
+});
+</script>
+
+<script>
+// --- Save PDF with Toasts + Haptics feedback ---
+document.addEventListener("DOMContentLoaded", () => {
+  const saveBtn = document.getElementById("savePdf");
+  if (!saveBtn) return;
+
+  // Attach once
+  saveBtn.addEventListener("click", async () => {
+    bump('info'); // short tap
+    showToast("Building PDF…", "info");
+
+    try {
+      await buildPdfWithFeedback();
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      bump('error');
+      showToast("Error building PDF!", "error");
+    }
+  });
+});
+
+// --- Wrapper for buildPdf() to include feedback ---
+async function buildPdfWithFeedback() {
+  return new Promise((resolve, reject) => {
+    try {
+      // Wrap your existing buildPdf logic
+      buildPdf();
+
+      // Delay success feedback slightly to allow print window to open
+      setTimeout(() => {
+        bump('success');
+        showToast("PDF ready — printing…", "success");
+        resolve();
+      }, 1500);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+</script>
+
+<script>
+// ==========================
+// Email Reminder + Send Email
+// ==========================
+
+document.addEventListener("DOMContentLoaded", () => {
+  const btn    = document.getElementById("sendEmail");
+  const modal  = document.getElementById("emailModal");
+  const ok     = document.getElementById("emailOk");
+
+  if (!btn || !modal || !ok) {
+    console.warn("Email reminder setup skipped: missing element(s).");
+    return;
+  }
+
+  // Keep hidden until needed
+  modal.style.display = "none";
+
+  // Flag so the reminder only appears once
+  let reminderShown = false;
+
+  // --- Intercept first click ---
+  btn.addEventListener("click", (e) => {
+	 if (!e.isTrusted) return;
+    if (!reminderShown) {
+      e.preventDefault();
+      modal.style.display = "flex";
+    } else {
+      // run the actual send logic
+      sendEmailNow();
+    }
+  });
+
+  // --- When user confirms ---
+  ok.addEventListener("click", () => {
+    modal.style.display = "none";
+    reminderShown = true;
+	 showToast ("Opening mail app...", "info");
+    sendEmailNow();   // now trigger the real send
+  });
+
+  // --- Actual send logic ---
+  function sendEmailNow() {
+    const to = document.getElementById("custEmail").value || "";
+    const cc = document.getElementById("salesEmail").value || ""; // Sales Engineer
+    const bcc = "info.uk@spray.com";
+    const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("ponumber").value || ""} - ${document.getElementById("date").value || ""}`;
+
+    const custName = (document.getElementById("custName").value || "Customer").trim();
+    const engineer = (document.getElementById("engineer").value || "Your SSCo Engineer").trim();
+    const project = (document.getElementById("project").value || "your project").trim();
+    const ponumber = (document.getElementById("ponumber").value || "").trim();
+
+    let body = `Hi ${custName},\n\nPlease find your engineers report related to ${project} attached and some key details below.\n\n----------------------------------------\n`;
+
+    const report = (document.getElementById("report")?.value || "").trim();
+    if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
+
+    const partsUsed = (document.getElementById("partsUsed")?.value || "").trim();
+    if (partsUsed) body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
+
+    const partsReq = (document.getElementById("partsReq")?.value || "").trim();
+    if (partsReq) body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
+
+    body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
+
+    let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
+    if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
+
+    console.log("Generated mailto link:", mailtoLink);
+    window.location.href = mailtoLink;
+
+    // Clear saved form data
+    localStorage.clear();
+  }
+});
+</script>
+
+<!-- Toast Notification -->
+<div id="toast"
+     style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+            z-index:5000;background:#1ea64a;color:#fff;padding:10px 18px;
+            border-radius:14px;opacity:0;transition:opacity .4s ease, transform .4s ease;
+            box-shadow:0 8px 20px rgba(0,0,0,0.25);font-size:15px;pointer-events:none;">
+</div>
+
+<!-- Zoom Overlay Indicator (always on top) -->
+<div id="zoomIndicator"
+     style="position:fixed;
+            bottom:90px;
+            left:50%;
+            transform:translateX(-50%);
+            background:rgba(20,20,20,0.9);
+            color:#fff;
+            font-size:15px;
+            padding:6px 16px;
+            border-radius:24px;
+            opacity:0;
+            pointer-events:none;
+            transition:opacity .25s ease;
+            z-index:99999;
+            box-shadow:0 2px 8px rgba(0,0,0,0.5);
+            font-family:system-ui, sans-serif;">
+  100%
+</div>
+
+<!-- Quick Actions Bar -->
+<div id="quickBar" style="display:none;position:fixed;left:50%;bottom:28px;
+  transform:translateX(-50%);z-index:3500;background:rgba(30,30,31,0.92);
+  padding:8px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.45)">
+  <div style="display:flex;gap:8px">
+    <button id="qbSave" class="btn green">💾 Save PDF</button>
+    <button id="qbEmail" class="btn" style="background:#2b6cff;color:white">📧 Email</button>
+  </div>
+</div>
+
+<script>
+<!-- Quick Actions Bar -->
+// (function(){
+  const bar = document.getElementById('quickBar');
+  function toggleBar(){
+    const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 420);
+    bar.style.display = nearBottom ? 'block' : 'none';
+  }
+  window.addEventListener('scroll', () => { requestAnimationFrame(toggleBar); });
+
+  document.getElementById('qbSave').addEventListener('click', () => {
+    navigator.vibrate?.(20);
+    document.getElementById('savePdf')?.click();
+    showToast('Saving PDF…','info');
+  });
+
+  document.getElementById('qbEmail').addEventListener('click', () => {
+    navigator.vibrate?.(20);
+    document.getElementById('sendEmail')?.click();
+  });
+})();
 </script>
 
 </body>
