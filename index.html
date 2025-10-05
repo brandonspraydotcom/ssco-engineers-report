@@ -1353,12 +1353,17 @@ function buildPdf(){
   doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
   doc += prepared.innerHTML;
 
-// Project Description (if any)
-const projectDesc = $('projectDesc')?.value?.trim();
+// --- Project Description (only if filled) ---
+const projectDesc = (document.getElementById('projectDesc')?.value || '').trim();
 if (projectDesc) {
   doc += `
-    <h3 style="margin-top:16px;">Project Description</h3>
-    <p style="white-space:pre-wrap;line-height:1.4;">${escapeHtml(projectDesc)}</p>
+    <div style="margin-top:20px;">
+      <h3 style="margin-bottom:6px;">Project Description</h3>
+      <div style="border:1px solid #ccc;padding:8px;border-radius:6px;
+                  font-size:13px;white-space:pre-wrap;">
+        ${escapeHtml(projectDesc)}
+      </div>
+    </div>
   `;
 }
   
@@ -1400,7 +1405,26 @@ if (projectDesc) {
 
 
 /* ---------- Buttons ---------- */
-$('savePdf').addEventListener('click',       e=>{ e.preventDefault(); if (!validateImportantFields()) return; buildPdf(); markPdfSaved(); bump('success'); showToast('✅ PDF saved and ready to send!', 'success'); });
+document.getElementById('savePdf').addEventListener('click', e => {
+  e.preventDefault();
+
+  // ✅ Validate before generating PDF
+  if (!validateImportantFields()) {
+    bump('warning');
+    showToast('⚠️ Please complete highlighted fields before saving.', 'warning');
+    return;
+  }
+
+  // ✅ Build the PDF
+  buildPdf();
+
+  // ✅ Mark PDF as saved (for the email safety check)
+  markPdfSaved();
+
+  // ✅ Give some feedback
+  bump('success');
+  showToast('✅ PDF saved and ready to send!', 'success');
+});
 
 // $('sendEmail').addEventListener('click', e => {
   // e.preventDefault();
