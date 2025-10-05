@@ -1406,18 +1406,16 @@ if (projectDesc) {
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e => {
   e.preventDefault();
-  const valid = validateImportantFields(); // triggers scroll + highlight
+  const valid = validateImportantFields();
   if (!valid) {
     bump('warning');
     showToast('⚠️ Please complete highlighted fields before saving.', 'warning');
     return;
   }
-
   bump('info');
   showToast('Building PDF…', 'info');
   buildPdf();
   markPdfSaved();
-
   setTimeout(() => {
     bump('success');
     showToast('✅ PDF saved and ready to send!', 'success');
