@@ -1358,9 +1358,8 @@ const projectDesc = (document.getElementById('projectDesc')?.value || '').trim()
 if (projectDesc) {
   doc += `
     <div style="margin-top:20px;">
-      <h3 style="margin-bottom:6px;">Project Description</h3>
-      <div style="border:1px solid #ccc;padding:8px;border-radius:6px;
-                  font-size:13px;white-space:pre-wrap;">
+      <h3 style="margin-bottom:4px;">Project Description</h3>
+      <div style="font-size:13px;line-height:1.5;white-space:pre-wrap;">
         ${escapeHtml(projectDesc)}
       </div>
     </div>
@@ -1405,23 +1404,23 @@ if (projectDesc) {
 
 
 /* ---------- Buttons ---------- */
-document.getElementById('savePdf').addEventListener('click', e => {
+$('savePdf').addEventListener('click', e => {
   e.preventDefault();
-
-  // ✅ Validate before generating PDF
-  if (!validateImportantFields()) {
-    bump('warning');
-    showToast('⚠️ Please complete highlighted fields before saving.', 'warning');
-    return;
+  
+  // Run validation first
+  if (!validateBeforeEmail()) {
+    return; // stops if missing required data
   }
 
-  // ✅ Build the PDF
+  // Scroll to first missing field smoothly (auto-scroll)
+  const firstInvalid = document.querySelector('.highlight-missing');
+  if (firstInvalid) {
+    firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // Continue only if all fields valid
   buildPdf();
-
-  // ✅ Mark PDF as saved (for the email safety check)
   markPdfSaved();
-
-  // ✅ Give some feedback
   bump('success');
   showToast('✅ PDF saved and ready to send!', 'success');
 });
@@ -1946,6 +1945,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!validateBeforeEmail()) {
       return; // stops if missing required data
     }
+
+const firstInvalid = document.querySelector('.highlight-missing');
+if (firstInvalid) {
+  firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+}
 
     // ✅ Step 3: Show success overlay before email modal
 if (!reminderShown) {
