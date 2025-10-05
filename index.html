@@ -1404,23 +1404,6 @@ if (projectDesc) {
 
 
 /* ---------- Buttons ---------- */
-$('savePdf').addEventListener('click', e => {
-  e.preventDefault();
-  const valid = validateImportantFields();
-  if (!valid) {
-    bump('warning');
-    showToast('⚠️ Please complete highlighted fields before saving.', 'warning');
-    return;
-  }
-  bump('info');
-  showToast('Building PDF…', 'info');
-  buildPdf();
-  markPdfSaved();
-  setTimeout(() => {
-    bump('success');
-    showToast('✅ PDF saved and ready to send!', 'success');
-  }, 800);
-});
 
 // $('sendEmail').addEventListener('click', e => {
   // e.preventDefault();
@@ -1871,31 +1854,6 @@ async function buildPdfWithFeedback() {
 
 <script>
 
-function showValidationSuccess() {
-  const overlay = document.getElementById('validationSuccess');
-  const inner = overlay.firstElementChild;
-  if (!overlay || !inner) return;
-
-  overlay.style.display = 'flex';
-  inner.style.transform = 'scale(1)';
-  inner.style.animation = 'pulseSuccess 1s ease-in-out';
-
-  // haptic + toast feedback
-  bump('success');
-  showToast('✅ All checks passed — ready to send!', 'success');
-
-  setTimeout(() => {
-    inner.style.opacity = '0';
-    overlay.style.opacity = '0';
-    setTimeout(() => {
-      overlay.style.display = 'none';
-      overlay.style.opacity = '1';
-      inner.style.opacity = '1';
-      inner.style.transform = 'scale(0)';
-    }, 600);
-  }, 1400);
-}
-
 function validateBeforeEmail() {
   const ok = validateImportantFields(); // reuse same logic
   if (!ok) {
@@ -1910,100 +1868,7 @@ function validateBeforeEmail() {
 // Email Reminder + Send Email
 // ==========================
 
-document.addEventListener("DOMContentLoaded", () => {
-  const btn    = document.getElementById("sendEmail");
-  const modal  = document.getElementById("emailModal");
-  const ok     = document.getElementById("emailOk");
 
-  if (!btn || !modal || !ok) {
-    console.warn("Email reminder setup skipped: missing element(s).");
-    return;
-  }
-
-  // Keep hidden until needed
-  modal.style.display = "none";
-  let reminderShown = false;
-
-  // --- Intercept first click ---
-  btn.addEventListener("click", (e) => {
-    e.preventDefault();
-
-    // ✅ Safety check — PDF must be saved first
-    if (!hasSavedPdf()) {
-      bump('warning');
-      showToast('⚠️ Please save the PDF before sending email.', 'warning');
-      const saveBtn = document.getElementById('savePdf');
-      saveBtn.style.animation = 'pulse 1s ease-in-out 2';
-      setTimeout(() => saveBtn.style.animation = '', 2000);
-      return; // stop here
-    }
-
-        // ✅ Step 2: Validate important fields (scroll + highlight)
-    if (!validateBeforeEmail()) {
-      return; // stops if missing required data
-    }
-
-const firstInvalid = document.querySelector('.highlight-missing');
-if (firstInvalid) {
-  firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-    // ✅ Step 3: Show success overlay before email modal
-if (!reminderShown) {
-  showValidationSuccess(); // 🟢 new overlay animation + toast
-  setTimeout(() => {
-    modal.style.display = "flex"; // open modal after overlay fades
-  }, 1400);
-} else {
-  sendEmailNow();
-}
-  });
-
-  // --- When user confirms ---
-  ok.addEventListener("click", () => {
-    modal.style.display = "none";
-    reminderShown = true;
-    bump('info');
-    showToast("Opening mail app...", "info");
-    sendEmailNow();   // now trigger the real send
-  });
-
-  // --- Actual send logic ---
-  function sendEmailNow() {
-    const to = document.getElementById("custEmail").value || "";
-    const cc = document.getElementById("salesEmail").value || "";
-    const bcc = "info.uk@spray.com";
-    const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("ponumber").value || ""} - ${document.getElementById("date").value || ""}`;
-
-    const custName = (document.getElementById("custName").value || "Customer").trim();
-    const engineer = (document.getElementById("engineer").value || "Your SSCo Engineer").trim();
-    const project = (document.getElementById("project").value || "your project").trim();
-    const ponumber = (document.getElementById("ponumber").value || "").trim();
-
-    let body = `Hi ${custName},\n\nPlease find your engineers report related to ${project} attached and some key details below.\n\n----------------------------------------\n`;
-
-    const report = (document.getElementById("report")?.value || "").trim();
-    if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
-
-    const partsUsed = (document.getElementById("partsUsed")?.value || "").trim();
-    if (partsUsed) body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
-
-    const partsReq = (document.getElementById("partsReq")?.value || "").trim();
-    if (partsReq) body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
-
-    body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
-
-    let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
-    if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
-
-    console.log("Generated mailto link:", mailtoLink);
-    window.location.href = mailtoLink;
-
-    // Clear saved form data if desired
-    // localStorage.clear();
-  }
-});
 </script>
 
 <script>
@@ -2074,6 +1939,79 @@ function highlightField(el, isFirst = false) {
   const duration = isFirst ? 6000 : 1800;
   setTimeout(clearHighlight, duration);
 }
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  // ---------- SAVE PDF ----------
+  const saveBtn = document.getElementById("savePdf");
+  saveBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+
+    // Run validation (scroll + highlight)
+    const ok = validateImportantFields();
+    if (!ok) return;
+
+    bump("info");
+    showToast("Building PDF…", "info");
+
+    try {
+      await new Promise(r => setTimeout(r, 400)); // allow animation time
+      buildPdf();
+      markPdfSaved();
+      bump("success");
+      showToast("✅ PDF saved and ready to send!", "success");
+    } catch (err) {
+      console.error("PDF build failed:", err);
+      bump("error");
+      showToast("❌ PDF generation failed!", "error");
+    }
+  });
+
+
+  // ---------- SEND EMAIL ----------
+  const btn = document.getElementById("sendEmail");
+  const modal = document.getElementById("emailModal");
+  const ok = document.getElementById("emailOk");
+  let reminderShown = false;
+
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+
+    // Ensure PDF is saved
+    if (!hasSavedPdf()) {
+      bump("warning");
+      showToast("⚠️ Please save the PDF before sending email.", "warning");
+      document.getElementById("savePdf").style.animation = "pulse 1s ease-in-out 2";
+      return;
+    }
+
+    // Validate fields with scroll + highlight
+    const valid = validateImportantFields();
+    if (!valid) return;
+
+    // Wait briefly to allow scroll
+    await new Promise(r => setTimeout(r, 500));
+
+    // Show success overlay before email modal
+    if (!reminderShown) {
+      showValidationSuccess();
+      setTimeout(() => modal.style.display = "flex", 1400);
+    } else {
+      sendEmailNow();
+    }
+  });
+
+  ok.addEventListener("click", () => {
+    modal.style.display = "none";
+    reminderShown = true;
+    bump("info");
+    showToast("Opening mail app...", "info");
+    sendEmailNow();
+  });
+
+});
 </script>
 
 <!-- Toast Notification -->
