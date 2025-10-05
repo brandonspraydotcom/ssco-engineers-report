@@ -1355,10 +1355,10 @@ function buildPdf(){
 
 // --- Project Description (only if filled) ---
 const projectDesc = (document.getElementById('projectDesc')?.value || '').trim();
-if (projectDesc) {
+if (projectDesc !== '') {
   doc += `
     <div style="margin-top:20px;">
-      <h3 style="margin-bottom:4px;">Project Description</h3>
+      <h3 style="margin-bottom:6px;">Project Description</h3>
       <div style="font-size:13px;line-height:1.5;white-space:pre-wrap;">
         ${escapeHtml(projectDesc)}
       </div>
@@ -1406,19 +1406,8 @@ if (projectDesc) {
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e => {
   e.preventDefault();
-  
-  // Run validation first
-  if (!validateBeforeEmail()) {
-    return; // stops if missing required data
-  }
-
-  // Scroll to first missing field smoothly (auto-scroll)
-  const firstInvalid = document.querySelector('.highlight-missing');
-  if (firstInvalid) {
-    firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  // Continue only if all fields valid
+  const firstInvalid = validateImportantFields();
+  if (!firstInvalid) return;  // stops if invalid fields exist
   buildPdf();
   markPdfSaved();
   bump('success');
