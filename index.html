@@ -19,6 +19,24 @@
 
 <title>SSCo — Engineers Report</title>
 <style>
+#zoomIndicator {
+  position: fixed !important;
+  top: 20px;
+  right: 20px;
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 999999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#zoomIndicator.visible {
+  opacity: 1 !important;
+}
 #annotatorModal .btn.ghost { background: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.06); }
 #annotatorModal .btn.bluepen { background: #2b6cff; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Blue pen */
 #annotatorModal .btn.greenpen { background: #1ea64a; color: #fff; border: 1px solid rgba(255,255,255,0.06); } /* Green pen */
@@ -564,20 +582,45 @@ $('afterInput').addEventListener('change', e=> previewFiles(e.target,'afterThumb
   let isPanning = false;
   let lastPinchDist = 0;
 
-  function applyTransform(animated = false, springy = false) {
+function applyTransform(animated = false, springy = false) {
   const wrapperEl = stage.firstElementChild;
   if (!wrapperEl) return;
 
+  // --- Limit zoom range ---
+  zoom = Math.min(Math.max(zoom, 0.5), 4);
+
+  // --- Compute transform bounds ---
+  const rect = wrapperEl.getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+  const maxX = Math.max((rect.width * zoom - stageRect.width) / 2, 0);
+  const maxY = Math.max((rect.height * zoom - stageRect.height) / 2, 0);
+  offsetX = Math.min(Math.max(offsetX, -maxX), maxX);
+  offsetY = Math.min(Math.max(offsetY, -maxY), maxY);
+
+  // --- Apply transition styles ---
   if (animated) {
     wrapperEl.style.transition = springy
-      ? 'transform 0.4s cubic-bezier(0.22, 1.15, 0.55, 1.0)'  // natural “spring” bounce
+      ? 'transform 0.4s cubic-bezier(0.22, 1.15, 0.55, 1.0)' // natural spring
       : 'transform 0.25s ease-out';
   } else {
     wrapperEl.style.transition = 'none';
   }
 
+  // --- Apply transform ---
   wrapperEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
   wrapperEl.style.transformOrigin = 'center center';
+
+  // --- Show zoom indicator (top-right overlay) ---
+showZoomIndicator(zoom);
+const indicator = document.getElementById('zoomIndicator');
+  if (indicator) {
+    indicator.textContent = `Zoom: ${(zoom * 100).toFixed(0)}%`;
+    indicator.style.opacity = '1';
+    clearTimeout(indicator.hideTimeout);
+    indicator.hideTimeout = setTimeout(() => {
+      indicator.style.opacity = '0';
+    }, 1200);
+  }
 }
 
   function getTouchDist(touches){
@@ -1850,6 +1893,105 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById('sendEmail')?.click();
   });
 })();
+</script>
+
+<!-- Zoom Indicator -->
+<div id="zoomIndicator"
+     style="
+       position: fixed;
+       top: 20px;
+       right: 20px;
+       background: rgba(0, 0, 0, 0.8);
+       color: #fff;
+       padding: 8px 14px;
+       border-radius: 8px;
+       font-size: 14px;
+       font-weight: 600;
+       z-index: 999999;
+       pointer-events: none;
+       opacity: 0;
+       transition: opacity 0.3s ease;
+       font-family: system-ui, sans-serif;">
+  100%
+</div>
+
+<script>
+window.addEventListener('online', () => {
+  showToast('✅ Back online', 'success');
+  bump(50);
+});
+
+window.addEventListener('offline', () => {
+  showToast('⚠️ You are offline', 'error');
+  bump(50);
+});
+</script>
+
+<!-- Install App Button (hidden until available) -->
+<button id="installAppBtn"
+  style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+         background:#2b6cff;color:white;border:none;border-radius:999px;
+         padding:12px 22px;font-size:15px;font-weight:600;
+         box-shadow:0 6px 18px rgba(0,0,0,0.25);z-index:9999;
+         display:none;transition:all 0.3s ease;">
+  📲 Install Engineer Report
+</button>
+
+<script>
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('✅ Service Worker registered:', reg.scope))
+        .catch(err => console.error('❌ SW registration failed:', err));
+    });
+  }
+
+  // Toast for online/offline
+  window.addEventListener('online', () => {
+    showToast('✅ Back online', 'success');
+    bump(50);
+  });
+  window.addEventListener('offline', () => {
+    showToast('⚠️ You are offline', 'error');
+    bump(50);
+  });
+
+  // --- Install App Logic ---
+  let deferredPrompt;
+  const installBtn = document.getElementById('installAppBtn');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.style.display = 'block'; // show the button
+    showToast('⬇️ Ready to install the app', 'info');
+  });
+
+  installBtn.addEventListener('click', async () => {
+    bump('info');
+    showToast('📲 Installing...', 'info');
+    installBtn.style.display = 'none';
+
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('User install choice:', outcome);
+      if (outcome === 'accepted') {
+        showToast('✅ App installed!', 'success');
+        bump('success');
+      } else {
+        showToast('❌ Installation canceled', 'error');
+      }
+      deferredPrompt = null;
+    }
+  });
+
+  // Hide button automatically if already installed
+  window.addEventListener('appinstalled', () => {
+    showToast('✅ Engineer Report installed!', 'success');
+    installBtn.style.display = 'none';
+  });
 </script>
 
 </body>
