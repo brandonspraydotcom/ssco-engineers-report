@@ -1355,11 +1355,11 @@ function buildPdf(){
 
 // --- Project Description (only if filled) ---
 const projectDesc = (document.getElementById('projectDesc')?.value || '').trim();
-if (projectDesc !== '') {
+if (projectDesc) {
   doc += `
     <div style="margin-top:20px;">
-      <h3 style="margin-bottom:6px;">Project Description</h3>
-      <div style="font-size:13px;line-height:1.5;white-space:pre-wrap;">
+      <h3 style="margin-bottom:6px;font-size:14px;color:#333;">Project Description</h3>
+      <div style="font-size:13px;white-space:pre-wrap;line-height:1.5;">
         ${escapeHtml(projectDesc)}
       </div>
     </div>
@@ -1406,12 +1406,22 @@ if (projectDesc !== '') {
 /* ---------- Buttons ---------- */
 $('savePdf').addEventListener('click', e => {
   e.preventDefault();
-  const firstInvalid = validateImportantFields();
-  if (!firstInvalid) return;  // stops if invalid fields exist
+  const valid = validateImportantFields(); // triggers scroll + highlight
+  if (!valid) {
+    bump('warning');
+    showToast('⚠️ Please complete highlighted fields before saving.', 'warning');
+    return;
+  }
+
+  bump('info');
+  showToast('Building PDF…', 'info');
   buildPdf();
   markPdfSaved();
-  bump('success');
-  showToast('✅ PDF saved and ready to send!', 'success');
+
+  setTimeout(() => {
+    bump('success');
+    showToast('✅ PDF saved and ready to send!', 'success');
+  }, 800);
 });
 
 // $('sendEmail').addEventListener('click', e => {
