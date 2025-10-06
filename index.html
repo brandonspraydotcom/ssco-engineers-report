@@ -534,10 +534,6 @@ function hasSavedPdf() {
   return localStorage.getItem('pdfSaved') === 'true';
 }
 
-// Reset on load
-window.addEventListener('DOMContentLoaded', () => {
-  clearPdfSaved();
-});
 
 /* ---------- Helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -1258,7 +1254,7 @@ function prepareForPdf(clone, sigData) {
 
     <div style="margin-top:16px;font-size:13px;color:#333;">
       Please sign to certify that this report and time record is accurate
-      and the work carried out has been completed/progressed to your satisfaction.test2
+      and the work carried out has been completed/progressed to your satisfaction.
     </div>
 
     <div style="display:flex;gap:60px;margin-top:18px;align-items:flex-start;">
@@ -1279,6 +1275,60 @@ function prepareForPdf(clone, sigData) {
   return clone;
 }
 
+// Print an HTML string via a hidden iframe (Safari/PWA safe)
+async function printHtmlViaIframe(htmlString) {
+  return new Promise((resolve, reject) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const idoc = iframe.contentDocument || iframe.contentWindow.document;
+    idoc.open();
+    idoc.write(htmlString);
+    idoc.close();
+
+    // Wait for images to load (best-effort), then print
+    const imgs = Array.from(idoc.images || []);
+    let done = 0, total = imgs.length;
+    const timeout = setTimeout(goPrint, 1200); // safety net
+
+    function imgDone() {
+      done++;
+      if (done >= total) goPrint();
+    }
+    function goPrint() {
+      clearTimeout(timeout);
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (e) {
+        console.warn('iframe print failed, falling back to preview', e);
+        reject(e);
+      } finally {
+        // remove iframe after a moment
+        setTimeout(() => iframe.remove(), 1500);
+        resolve();
+      }
+    }
+
+    if (total === 0) {
+      goPrint();
+    } else {
+      imgs.forEach(img => {
+        if (img.complete) { imgDone(); }
+        else {
+          img.addEventListener('load', imgDone);
+          img.addEventListener('error', imgDone);
+        }
+      });
+    }
+  });
+}
 
 /* ---------- Build printable doc (light) and open it ---------- */
 function buildPdf(){
@@ -1337,13 +1387,6 @@ function buildPdf(){
   doc += '<div style="text-align:center;font-weight:700;margin-bottom:6px">'+sscoTitle+'</div>';
   doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
   doc += prepared.innerHTML;
-
-  
-  // Certification line here
-  doc += `<div style="margin:12px 0;font-size:13px;">
-    Please sign to certify that this report and time record is accurate
-    and the work carried out has been completed/progressed to your satisfaction.test1
-  </div>`;
 
   // photos section
   function photosHtml(arr,label){
@@ -1687,7 +1730,7 @@ function initAutocomplete() {
   });
 
   // --- Autocomplete for companies (custCompany) ---
-const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
+  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
   fields: ["address_components", "geometry", "name"],
   types: ["establishment"]
 });
@@ -1706,7 +1749,8 @@ companyAutocomplete.addListener("place_changed", () => {
 
   // ✅ Still fill the address fields as before
   fillAddress(place);
-});
+  });
+}
 
 window.addEventListener("load", initAutocomplete);
 </script>
@@ -1797,11 +1841,6 @@ function validateBeforeEmail() {
   }
   return true;
 }
-
-// ==========================
-// Email Reminder + Send Email
-// ==========================
-
 
 </script>
 
@@ -2451,34 +2490,56 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => (modal.style.display = "none"), 300);
   });
 
-  // --- Confirm Save (Step 1 -> Step 2) ---
-  ok.addEventListener("click", async () => {
-    bump("info");
-    showToast("Building PDF…", "info");
+  // --- Confirm & Print (no preview tab) ---
+ok.addEventListener("click", async () => {
+  bump("info");
+  showToast("Building PDF…", "info");
+  saveSignature("sig1");
+  saveSignature("sig2");
 
+  try {
+    await new Promise(r => setTimeout(r, 200)); // let UI animate
+
+    // Build the preview window as usual (re-using your existing builder)...
+    const w = buildPdf(); // this writes the doc into w
+    // ...but instead of keeping it, grab the HTML and close the window
+    const html = w?.document?.documentElement?.outerHTML || '';
+    try { w.close(); } catch (e) {}
+
+    if (!html) throw new Error('No HTML built');
+
+    // Print via hidden iframe (Safari/PWA-safe)
+    await printHtmlViaIframe(html);
+
+    // Mark as saved so Email button passes the gate
+    localStorage.setItem("pdfSaved", "true");
+
+    bump("success");
+    showToast("✅ Sent to printer", "success");
+
+    // Close the modal completely (we skip Step 2 now)
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 300);
+
+  } catch (err) {
+    console.error("PDF build/print error:", err);
+    bump("error");
+    showToast("⚠️ Printing failed — opening preview…", "warning");
+
+    // Fallback: rebuild and show the preview window so user can print manually
     try {
-      await new Promise(r => setTimeout(r, 300)); // allow animations to finish
-      const w = buildPdf(); // builds silently (no print)
-
-      // ✅ Remember that a PDF was saved
-      markPdfSaved();
-
-      bump("success");
-      showToast("✅ PDF built successfully", "success");
-
-      // Switch modal to Step 2 ("Print now?")
+      const w2 = buildPdf();
+      window.lastBuiltPdfWindow = w2;
+      // switch modal to step 2 only for this fallback
       step1.style.display = "none";
       step2.style.display = "block";
-
-      // ✅ If user is in Safari PWA (no multi-tab support),
-      // allow the print modal to appear again later
-      window.lastBuiltPdfWindow = w;
-    } catch (err) {
-      console.error("PDF error:", err);
-      bump("error");
+    } catch (e2) {
       showToast("❌ PDF failed to generate", "error");
     }
-  });
+  }
+});
 
   // --- Print Now ---
   printNow.addEventListener("click", () => {
