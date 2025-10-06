@@ -19,6 +19,13 @@
 
 <title>SSCo — Engineers Report</title>
 <style>
+/* Prevent iOS Safari auto-zoom on input focus */
+input,
+textarea,
+select {
+  font-size: 16px !important;
+}
+
 #zoomIndicator {
   position: fixed !important;
   top: 20px;
@@ -429,7 +436,7 @@ window.addEventListener("load", () => {
 
     <div class="card">
       <label>Signatures</label>
-	  <label>Please sign to certify that this report and time record is accurate and the work carried out has been completed/progressed to your satisfaction.test3</label>
+	  <label>Please sign to certify that this report and time record is accurate and the work carried out has been completed/progressed to your satisfaction.</label>
 
       <div class="sigWrap" style="margin-bottom:20px">
         <div class="small">Engineer Signature</div>
@@ -974,6 +981,7 @@ wrapper.addEventListener('dblclick', () => {
   window.openAnnotator = function(thumbnailImgEl, thumbListId){
     currentImgEl = thumbnailImgEl;
     modal.style.display = 'block';
+    lockScroll();
     bump('info');
     showToast('Annotator opened', 'info');
 
@@ -1029,6 +1037,7 @@ wrapper.addEventListener('dblclick', () => {
 
   btnClose.addEventListener('click', ()=> {
     modal.style.display = 'none';
+    unlockScroll();
     stage.innerHTML = '';
     currentImgEl = null;
   });
@@ -1926,7 +1935,7 @@ function highlightField(el, isFirst = false) {
 
 <script>
 // ==========================
-// Email Reminder + Send Email (Fixed Scroll + Highlight)
+// Email Reminder + Send Email (Fixed Scroll + Highlight + Auto-Clear)
 // ==========================
 document.addEventListener("DOMContentLoaded", () => {
   const btn    = document.getElementById("sendEmail");
@@ -2023,7 +2032,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
     if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
 
+    // ✅ Open email app
     window.location.href = mailtoLink;
+
+    // ✅ Clear form + localStorage after sending
+    setTimeout(() => {
+      localStorage.clear();
+      document.querySelectorAll("input, textarea").forEach(el => {
+        if (el.type !== "button" && el.type !== "submit" && el.type !== "file") {
+          el.value = "";
+        }
+      });
+      showToast("🧹 Form cleared for next report", "info");
+    }, 3000);
   }
 });
 </script>
@@ -2473,6 +2494,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Display + animate modal
     modal.style.display = "flex";
+    lockScroll();
     setTimeout(() => {
       modal.classList.add("show");
       box.style.transform = "scale(1)";
@@ -2491,53 +2513,43 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // --- Confirm & Print (no preview tab) ---
-ok.addEventListener("click", async () => {
+ok.addEventListener("click", () => {
   bump("info");
   showToast("Building PDF…", "info");
+
+  // ✅ Save signatures first
   saveSignature("sig1");
   saveSignature("sig2");
 
   try {
-    await new Promise(r => setTimeout(r, 200)); // let UI animate
+    // Build PDF immediately (inside same click context)
+    const w = buildPdf();
+    window.lastBuiltPdfWindow = w;
 
-    // Build the preview window as usual (re-using your existing builder)...
-    const w = buildPdf(); // this writes the doc into w
-    // ...but instead of keeping it, grab the HTML and close the window
-    const html = w?.document?.documentElement?.outerHTML || '';
-    try { w.close(); } catch (e) {}
+    // Safari-safe: focus + print right away
+    w.focus();
+    setTimeout(() => {
+      try {
+        w.print();
+        markPdfSaved();
+        bump("success");
+        showToast("✅ Sent to printer", "success");
+      } catch (err) {
+        console.warn("Print blocked:", err);
+        showToast("⚠️ Printing blocked, preview opened instead", "warning");
+      }
+    }, 400);
 
-    if (!html) throw new Error('No HTML built');
-
-    // Print via hidden iframe (Safari/PWA-safe)
-    await printHtmlViaIframe(html);
-
-    // Mark as saved so Email button passes the gate
-    localStorage.setItem("pdfSaved", "true");
-
-    bump("success");
-    showToast("✅ Sent to printer", "success");
-
-    // Close the modal completely (we skip Step 2 now)
+    // Close modal immediately
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
     setTimeout(() => (modal.style.display = "none"), 300);
 
   } catch (err) {
-    console.error("PDF build/print error:", err);
+    console.error("PDF build failed:", err);
     bump("error");
-    showToast("⚠️ Printing failed — opening preview…", "warning");
-
-    // Fallback: rebuild and show the preview window so user can print manually
-    try {
-      const w2 = buildPdf();
-      window.lastBuiltPdfWindow = w2;
-      // switch modal to step 2 only for this fallback
-      step1.style.display = "none";
-      step2.style.display = "block";
-    } catch (e2) {
-      showToast("❌ PDF failed to generate", "error");
-    }
+    showToast("❌ PDF failed to generate", "error");
   }
 });
 
@@ -2565,14 +2577,28 @@ ok.addEventListener("click", async () => {
     }
   });
 
-  // --- Close modal after Step 2 ---
-  closeModal.addEventListener("click", () => {
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 300);
-  });
+  	// --- Close modal after Step 2 ---
+	closeModal.addEventListener("click", () => {
+  	modal.classList.remove("show");
+  	box.style.transform = "scale(0.85)";
+  	box.style.opacity = "0";
+
+  	setTimeout(() => {
+    	modal.style.display = "none";
+    	unlockScroll(); // ✅ restore scroll once hidden
+  	}, 300);
+ });
 });
+</script>
+
+<script>
+function lockScroll() {
+  document.body.classList.add("modal-open");
+}
+
+function unlockScroll() {
+  document.body.classList.remove("modal-open");
+}
 </script>
 
 <style>
