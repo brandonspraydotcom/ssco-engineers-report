@@ -1116,181 +1116,166 @@ wrapper.addEventListener('dblclick', () => {
   }
 
 
-/* ---------- Prepare clone for PDF (light theme) ---------- */
-function prepareForPdf(clone, sigData){
-  // strip all <label> to avoid duplication
-  clone.querySelectorAll('label').forEach(el=>el.remove());
-  // Remove the big title/subtitle (web only, not needed in PDF)
-  const h1 = clone.querySelector('h1');
-  if(h1) h1.remove();
-  const h2 = clone.querySelector('h2');
-  if(h2) h2.remove();
+/* ---------- Prepare clone for PDF (clean, structured layout) ---------- */
+function prepareForPdf(clone, sigData) {
+  // Remove UI-only elements
+  clone.querySelectorAll(
+    ".btn, .controls, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal"
+  ).forEach(el => el.remove());
 
-  // Replace textareas with plain paragraphs + headings
-  const textAreas = [
-    { id:'report', label:'Report Details' },
-    { id:'partsUsed', label:'Parts Used' },
-    { id:'partsReq', label:'Parts Required' }
-  ];
-  textAreas.forEach(t=>{
-    const el = clone.querySelector('#'+t.id);
-    if(el){
-      const wrap = document.createElement('div');
-      wrap.innerHTML = `
-        <h3 style="margin-top:16px;font-weight:700">${t.label}</h3>
-        <div style="white-space:pre-wrap;margin-top:6px;line-height:1.5">${escapeHtml(el.value)}</div>
-      `;
-      el.replaceWith(wrap);
+  // Gather data
+  const data = {
+    engineer: $('engineer')?.value || '—',
+    date: $('date')?.value || '—',
+    visit: $('visit')?.value || '—',
+    project: $('project')?.value || '—',
+    po: $('ponumber')?.value || '—',
+    salesName: $('salesName')?.value || '—',
+    salesEmail: $('salesEmail')?.value || '—',
+    custName: $('custName')?.value || '—',
+    custEmail: $('custEmail')?.value || '—',
+    custCompany: $('custCompany')?.value || '—',
+    addr1: $('addr1')?.value || '',
+    addr2: $('addr2')?.value || '',
+    city: $('city')?.value || '',
+    region: $('region')?.value || '',
+    postal: $('postal')?.value || '',
+    country: $('country')?.value || '',
+    projectDesc: $('projectDesc')?.value || '',
+    report: $('report')?.value || '',
+    partsUsed: $('partsUsed')?.value || '',
+    partsReq: $('partsReq')?.value || ''
+  };
+
+  // --- Address formatted like a letter ---
+  const addressLines = [data.addr1, data.addr2, data.city, data.region, data.postal, data.country]
+    .filter(x => x.trim() !== '')
+    .map(line => `<div>${escapeHtml(line)}</div>`)
+    .join('');
+
+  // --- Clean and format time records ---
+  const timeListClone = $('timeList')?.cloneNode(true);
+  let timeRecordsHtml = "";
+
+  if (timeListClone) {
+    // Remove "Remove this day" buttons
+    timeListClone.querySelectorAll("button").forEach(b => b.remove());
+
+    const slots = timeListClone.querySelectorAll('.daySlot');
+    if (slots.length > 0) {
+      slots.forEach(slot => {
+        const dateVal = slot.querySelector('input[type="date"]')?.value || "";
+        const formattedDate = formatDateWithOrdinal(dateVal);
+        const times = slot.querySelectorAll('input[type="time"]');
+        const total = slot.querySelector('.dayTotal')?.textContent?.trim() || "";
+
+        timeRecordsHtml += `
+          <div class="pdf-section">
+            <div class="pdf-subtitle">Time Record — ${formattedDate}</div>
+            <table class="time-table">
+              <tr>
+                <th>Departed</th>
+                <th>Arrived Site</th>
+                <th>Departed Site</th>
+                <th>Arrival</th>
+              </tr>
+              <tr>
+                <td>${escapeHtml(times[0]?.value || "")}</td>
+                <td>${escapeHtml(times[1]?.value || "")}</td>
+                <td>${escapeHtml(times[2]?.value || "")}</td>
+                <td>${escapeHtml(times[3]?.value || "")}</td>
+              </tr>
+            </table>
+            ${total ? `<div class="time-total">Total: ${escapeHtml(total)}</div>` : ""}
+          </div>
+        `;
+      });
+    } else {
+      timeRecordsHtml = `
+        <div class="pdf-section" style="color:#777;font-style:italic;">
+          No time records entered
+        </div>`;
     }
-  });
+  } else {
+    timeRecordsHtml = `
+      <div class="pdf-section" style="color:#777;font-style:italic;">
+        No time records entered
+      </div>`;
+  }
 
-  // Gather key input values
-  const engineer = $('engineer').value || '';
-  const date = $('date').value || '';
-  const visit = $('visit').value || '';
-  const project = $('project').value || '';
-  const contact = $('custName').value || '';
-  const email = $('custEmail').value || '';
-  const company = $('custCompany').value || '';
-  const sales = $('salesName').value || '';
-  const salesemail = $('salesEmail').value || '';
-  const ponumber = $('ponumber').value || '';
-
-  const addrFields = [
-    $('addr1').value, $('addr2').value,
-    $('city').value, $('region').value,
-    $('postal').value, $('country').value
-  ].filter(v=>v && v.trim() !== '');
-
-  // Clear original address inputs
-  ['addr1','addr2','city','region','postal','country'].forEach(id=>{
-    const el = clone.querySelector('#'+id);
-    if(el) el.remove();
-  });
-
-  // Replace main inputs with clean Label: Value format
-  const replacements = [
-    { id:'engineer', label:'SSCo Engineer', val:engineer },
-    { id:'date', label:'Date Entered', val:date },
-    { id:'visit', label:'Visit Type', val:visit },
-    { id:'project', label:'Project Number', val:project },
-    { id:'custName', label:'Point of Contact', val:contact },
-    { id:'custEmail', label:'Point of Contact Email', val:email },
-    { id:'custCompany', label:'Company', val:company },
-    { id:'salesName', label:'Sales Engineer', val:sales },
-    { id:'salesEmail', label:'Sales Engineer Email', val:salesemail },
-	{ id:'ponumber', label:'Purchase Order Number', val:ponumber }
-  ];
-  
-  replacements.forEach(r=>{
-    const el = clone.querySelector('#'+r.id);
-    if(el){
-      const div = document.createElement('div');
-      div.style.marginTop = '4px';
-      div.innerHTML = `<strong>${r.label}:</strong> ${escapeHtml(r.val)}`;
-
-      // Add row-specific classes for spacing control
-      switch (r.label) {
-        case 'Project Number':
-          div.classList.add('row-project-number');
-          break;
-	    case 'Purchase Order Number':
-          div.classList.add('row-purchase-order-number');
-          break;
-        case 'Sales Engineer':
-          div.classList.add('row-sales-engineer');
-          break;
-        case 'Sales Engineer Email':
-          div.classList.add('row-sales-email');
-          break;
-        case 'Point of Contact':
-          div.classList.add('row-point-contact');
-          break;
+  // --- Build final HTML for PDF ---
+  const html = `
+    <style>
+      .pdf-section { margin-bottom: 10px; }
+      .pdf-label { font-weight: 700; width: 180px; display: inline-block; }
+      .pdf-value { color: #111; }
+      .divider { border-top: 1px solid #ccc; margin: 16px 0; }
+      .pdf-subtitle { font-size: 14px; font-weight: 700; margin-bottom: 6px; color:#222; }
+      table.time-table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+      table.time-table th, table.time-table td {
+        border: 1px solid #ccc;
+        padding: 6px 8px;
+        font-size: 12px;
+        text-align: center;
       }
+      table.time-table th { background: #f5f5f5; font-weight: 700; }
+      .time-total { text-align: right; font-size: 12px; margin-top: 4px; font-weight: 700; }
+    </style>
 
-      el.replaceWith(div);
-    }
-  });
+    <div class="pdf-section"><span class="pdf-label">Engineer:</span> <span class="pdf-value">${escapeHtml(data.engineer)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">Date:</span> <span class="pdf-value">${escapeHtml(data.date)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">Visit Type:</span> <span class="pdf-value">${escapeHtml(data.visit)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">Project Number:</span> <span class="pdf-value">${escapeHtml(data.project)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">PO Number:</span> <span class="pdf-value">${escapeHtml(data.po)}</span></div>
 
-  // Insert address block neatly under Company
-  if(addrFields.length > 0){
-    const addrDiv = document.createElement('div');
-    addrDiv.style.marginTop = '4px';
-    addrDiv.innerHTML = addrFields.map(l=>escapeHtml(l)).join('<br>');
-    const companyDiv = Array.from(clone.querySelectorAll('div'))
-      .find(d=>d.textContent && d.textContent.startsWith('Company:'));
-    if(companyDiv){
-      companyDiv.insertAdjacentElement('afterend', addrDiv);
-    }
-  }
+    <div class="divider"></div>
 
-  // Signatures
-  ['sig1','sig2'].forEach((id, idx)=>{
-    const img = document.createElement('img');
-    img.src = sigData[idx] || '';
-    img.style.maxWidth='320px'; img.style.border='1px solid #000'; img.style.borderRadius='6px';
-    const target = clone.querySelector('#'+id);
-    if(target) target.replaceWith(img);
-  });
-  // Add spacing between engineer and customer signature blocks
-  const sigWraps = clone.querySelectorAll('.sigWrap');
-  if(sigWraps[0]) sigWraps[0].style.marginBottom = '20px';
+    <div class="pdf-section"><span class="pdf-label">Sales Engineer:</span> <span class="pdf-value">${escapeHtml(data.salesName)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">Sales Email:</span> <span class="pdf-value">${escapeHtml(data.salesEmail)}</span></div>
 
-  // Replace sig1Name and sig2Name inputs with plain text
-  const sig1Name = document.getElementById("sig1Name").value || "";
-  const sig2Name = document.getElementById("sig2Name").value || "";
+    <div class="divider"></div>
 
-  const sig1Input = clone.querySelector("#sig1Name");
-  if (sig1Input) {
-    const nameBlock = document.createElement("div");
-    nameBlock.textContent = sig1Name;
-    nameBlock.style.marginTop = "6px";
-    nameBlock.style.fontWeight = "700";
-    nameBlock.style.color = "#000";
-    sig1Input.replaceWith(nameBlock);
-  }
+    <div class="pdf-section"><span class="pdf-label">Site Contact:</span> <span class="pdf-value">${escapeHtml(data.custName)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">Site Contact Email:</span> <span class="pdf-value">${escapeHtml(data.custEmail)}</span></div>
+    <div class="pdf-section"><span class="pdf-label">Company:</span> <span class="pdf-value">${escapeHtml(data.custCompany)}</span></div>
+    ${addressLines ? `<div class="pdf-section"><span class="pdf-label" style="vertical-align:top;">Address:</span><div class="pdf-value" style="display:inline-block;">${addressLines}</div></div>` : ''}
 
-  const sig2Input = clone.querySelector("#sig2Name");
-  if (sig2Input) {
-    const nameBlock = document.createElement("div");
-    nameBlock.textContent = sig2Name;
-    nameBlock.style.marginTop = "6px";
-    nameBlock.style.fontWeight = "700";
-    nameBlock.style.color = "#000";
-    sig2Input.replaceWith(nameBlock);
-  }
+    <div class="divider"></div>
 
-  // Time records
-  clone.querySelectorAll('.daySlot').forEach(slot=>{
-    const dateVal = slot.querySelector('input[type=date]')?.value || '';
-    const formatted = formatDateWithOrdinal(dateVal);
-    const times = slot.querySelectorAll('input[type=time]');
-    const total = slot.querySelector('.dayTotal')?.textContent || '';
-    const block = document.createElement('div');
-    block.innerHTML = `
-      <h3 style="margin-top:16px;font-weight:700">Time Record — ${formatted}</h3>
-      <table style="width:100%;border-collapse:collapse;margin-top:6px">
-        <tr>
-          <th style="padding:8px;border:1px solid #ddd;background:#f7f7f7">Departed</th>
-          <th style="padding:8px;border:1px solid #ddd;background:#f7f7f7">Arrived Site</th>
-          <th style="padding:8px;border:1px solid #ddd;background:#f7f7f7">Departed Site</th>
-          <th style="padding:8px;border:1px solid #ddd;background:#f7f7f7">Arrival</th>
-        </tr>
-        <tr>
-          <td style="padding:8px;border:1px solid #ddd">${escapeHtml(times[0]?.value||'')}</td>
-          <td style="padding:8px;border:1px solid #ddd">${escapeHtml(times[1]?.value||'')}</td>
-          <td style="padding:8px;border:1px solid #ddd">${escapeHtml(times[2]?.value||'')}</td>
-          <td style="padding:8px;border:1px solid #ddd">${escapeHtml(times[3]?.value||'')}</td>
-        </tr>
-      </table>
-      <div style="font-weight:700;margin-top:6px">${escapeHtml(total)}</div>
-    `;
-    slot.replaceWith(block);
-  });
+    ${data.projectDesc ? `<div class="pdf-section"><div class="pdf-subtitle">Project Description:</div><div>${escapeHtml(data.projectDesc)}</div></div>` : ''}
+    ${data.report ? `<div class="pdf-section"><div class="pdf-subtitle">Report Details:</div><div>${escapeHtml(data.report)}</div></div>` : ''}
+    ${data.partsUsed ? `<div class="pdf-section"><div class="pdf-subtitle">Parts Used:</div><div>${escapeHtml(data.partsUsed)}</div></div>` : ''}
+    ${data.partsReq ? `<div class="pdf-section"><div class="pdf-subtitle">Parts Required (To Be Quoted):</div><div>${escapeHtml(data.partsReq)}</div></div>` : ''}
 
-  // remove interactive controls
-  clone.querySelectorAll('button, .removePhoto, .uploadBtn, footer, .photos').forEach(el=>el.remove());
+    <div class="divider"></div>
 
+    <div class="pdf-section">
+      <div class="pdf-subtitle">Time Records:</div>
+      ${timeRecordsHtml}
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="margin-top:16px;font-size:13px;color:#333;">
+      Please sign to certify that this report and time record is accurate
+      and the work carried out has been completed/progressed to your satisfaction.
+    </div>
+
+    <div style="display:flex;gap:60px;margin-top:18px;align-items:flex-start;">
+      <div>
+        <div class="pdf-subtitle">Engineer Signature</div>
+        <img src="${sigData[0]}" style="max-width:280px;border:1px solid #000;border-radius:6px;"><br>
+        <div style="margin-top:4px;font-size:13px;font-weight:700;">${escapeHtml($('sig1Name')?.value || '—')}</div>
+      </div>
+      <div>
+        <div class="pdf-subtitle">Site Contact Signature</div>
+        <img src="${sigData[1]}" style="max-width:280px;border:1px solid #000;border-radius:6px;"><br>
+        <div style="margin-top:4px;font-size:13px;font-weight:700;">${escapeHtml($('sig2Name')?.value || '—')}</div>
+      </div>
+    </div>
+  `;
+
+  clone.innerHTML = html;
   return clone;
 }
 
@@ -1353,26 +1338,12 @@ function buildPdf(){
   doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
   doc += prepared.innerHTML;
 
-// --- Project Description (only if filled) ---
-const projectDesc = (document.getElementById('projectDesc')?.value || '').trim();
-if (projectDesc) {
-  doc += `
-    <div style="margin-top:20px;">
-      <h3 style="margin-bottom:6px;font-size:14px;color:#333;">Project Description</h3>
-      <div style="font-size:13px;white-space:pre-wrap;line-height:1.5;">
-        ${escapeHtml(projectDesc)}
-      </div>
-    </div>
-  `;
-}
   
   // Certification line here
-  doc += `
-    <div style="margin:12px 0;font-size:13px;">
-      Please sign to certify that this report and time record is accurate
-      and the work carried out has been completed/progressed to your satisfaction.
-    </div>
-  `;
+  doc += `<div style="margin:12px 0;font-size:13px;">
+    Please sign to certify that this report and time record is accurate
+    and the work carried out has been completed/progressed to your satisfaction.
+  </div>`;
 
   // photos section
   function photosHtml(arr,label){
@@ -1392,7 +1363,7 @@ if (projectDesc) {
   doc += '<div class="footer"><div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div><div class="page"></div></div>';
   if(BOTTLE_B64 && BOTTLE_B64.indexOf('data:') === 0){
     doc += '<img class="logo-small" src="'+BOTTLE_B64+'">';
-  }
+}
 
   doc += '</body></html>';
 
@@ -1429,6 +1400,13 @@ return w;
   let body = `Hi ${custName},\n\n`;
   body += `Please find your engineers report attached and some key details below.\n\n`;
   body += `----------------------------------------\n`;
+
+  // Project description
+  const projectDesc = $('projectDesc').value.trim();
+  if (projectDesc) {
+    body += `PROJECT DESCRIPTION:\n${projectDesc}\n\n`;
+    body += `----------------------------------------\n`;
+  }
 
   // Report details
   const report = $('report').value.trim();
@@ -1822,6 +1800,7 @@ function validateImportantFields() {
   const importantFields = [
     { id: 'engineer', label: 'Engineer name' },
     { id: 'date', label: 'Date' },
+    { id:'projectDesc', label:'Project Description' },
     { id: 'custName', label: 'Customer name' },
     { id: 'custEmail', label: 'Customer email' },
     { id: 'sig1', label: 'Engineer signature' },
@@ -1975,6 +1954,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const project = (document.getElementById("project").value || "your project").trim();
 
     let body = `Hi ${custName},\n\nPlease find your engineers report related to ${project} attached and some key details below.\n\n----------------------------------------\n`;
+
+    const projectDesc = (document.getElementById("projectDesc")?.value || "").trim();
+    if (projectDesc) body += `PROJECT DESCRIPTION:\n${projectDesc}\n\n----------------------------------------\n`;
 
     const report = (document.getElementById("report")?.value || "").trim();
     if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
@@ -2468,15 +2450,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Print Now ---
   printNow.addEventListener("click", () => {
-    bump("info");
-    showToast("Opening print dialog…", "info");
-    try {
-      window.lastBuiltPdfWindow?.print();
-    } catch (err) {
-      console.warn("Print blocked or unavailable:", err);
-      showToast("⚠️ Unable to open print window", "warning");
+  bump("info");
+  showToast("Opening print dialog…", "info");
+  try {
+    if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
+      window.lastBuiltPdfWindow.focus();
+      window.lastBuiltPdfWindow.print();
+    } else {
+      showToast("⚠️ Please rebuild the PDF first.", "warning");
     }
-  });
+  } catch (err) {
+    console.warn("Print blocked or unavailable:", err);
+    showToast("⚠️ Unable to open print window", "warning");
+  }
+});
 
   // --- Close modal after Step 2 ---
   closeModal.addEventListener("click", () => {
