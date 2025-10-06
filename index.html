@@ -1396,9 +1396,18 @@ if (projectDesc) {
 
   doc += '</body></html>';
 
-  const w = window.open('', '_blank');
-  w.document.open(); w.document.write(doc); w.document.close(); w.focus();
-  setTimeout(()=>{ try{ w.print(); } catch(e){} }, 600);
+    // --- open a blank tab silently (do NOT print yet)
+const w = window.open('', '_blank');
+w.document.open();
+w.document.write(doc);
+w.document.close();
+w.focus();
+
+// store reference globally so we can print later from the modal
+window.lastBuiltPdfWindow = w;
+
+// return the window for reference
+return w;
 }
 
 
@@ -1789,70 +1798,6 @@ function showToast(message, type = 'success') {
 </script>
 
 <script>
-// --- Save PDF with Haptics + Toast ---
-document.addEventListener("DOMContentLoaded", () => {
-  const saveBtn = document.getElementById("savePdf");
-  if (!saveBtn) return;
-
-  saveBtn.addEventListener("click", () => {
-    // Give tactile tap
-    bump('info');
-
-    // Show toast message
-    showToast("Saving PDF…", "info");
-
-    // Call your existing PDF save logic
-    // If you have a function for it, call it here:
-    // generatePdf();
-    // Or if your button already triggers a PDF via a hidden form or script:
-    // document.getElementById("savePdf")?.click();
-  });
-});
-</script>
-
-<script>
-// --- Save PDF with Toasts + Haptics feedback ---
-document.addEventListener("DOMContentLoaded", () => {
-  const saveBtn = document.getElementById("savePdf");
-  if (!saveBtn) return;
-
-  // Attach once
-  saveBtn.addEventListener("click", async () => {
-    bump('info'); // short tap
-    showToast("Building PDF…", "info");
-
-    try {
-      await buildPdfWithFeedback();
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-      bump('error');
-      showToast("Error building PDF!", "error");
-    }
-  });
-});
-
-// --- Wrapper for buildPdf() to include feedback ---
-async function buildPdfWithFeedback() {
-  return new Promise((resolve, reject) => {
-    try {
-      // Wrap your existing buildPdf logic
-      buildPdf();
-
-      // Delay success feedback slightly to allow print window to open
-      setTimeout(() => {
-        bump('success');
-        showToast("PDF ready — printing…", "success");
-        resolve();
-      }, 1500);
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-
-</script>
-
-<script>
 
 function validateBeforeEmail() {
   const ok = validateImportantFields(); // reuse same logic
@@ -1885,34 +1830,43 @@ function validateImportantFields() {
     { id: 'sig2Name', label: 'Customer print name' }
   ];
 
-  for (let f of importantFields) {
+  let firstMissing = null;
+
+  importantFields.forEach(f => {
     const el = document.getElementById(f.id);
-    if (!el) continue;
+    if (!el) return;
 
     let isMissing = false;
 
-    // Check signature canvases
     if (el.tagName === 'CANVAS') {
       const ctx = el.getContext('2d');
       const pixelData = ctx.getImageData(0, 0, el.width, el.height).data;
       const isBlank = !pixelData.some(v => v !== 0);
       if (isBlank) isMissing = true;
-    } 
-    // Check normal input fields
-    else if (el.value.trim() === '') {
+    } else if (el.value.trim() === '') {
       isMissing = true;
     }
 
-    // Stop at the first missing one
     if (isMissing) {
-      showToast(`⚠️ Missing: ${f.label}`, 'warning');
-      scrollToField(el);
-      highlightField(el, true); // pass flag for longer highlight
-      return false;
+      highlightField(el);
+      if (!firstMissing) firstMissing = el;
     }
+  });
+
+  if (firstMissing) {
+    bump('warning');
+    showToast('⚠️ Please complete all highlighted fields.', 'warning');
+
+    // 👇 This ensures smooth scroll to the first missing one
+    firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // short vibration for feedback
+    if (navigator.vibrate) navigator.vibrate(50);
+
+    return false;
   }
 
-  return true; // all good
+  return true;
 }
 
 // Smooth scroll and highlight
@@ -1942,75 +1896,103 @@ function highlightField(el, isFirst = false) {
 </script>
 
 <script>
+// ==========================
+// Email Reminder + Send Email (Fixed Scroll + Highlight)
+// ==========================
 document.addEventListener("DOMContentLoaded", () => {
+  const btn    = document.getElementById("sendEmail");
+  const modal  = document.getElementById("emailModal");
+  const ok     = document.getElementById("emailOk");
 
-  // ---------- SAVE PDF ----------
-  const saveBtn = document.getElementById("savePdf");
-  saveBtn.addEventListener("click", async (e) => {
-    e.preventDefault();
+  if (!btn || !modal || !ok) {
+    console.warn("Email reminder setup skipped: missing element(s).");
+    return;
+  }
 
-    // Run validation (scroll + highlight)
-    const ok = validateImportantFields();
-    if (!ok) return;
-
-    bump("info");
-    showToast("Building PDF…", "info");
-
-    try {
-      await new Promise(r => setTimeout(r, 400)); // allow animation time
-      buildPdf();
-      markPdfSaved();
-      bump("success");
-      showToast("✅ PDF saved and ready to send!", "success");
-    } catch (err) {
-      console.error("PDF build failed:", err);
-      bump("error");
-      showToast("❌ PDF generation failed!", "error");
-    }
-  });
-
-
-  // ---------- SEND EMAIL ----------
-  const btn = document.getElementById("sendEmail");
-  const modal = document.getElementById("emailModal");
-  const ok = document.getElementById("emailOk");
+  modal.style.display = "none";
   let reminderShown = false;
 
+  // --- Click "Send Email" ---
   btn.addEventListener("click", async (e) => {
     e.preventDefault();
 
-    // Ensure PDF is saved
+    // Step 1: Check PDF saved
     if (!hasSavedPdf()) {
       bump("warning");
       showToast("⚠️ Please save the PDF before sending email.", "warning");
-      document.getElementById("savePdf").style.animation = "pulse 1s ease-in-out 2";
+      const saveBtn = document.getElementById("savePdf");
+      saveBtn.style.animation = "pulse 1s ease-in-out 2";
+      setTimeout(() => (saveBtn.style.animation = ""), 2000);
       return;
     }
 
-    // Validate fields with scroll + highlight
+    // Step 2: Validate all required fields
     const valid = validateImportantFields();
-    if (!valid) return;
+    if (!valid) {
+      bump("warning");
+      showToast("⚠️ Please complete the highlighted fields.", "warning");
 
-    // Wait briefly to allow scroll
-    await new Promise(r => setTimeout(r, 500));
+      // Scroll smoothly to the first missing field
+      const firstMissing = document.querySelector(".highlight-missing, [style*='box-shadow']");
+      if (firstMissing) {
+        firstMissing.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
 
-    // Show success overlay before email modal
+      // Give time for scroll and highlight animations to complete
+      await new Promise(r => setTimeout(r, 1200));
+      return;
+    }
+
+    // Step 3: All good → Show validation success
     if (!reminderShown) {
       showValidationSuccess();
-      setTimeout(() => modal.style.display = "flex", 1400);
+      setTimeout(() => {
+        modal.style.display = "flex";
+      }, 1400);
     } else {
       sendEmailNow();
     }
   });
 
+  // --- Confirm modal OK ---
   ok.addEventListener("click", () => {
     modal.style.display = "none";
     reminderShown = true;
     bump("info");
-    showToast("Opening mail app...", "info");
+    showToast("📧 Opening mail app…", "info");
     sendEmailNow();
   });
 
+  // --- Actual mailto builder ---
+  function sendEmailNow() {
+    const to = document.getElementById("custEmail").value || "";
+    const cc = document.getElementById("salesEmail").value || "";
+    const bcc = "info.uk@spray.com";
+    const subject = `Engineers Report — ${document.getElementById("project").value || ""} — ${document.getElementById("ponumber").value || ""} - ${document.getElementById("date").value || ""}`;
+
+    const custName = (document.getElementById("custName").value || "Customer").trim();
+    const engineer = (document.getElementById("engineer").value || "Your SSCo Engineer").trim();
+    const project = (document.getElementById("project").value || "your project").trim();
+
+    let body = `Hi ${custName},\n\nPlease find your engineers report related to ${project} attached and some key details below.\n\n----------------------------------------\n`;
+
+    const report = (document.getElementById("report")?.value || "").trim();
+    if (report) body += `REPORT DETAILS:\n${report}\n\n----------------------------------------\n`;
+
+    const partsUsed = (document.getElementById("partsUsed")?.value || "").trim();
+    if (partsUsed) body += `PARTS USED:\n${partsUsed}\n\n----------------------------------------\n`;
+
+    const partsReq = (document.getElementById("partsReq")?.value || "").trim();
+    if (partsReq) body += `PARTS REQUIRED (TO BE QUOTED):\n${partsReq}\n\n----------------------------------------\n`;
+
+    body += `Best regards,\n${engineer}\nSpraying Systems Co.\n`;
+
+    let mailtoLink = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
+    if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
+
+    window.location.href = mailtoLink;
+  }
 });
 </script>
 
@@ -2307,6 +2289,204 @@ function showToast(message, type = 'info') {
     ✅
   </div>
 </div>
+
+<!-- ✅ Save PDF Confirmation Modal -->
+<div id="saveConfirmModal"
+     style="display:none;position:fixed;inset:0;z-index:5000;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;
+            transition:opacity .3s ease;">
+  <div id="saveConfirmBox"
+       style="background:rgba(30,30,31,0.95);
+              border-radius:16px;
+              padding:26px 22px;
+              max-width:340px;
+              width:88%;
+              text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,0.6);
+              transform:scale(0.85);
+              opacity:0;
+              transition:all .25s ease;">
+    <div id="saveConfirmStep1">
+      <div style="font-size:22px;margin-bottom:10px;">💾 Confirm Save</div>
+      <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 16px;">
+        Your report looks complete. Would you like to generate the PDF now?
+      </p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button id="saveConfirmOk" class="btn green" style="flex:1;">✅ Confirm</button>
+        <button id="saveConfirmCancel" class="btn ghost" style="flex:1;">Cancel</button>
+      </div>
+    </div>
+
+    <div id="saveConfirmStep2" style="display:none;">
+      <div style="font-size:22px;margin-bottom:10px;">📄 PDF Built</div>
+      <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 16px;">
+        Your PDF is ready. Would you like to open the print dialog now?
+      </p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button id="printNow" class="btn green" style="flex:1;">🖨️ Print</button>
+        <button id="closeModal" class="btn ghost" style="flex:1;">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ✨ Save Confirm Modal Styling (Final Polished Version) */
+#saveConfirmModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#saveConfirmModal.show {
+  display: flex !important;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#saveConfirmBox {
+  background: rgba(30, 30, 31, 0.95);
+  border-radius: 16px;
+  padding: 26px 22px;
+  max-width: 340px;
+  width: 88%;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  transform: scale(0.85);
+  opacity: 0;
+  transition: all 0.25s ease;
+}
+
+#saveConfirmModal.show #saveConfirmBox {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Subtle hover animation */
+#saveConfirmOk:hover, #saveConfirmCancel:hover,
+#printNow:hover, #closeModal:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+</style>
+
+<style>
+/* ✨ Animated pop-in modal */
+#saveConfirmModal.show #saveConfirmBox {
+  transform:scale(1);
+  opacity:1;
+}
+
+/* subtle hover animation */
+#saveConfirmOk:hover, #saveConfirmCancel:hover {
+  transform:scale(1.05);
+  transition:transform .2s ease;
+}
+</style>
+
+<script>
+// --- SAVE PDF ---
+document.addEventListener("DOMContentLoaded", () => {
+  const saveBtn = document.getElementById("savePdf");
+  const modal = document.getElementById("saveConfirmModal");
+  const box = document.getElementById("saveConfirmBox");
+  const ok = document.getElementById("saveConfirmOk");
+  const cancel = document.getElementById("saveConfirmCancel");
+  const step1 = document.getElementById("saveConfirmStep1");
+  const step2 = document.getElementById("saveConfirmStep2");
+  const printNow = document.getElementById("printNow");
+  const closeModal = document.getElementById("closeModal");
+
+  if (!saveBtn || !modal || !ok || !cancel) {
+    console.warn("❌ Save PDF modal setup failed — missing elements.");
+    return;
+  }
+
+  // --- Step 1: Click Save PDF ---
+  saveBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+
+    const valid = validateImportantFields();
+    if (!valid) return;
+
+    bump("info");
+    showToast("All fields complete — ready to save", "info");
+
+    // Reset to Step 1 every time
+    step1.style.display = "block";
+    step2.style.display = "none";
+
+    // Display + animate modal
+    modal.style.display = "flex";
+    setTimeout(() => {
+      modal.classList.add("show");
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    }, 50);
+  });
+
+  // --- Cancel Save ---
+  cancel.addEventListener("click", () => {
+    bump("info");
+    showToast("Save cancelled", "info");
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 300);
+  });
+
+  // --- Confirm Save ---
+  ok.addEventListener("click", async () => {
+    bump("info");
+    showToast("Building PDF…", "info");
+
+    try {
+      await new Promise(r => setTimeout(r, 300)); // allow animations to finish
+      const w = buildPdf(); // builds silently (no print)
+      markPdfSaved();
+      bump("success");
+      showToast("✅ PDF built successfully", "success");
+
+      // Switch modal to Step 2 ("Print now?")
+      step1.style.display = "none";
+      step2.style.display = "block";
+    } catch (err) {
+      console.error("PDF error:", err);
+      bump("error");
+      showToast("❌ PDF failed to generate", "error");
+    }
+  });
+
+  // --- Print Now ---
+  printNow.addEventListener("click", () => {
+    bump("info");
+    showToast("Opening print dialog…", "info");
+    try {
+      window.lastBuiltPdfWindow?.print();
+    } catch (err) {
+      console.warn("Print blocked or unavailable:", err);
+      showToast("⚠️ Unable to open print window", "warning");
+    }
+  });
+
+  // --- Close modal after Step 2 ---
+  closeModal.addEventListener("click", () => {
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 300);
+  });
+});
+</script>
 
 <style>
 @keyframes glowPulse {
