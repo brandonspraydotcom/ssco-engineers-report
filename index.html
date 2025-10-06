@@ -429,7 +429,7 @@ window.addEventListener("load", () => {
 
     <div class="card">
       <label>Signatures</label>
-	  <label>Please sign to certify that this report and time record is accurate and the work carried out has been completed/progressed to your satisfaction.</label>
+	  <label>Please sign to certify that this report and time record is accurate and the work carried out has been completed/progressed to your satisfaction.test3</label>
 
       <div class="sigWrap" style="margin-bottom:20px">
         <div class="small">Engineer Signature</div>
@@ -1258,7 +1258,7 @@ function prepareForPdf(clone, sigData) {
 
     <div style="margin-top:16px;font-size:13px;color:#333;">
       Please sign to certify that this report and time record is accurate
-      and the work carried out has been completed/progressed to your satisfaction.
+      and the work carried out has been completed/progressed to your satisfaction.test2
     </div>
 
     <div style="display:flex;gap:60px;margin-top:18px;align-items:flex-start;">
@@ -1342,7 +1342,7 @@ function buildPdf(){
   // Certification line here
   doc += `<div style="margin:12px 0;font-size:13px;">
     Please sign to certify that this report and time record is accurate
-    and the work carried out has been completed/progressed to your satisfaction.
+    and the work carried out has been completed/progressed to your satisfaction.test1
   </div>`;
 
   // photos section
@@ -1686,16 +1686,27 @@ function initAutocomplete() {
     fillAddress(place);
   });
 
-  // Autocomplete for companies (custCompany)
-  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
-    fields: ["address_components", "geometry", "name"],
-    types: ["establishment"]
-  });
-  companyAutocomplete.addListener("place_changed", () => {
-    const place = companyAutocomplete.getPlace();
-    fillAddress(place);
-  });
-}
+  // --- Autocomplete for companies (custCompany) ---
+const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
+  fields: ["address_components", "geometry", "name"],
+  types: ["establishment"]
+});
+
+companyAutocomplete.addListener("place_changed", () => {
+  const place = companyAutocomplete.getPlace();
+  if (!place) return;
+
+  // ✅ Use only the business name (no address junk)
+  const cleanName = place.name
+    .replace(/,.*/g, "")     // remove anything after a comma
+    .replace(/\s+\d+.*/, "") // remove trailing numbers / street parts
+    .trim();
+
+  companyField.value = cleanName;
+
+  // ✅ Still fill the address fields as before
+  fillAddress(place);
+});
 
 window.addEventListener("load", initAutocomplete);
 </script>
@@ -2375,8 +2386,7 @@ function showToast(message, type = 'info') {
 }
 </style>
 
-<script>
-// --- SAVE PDF ---
+// --- SAVE PDF (Persistent + Safari Safe) ---
 document.addEventListener("DOMContentLoaded", () => {
   const saveBtn = document.getElementById("savePdf");
   const modal = document.getElementById("saveConfirmModal");
@@ -2387,6 +2397,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const step2 = document.getElementById("saveConfirmStep2");
   const printNow = document.getElementById("printNow");
   const closeModal = document.getElementById("closeModal");
+
+  // --- Track PDF Saved state ---
+  function markPdfSaved() {
+    localStorage.setItem("pdfSaved", "true");
+  }
+  function hasSavedPdf() {
+    return localStorage.getItem("pdfSaved") === "true";
+  }
+  function clearPdfSaved() {
+    localStorage.removeItem("pdfSaved");
+  }
+
+  // Optional: uncomment if you want to clear saved PDF flag each new session
+  // clearPdfSaved();
 
   if (!saveBtn || !modal || !ok || !cancel) {
     console.warn("❌ Save PDF modal setup failed — missing elements.");
@@ -2426,7 +2450,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => (modal.style.display = "none"), 300);
   });
 
-  // --- Confirm Save ---
+  // --- Confirm Save (Step 1 -> Step 2) ---
   ok.addEventListener("click", async () => {
     bump("info");
     showToast("Building PDF…", "info");
@@ -2434,13 +2458,20 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       await new Promise(r => setTimeout(r, 300)); // allow animations to finish
       const w = buildPdf(); // builds silently (no print)
+
+      // ✅ Remember that a PDF was saved
       markPdfSaved();
+
       bump("success");
       showToast("✅ PDF built successfully", "success");
 
       // Switch modal to Step 2 ("Print now?")
       step1.style.display = "none";
       step2.style.display = "block";
+
+      // ✅ If user is in Safari PWA (no multi-tab support),
+      // allow the print modal to appear again later
+      window.lastBuiltPdfWindow = w;
     } catch (err) {
       console.error("PDF error:", err);
       bump("error");
@@ -2450,20 +2481,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- Print Now ---
   printNow.addEventListener("click", () => {
-  bump("info");
-  showToast("Opening print dialog…", "info");
-  try {
-    if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
-      window.lastBuiltPdfWindow.focus();
-      window.lastBuiltPdfWindow.print();
-    } else {
-      showToast("⚠️ Please rebuild the PDF first.", "warning");
+    bump("info");
+    showToast("Opening print dialog…", "info");
+
+    try {
+      // ✅ Try to print if window reference exists
+      if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
+        window.lastBuiltPdfWindow.focus();
+        window.lastBuiltPdfWindow.print();
+      } else if (hasSavedPdf()) {
+        // ✅ If the PDF window is gone (Safari PWA), rebuild & print again
+        const w = buildPdf();
+        window.lastBuiltPdfWindow = w;
+        setTimeout(() => w.print(), 800);
+      } else {
+        showToast("⚠️ Please save the PDF first", "warning");
+      }
+    } catch (err) {
+      console.warn("Print blocked or unavailable:", err);
+      showToast("⚠️ Unable to open print window", "warning");
     }
-  } catch (err) {
-    console.warn("Print blocked or unavailable:", err);
-    showToast("⚠️ Unable to open print window", "warning");
-  }
-});
+  });
 
   // --- Close modal after Step 2 ---
   closeModal.addEventListener("click", () => {
