@@ -459,7 +459,7 @@ window.addEventListener("load", () => {
 
 
     <footer class="appFooter">
-      <button id="savePdf" class="btn" type="button" style="flex:1">💾 PDF</button>
+      <button id="savePdf" class="btn" type="button" style="flex:1">💾 PDF</button> <button id="clearForm" class="btn remove" style="margin-left:6px;">🧹 Clear Form</button>
       <button id="sendEmail" class="btn green" type="button" style="flex:1">📧 Email</button>
       <!-- Version Badge -->
 <span id="versionBadge"
@@ -1783,6 +1783,36 @@ window.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
+<!-- Clear Form Confirmation Modal -->
+<!-- 🧹 Clear Form Confirmation Modal -->
+<div id="clearConfirmModal"
+     style="display:none;position:fixed;inset:0;z-index:6000;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;
+            transition:opacity .3s ease;opacity:0;">
+  <div id="clearConfirmBox"
+       style="background:rgba(180,30,30,0.96);
+              border-radius:16px;
+              padding:26px 22px;
+              max-width:340px;
+              width:88%;
+              text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,0.6);
+              transform:scale(0.85);
+              opacity:0;
+              transition:all .25s ease;">
+    <div style="font-size:24px;font-weight:700;color:#fff;margin-bottom:10px;">⚠️ Confirm Reset</div>
+    <p style="font-size:15px;line-height:1.6;color:#ffeaea;margin:0 0 18px;">
+      This will <strong>erase all fields, signatures, and photos</strong>.<br>
+      Are you sure you want to continue?
+    </p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="clearConfirmOk" class="btn remove" style="flex:1;">🧹 Yes, Clear</button>
+      <button id="clearConfirmCancel" class="btn ghost" style="flex:1;">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Email Reminder Modal -->
 <div id="emailModal" style="display:none;position:fixed;inset:0;z-index:4000;
   background:rgba(0,0,0,0.6);align-items:center;justify-content:center">
@@ -2037,14 +2067,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ✅ Clear form + localStorage after sending
     setTimeout(() => {
-      localStorage.clear();
-      document.querySelectorAll("input, textarea").forEach(el => {
-        if (el.type !== "button" && el.type !== "submit" && el.type !== "file") {
-          el.value = "";
-        }
-      });
-      showToast("🧹 Form cleared for next report", "info");
-    }, 3000);
+  localStorage.clear();
+  document.querySelectorAll("input, textarea").forEach(el => {
+    if (el.type !== "button" && el.type !== "submit" && el.type !== "file") {
+      el.value = "";
+    }
+  });
+  showToast("🧹 Form cleared for next report", "info");
+}, 3000);
   }
 });
 </script>
@@ -2088,29 +2118,6 @@ document.addEventListener("DOMContentLoaded", () => {
     <button id="qbEmail" class="btn" style="background:#2b6cff;color:white">📧 Email</button>
   </div>
 </div>
-
-<script>
-<!-- Quick Actions Bar -->
-// (function(){
-  const bar = document.getElementById('quickBar');
-  function toggleBar(){
-    const nearBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 420);
-    bar.style.display = nearBottom ? 'block' : 'none';
-  }
-  window.addEventListener('scroll', () => { requestAnimationFrame(toggleBar); });
-
-  document.getElementById('qbSave').addEventListener('click', () => {
-    navigator.vibrate?.(20);
-    document.getElementById('savePdf')?.click();
-    showToast('Saving PDF…','info');
-  });
-
-  document.getElementById('qbEmail').addEventListener('click', () => {
-    navigator.vibrate?.(20);
-    document.getElementById('sendEmail')?.click();
-  });
-})();
-</script>
 
 <!-- Zoom Indicator -->
 <div id="zoomIndicator"
@@ -2466,9 +2473,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function hasSavedPdf() {
     return localStorage.getItem("pdfSaved") === "true";
   }
-  function clearPdfSaved() {
-    localStorage.removeItem("pdfSaved");
-  }
 
   // Optional: uncomment if you want to clear saved PDF flag each new session
   // clearPdfSaved();
@@ -2590,6 +2594,120 @@ ok.addEventListener("click", () => {
  });
 });
 </script>
+
+<script>
+// --- 🧹 Clear Form Modal (Animated) ---
+document.addEventListener("DOMContentLoaded", () => {
+  const clearBtn   = document.getElementById("clearForm");
+  const modal      = document.getElementById("clearConfirmModal");
+  const box        = document.getElementById("clearConfirmBox");
+  const ok         = document.getElementById("clearConfirmOk");
+  const cancel     = document.getElementById("clearConfirmCancel");
+
+  if (!clearBtn || !modal || !box) {
+    console.warn("❌ Clear Form setup failed — missing elements.");
+    return;
+  }
+
+  // --- Show modal ---
+  clearBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    bump("warning");
+    showToast("⚠️ Preparing to clear form", "warning");
+
+  // Show modal
+  modal.style.display = "flex";
+  // ensure the CSS class gets applied next frame even if something slow runs
+  requestAnimationFrame(() => modal.classList.add("show"));
+  // don't let a missing helper kill it
+  if (typeof lockScroll === "function") lockScroll();
+  });
+
+  // --- Cancel button ---
+  cancel.addEventListener("click", () => {
+    bump("info");
+    showToast("Action cancelled", "info");
+    closeModal();
+  });
+
+  // --- Confirm clear ---
+  ok.addEventListener("click", () => {
+    try {
+      bump("error");
+      showToast("🧹 Clearing all data…", "error");
+
+      // 1️⃣ Clear all non-button, non-file inputs & textareas
+      document.querySelectorAll("input, textarea, select").forEach(el => {
+        if (!el || ["button", "submit", "file"].includes(el.type)) return;
+        el.value = "";
+      });
+
+      // 2️⃣ Clear signatures
+      ["sig1", "sig2"].forEach(id => {
+        const c = document.getElementById(id);
+        if (c && c.getContext) {
+          const ctx = c.getContext("2d");
+          ctx.clearRect(0, 0, c.width, c.height);
+          localStorage.removeItem("sig_" + id);
+        }
+      });
+
+      // 3️⃣ Clear thumbnails
+      ["beforeThumbs", "afterThumbs"].forEach(id => {
+        const list = document.getElementById(id);
+        if (list) list.innerHTML = "";
+        localStorage.removeItem(id);
+      });
+
+      // 4️⃣ Reset flags + storage safely
+      if (typeof clearPdfSaved === "function") clearPdfSaved();
+
+      bump("success");
+      showToast("✅ Form cleared successfully", "success");
+
+    } catch (err) {
+      console.error("⚠️ Clear form failed:", err);
+      showToast("❌ Error clearing form", "error");
+    } finally {
+      closeModal();
+    }
+  });
+
+  // --- Close helper ---
+  function closeModal() {
+    modal.classList.remove("show");
+    unlockScroll(); // unlock scroll
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    modal.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 250);
+  }
+});
+</script>
+
+<style>
+/* 🔥 Clear Form Modal (same style language as Save PDF) */
+
+#clearConfirmModal { pointer-events: none; }      /* base = non-blocking */
+#clearConfirmModal.show { pointer-events: auto; } /* only block when shown */
+
+#clearConfirmModal.show {
+  display:flex !important;
+  opacity:1;
+  pointer-events:auto;
+}
+
+#clearConfirmModal.show #clearConfirmBox {
+  transform:scale(1);
+  opacity:1;
+}
+
+/* Soft hover pop */
+#clearConfirmOk:hover, #clearConfirmCancel:hover {
+  transform:scale(1.05);
+  transition:transform 0.2s ease;
+}
+</style>
 
 <script>
 function lockScroll() {
@@ -2719,6 +2837,141 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+</script>
+
+<!-- Clear Form Confirmation Modal -->
+<div id="clearConfirmModal" style="
+  display:none;position:fixed;inset:0;z-index:2000;
+  background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);
+  align-items:center;justify-content:center;">
+  <div style="
+    background:#b32121;color:white;padding:22px 28px;
+    border-radius:12px;max-width:360px;text-align:center;
+    box-shadow:0 0 20px rgba(0,0,0,0.6);">
+    <h3 style="margin-top:0;">⚠️ Clear All Fields?</h3>
+    <p style="font-size:15px;margin:12px 0 20px;">
+      This will permanently erase <strong>every input, image, and signature</strong> on this page.<br><br>
+      Are you sure you wish to proceed?
+    </p>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button id="confirmClear" class="btn remove" style="background:#ff4d4d;">Yes, Clear</button>
+      <button id="cancelClear" class="btn ghost" style="border-color:white;color:white;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- CLEAR FORM CONFIRMATION MODAL ---
+const clearFormBtn = document.getElementById("clearForm");
+
+// Create modal dynamically
+const clearModal = document.createElement("div");
+clearModal.id = "clearModal";
+clearModal.style.cssText = `
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+`;
+clearModal.innerHTML = `
+  <div id="clearModalBox" style="
+      background:#b3261e;
+      color:#fff;
+      padding:22px 20px;
+      border-radius:12px;
+      max-width:320px;
+      text-align:center;
+      box-shadow:0 4px 20px rgba(0,0,0,0.5);
+      transform:scale(0.9);
+      opacity:0;
+      transition:all 0.25s ease;">
+    <h3 style="margin-top:0">⚠️ Clear All Fields?</h3>
+    <p style="font-size:15px;line-height:1.4">
+      This will erase <b>every input and signature</b> on this page.<br>
+      Do you wish to proceed?
+    </p>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;">
+      <button id="confirmClear" class="btn remove" style="flex:1">Yes, Clear</button>
+      <button id="cancelClear" class="btn ghost" style="flex:1">Cancel</button>
+    </div>
+  </div>
+`;
+document.body.appendChild(clearModal);
+
+function lockScroll() { document.body.style.overflow = "hidden"; }
+function unlockScroll() { document.body.style.overflow = ""; }
+
+// --- Open modal ---
+clearFormBtn.addEventListener("click", () => {
+  clearModal.style.display = "flex";
+  requestAnimationFrame(() => {
+    clearModal.style.opacity = "1";
+    document.getElementById("clearModalBox").style.transform = "scale(1)";
+    document.getElementById("clearModalBox").style.opacity = "1";
+  });
+  lockScroll();
+});
+
+// --- Close helper ---
+function closeClearModal() {
+  const box = document.getElementById("clearModalBox");
+  clearModal.style.opacity = "0";
+  box.style.transform = "scale(0.9)";
+  box.style.opacity = "0";
+  setTimeout(() => {
+    clearModal.style.display = "none";
+    unlockScroll();
+  }, 300);
+}
+
+// --- Cancel ---
+clearModal.querySelector("#cancelClear").addEventListener("click", closeClearModal);
+
+// --- Confirm clear ---
+clearModal.querySelector("#confirmClear").addEventListener("click", () => {
+  // ✅ Immediately fade modal out while clearing (no need for second tap)
+  closeClearModal();
+
+  setTimeout(() => {
+    try {
+      // 1️⃣ Clear all text, date, time, select, textarea fields
+      document.querySelectorAll("input, textarea, select").forEach(el => {
+        if (["button", "submit", "file"].includes(el.type)) return;
+        el.value = "";
+      });
+
+      // 2️⃣ Clear signatures
+      document.querySelectorAll("canvas.signature").forEach(c => {
+        const ctx = c.getContext("2d");
+        ctx.clearRect(0, 0, c.width, c.height);
+      });
+
+      // 3️⃣ Clear photo thumbnails
+      ["beforeThumbs", "afterThumbs"].forEach(id => {
+        const list = document.getElementById(id);
+        if (list) list.innerHTML = "";
+      });
+
+      // 4️⃣ Clear local storage safely
+      localStorage.clear();
+
+      // ✅ Confirmation
+      if (typeof showToast === "function") {
+        showToast("🧹 Form cleared successfully", "success");
+      }
+    } catch (err) {
+      console.error("Clear form failed:", err);
+      if (typeof showToast === "function") {
+        showToast("❌ Error clearing form", "error");
+      }
+    }
+  }, 200); // clear after modal starts closing
+});
 </script>
 
 </body>
