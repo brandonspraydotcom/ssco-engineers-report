@@ -271,6 +271,16 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 
 </style>
 </head>
+
+<!-- iOS Audio Unlock Overlay -->
+<div id="audioUnlock" style="
+  position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+  background:#000;color:white;z-index:10000;font-size:18px;font-weight:500;
+  text-align:center;flex-direction:column;">
+  <div style="opacity:0.9;">🔊 Tap to Begin</div>
+  <small style="opacity:0.6;margin-top:8px;">Enable sound & animation</small>
+</div>
+
 <body>
 
 <!-- 🌧️ Splash Screen with Dual-Layer Rain + Echo Pulse + Ripple Sync -->
@@ -381,59 +391,74 @@ window.addEventListener("load", () => {
   const rainBack = document.getElementById("splashRainBack");
   const dropletSound = document.getElementById("dropletSound");
   const ambientRain = document.getElementById("ambientRain");
+  const audioUnlock = document.getElementById("audioUnlock");
 
-  // 💧 Droplet plink
-  dropletSound?.play?.().catch(()=>{});
-  dropletSound.volume = 0.8;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-  // 🌫️ Fade in ambient rain
-  ambientRain.volume = 0;
-  ambientRain.play().catch(()=>{});
-  const fadeIn = setInterval(() => {
-    ambientRain.volume = Math.min(ambientRain.volume + 0.01, 0.25);
-    if (ambientRain.volume >= 0.25) clearInterval(fadeIn);
-  }, 100);
+  // --- If iOS, show unlock overlay ---
+  if (isIOS) {
+    audioUnlock.style.display = "flex";
+    audioUnlock.addEventListener("click", () => {
+      startSplash(true);
+      audioUnlock.style.display = "none";
+    });
+  } else {
+    startSplash(false);
+  }
 
-  // 🌧️ Drop creation for both layers
-  const makeDrop = (container, speed, opacity) => {
-    const d = document.createElement("div");
-    d.className = "drop";
-    d.style.left = Math.random() * 100 + "vw";
-    d.style.animationDuration = (speed + Math.random() * speed) + "s";
-    d.style.background = `rgba(0,200,255,${opacity})`;
-    container.appendChild(d);
-    setTimeout(() => d.remove(), 1500);
-  };
-  const frontRain = setInterval(() => makeDrop(rainFront, 0.8, 0.7), 60);
-  const backRain = setInterval(() => makeDrop(rainBack, 1.5, 0.3), 120);
+  // --- Function to start splash + sound ---
+  function startSplash(fromTap) {
+    // Droplet
+    if (dropletSound && dropletSound.play) {
+      dropletSound.volume = 0.9;
+      dropletSound.play().catch(()=>{});
+    }
 
-  // ❤️ Sync heartbeat = extra rain bursts
-  let beat = 0;
-  const pulseSync = setInterval(() => {
-    beat++;
-    for (let i = 0; i < 8; i++) makeDrop(rainFront, 0.9, 0.7);
-  }, 2400);
+    // Ambient rain
+    if (ambientRain && ambientRain.play) {
+      ambientRain.volume = 0;
+      ambientRain.play().catch(()=>{});
+      const fadeIn = setInterval(() => {
+        if (ambientRain.volume < 0.25) ambientRain.volume += 0.02;
+        else clearInterval(fadeIn);
+      }, 80);
+    }
 
-  // Fade out sequence
-  setTimeout(() => {
-    clearInterval(frontRain);
-    clearInterval(backRain);
-    clearInterval(pulseSync);
+    // Make rain drops
+    const makeDrop = (container, speed, opacity) => {
+      const d = document.createElement("div");
+      d.className = "drop";
+      d.style.left = Math.random() * 100 + "vw";
+      d.style.animationDuration = (speed + Math.random() * speed) + "s";
+      d.style.background = `rgba(0,95,175,${opacity})`;
+      container.appendChild(d);
+      setTimeout(() => d.remove(), 1500);
+    };
 
-    rainFront.style.transition = rainBack.style.transition = "opacity 0.6s ease";
-    rainFront.style.opacity = rainBack.style.opacity = "0";
-    splash.style.opacity = "0";
+    const frontRain = setInterval(() => makeDrop(rainFront, 0.7, 0.7), 40);
+    const backRain  = setInterval(() => makeDrop(rainBack, 1.2, 0.3), 90);
 
-    setTimeout(() => splash.remove(), 1000);
+    // Fade + cleanup after 2s
+    setTimeout(() => {
+      clearInterval(frontRain);
+      clearInterval(backRain);
+      rainFront.style.transition = rainBack.style.transition = "opacity 0.6s ease";
+      rainFront.style.opacity = rainBack.style.opacity = "0";
+      splash.style.transition = "opacity 0.6s ease";
+      splash.style.opacity = "0";
 
-    const fadeOut = setInterval(() => {
-      ambientRain.volume = Math.max(ambientRain.volume - 0.02, 0);
-      if (ambientRain.volume <= 0.01) {
-        clearInterval(fadeOut);
-        ambientRain.pause();
-      }
-    }, 100);
-  }, 2000); // visible duration
+      // Fade out ambient rain too
+      const fadeOut = setInterval(() => {
+        if (ambientRain.volume > 0.02) ambientRain.volume -= 0.02;
+        else {
+          clearInterval(fadeOut);
+          ambientRain.pause();
+        }
+      }, 100);
+
+      setTimeout(() => splash.remove(), 800);
+    }, fromTap ? 2200 : 2000);
+  }
 });
 </script>
 
