@@ -291,7 +291,7 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   <!-- Company Logo -->
   <img src="Bottle.png" alt="Spraying Systems Logo"
        style="width:90vw;max-width:440px;height:auto;object-fit:contain;
-              animation:pulseLogo 2.4s infinite ease-in-out;position:relative;z-index:3;">
+              animation:pulseLogo 2s infinite ease-in-out;position:relative;z-index:3;">
 
   <!-- 💧 Water droplet (one shot) -->
   <audio id="dropletSound" preload="auto">
@@ -320,8 +320,8 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   overflow: hidden; pointer-events: none;
   z-index: 1;
 }
-#splashRainBack { opacity: 0.45; animation: rainPulse 2.4s infinite ease-in-out; }
-#splashRainFront { opacity: 0.8; animation: rainPulse 2.4s infinite ease-in-out; }
+#splashRainBack { opacity: 0.45; animation: rainPulse 2s infinite ease-in-out; }
+#splashRainFront { opacity: 0.8; animation: rainPulse 2s infinite ease-in-out; }
 
 .drop {
   position: absolute;
@@ -350,7 +350,7 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   background: radial-gradient(circle at center,
     rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 65%);
   opacity:0; z-index:0;
-  animation: echoPulse 2.4s infinite ease-in-out;
+  animation: echoPulse 2s infinite ease-in-out;
 }
 @keyframes echoPulse {
   0% { opacity:0; transform:scale(1); }
@@ -363,7 +363,7 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   position:absolute;inset:0;z-index:1;
   background:radial-gradient(circle at center, rgba(0,200,255,0.2) 0%, transparent 70%);
   opacity:0;transform:scale(0.4);
-  animation:ripplePulse 2.4s infinite ease-in-out;
+  animation:ripplePulse 2s infinite ease-in-out;
 }
 @keyframes ripplePulse {
   10% { opacity:0.3; transform:scale(0.8); }
@@ -420,7 +420,7 @@ window.addEventListener("load", () => {
     clearInterval(backRain);
     clearInterval(pulseSync);
 
-    rainFront.style.transition = rainBack.style.transition = "opacity 1s ease";
+    rainFront.style.transition = rainBack.style.transition = "opacity 0.6s ease";
     rainFront.style.opacity = rainBack.style.opacity = "0";
     splash.style.opacity = "0";
 
@@ -433,7 +433,7 @@ window.addEventListener("load", () => {
         ambientRain.pause();
       }
     }, 100);
-  }, 3500); // visible duration
+  }, 2000); // visible duration
 });
 </script>
 
