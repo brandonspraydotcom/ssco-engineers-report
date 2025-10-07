@@ -273,94 +273,167 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 </head>
 <body>
 
-<!-- 🌧️ Splash Screen with Rain + Droplet -->
+<!-- 🌧️ Splash Screen with Dual-Layer Rain + Echo Pulse + Ripple Sync -->
 <div id="splashScreen"
      style="position:fixed;inset:0;z-index:9999;
             display:flex;align-items:center;justify-content:center;
             background:#000;overflow:hidden;transition:opacity 1s ease;">
-  
-  <!-- Rain Overlay -->
-  <div id="splashRain"></div>
+
+  <!-- Back (distant) rain layer -->
+  <div id="splashRainBack"></div>
+
+  <!-- Front (closer) rain layer -->
+  <div id="splashRainFront"></div>
+
+  <!-- Subtle ripple under logo -->
+  <div id="splashRipple"></div>
 
   <!-- Company Logo -->
   <img src="Bottle.png" alt="Spraying Systems Logo"
-       style="width:45vw;max-width:320px;height:auto;object-fit:contain;
-              animation:pulseLogo 2.8s infinite ease-in-out;position:relative;z-index:3;">
+       style="width:90vw;max-width:440px;height:auto;object-fit:contain;
+              animation:pulseLogo 2.4s infinite ease-in-out;position:relative;z-index:3;">
 
-  <!-- Water droplet sound -->
+  <!-- 💧 Water droplet (one shot) -->
   <audio id="dropletSound" preload="auto">
     <source src="https://cdn.pixabay.com/download/audio/2021/08/09/audio_droplet.mp3?filename=water-drop-1.mp3" type="audio/mpeg">
+  </audio>
+
+  <!-- 🌫️ Ambient soft rain loop -->
+  <audio id="ambientRain" preload="auto" loop>
+    <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_2a7b67f53e.mp3?filename=soft-rain-ambient.mp3" type="audio/mpeg">
   </audio>
 </div>
 
 <style>
+/* === Heartbeat Motion === */
 @keyframes pulseLogo {
-  0%, 100% { transform:scale(1); opacity:1; }
-  50% { transform:scale(1.05); opacity:0.9; }
+  0%   { transform: scale(0.7); opacity: 0.8; filter: brightness(0.9); }
+  25%  { transform: scale(1.35); opacity: 1; filter: brightness(1.25); }
+  40%  { transform: scale(1.25); filter: brightness(1.1); }
+  70%  { transform: scale(1.05); opacity: 0.9; }
+  100% { transform: scale(0.7); opacity: 0.8; filter: brightness(0.9); }
 }
 
-/* 🌧️ Rain effect */
-#splashRain {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04), transparent 70%);
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 2;
+/* === Rain Layers === */
+#splashRainBack, #splashRainFront {
+  position: absolute; inset: 0;
+  overflow: hidden; pointer-events: none;
+  z-index: 1;
 }
+#splashRainBack { opacity: 0.45; animation: rainPulse 2.4s infinite ease-in-out; }
+#splashRainFront { opacity: 0.8; animation: rainPulse 2.4s infinite ease-in-out; }
 
 .drop {
   position: absolute;
-  width: 2px;
-  height: 12px;
-  background: rgba(255,255,255,0.25);
+  width: 6px; height: 16px;
+  background: rgba(0,200,255,1);
   border-radius: 50%;
-  animation: rainDrop 1s linear forwards;
+  animation: rainDrop 1.2s linear forwards;
+  filter: blur(0.3px);
+}
+@keyframes rainDrop {
+  0% { transform: translateY(-20px); opacity:1; }
+  100% { transform: translateY(100vh); opacity:0; }
 }
 
-@keyframes rainDrop {
-  0%   { transform: translateY(-20px) scale(1,1); opacity:1; }
-  100% { transform: translateY(100vh) scale(0.9,1.2); opacity:0; }
+/* Rain breathing with heartbeat */
+@keyframes rainPulse {
+  0%,100% { opacity:0.3; }
+  30% { opacity:1; }
+  70% { opacity:0.6; }
+}
+
+/* === Halo Glow Pulse === */
+#splashScreen::after {
+  content:"";
+  position:absolute;inset:0;
+  background: radial-gradient(circle at center,
+    rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 65%);
+  opacity:0; z-index:0;
+  animation: echoPulse 2.4s infinite ease-in-out;
+}
+@keyframes echoPulse {
+  0% { opacity:0; transform:scale(1); }
+  25% { opacity:0.45; transform:scale(1.5); }
+  100% { opacity:0; transform:scale(1.7); }
+}
+
+/* === Ripple Effect === */
+#splashRipple {
+  position:absolute;inset:0;z-index:1;
+  background:radial-gradient(circle at center, rgba(0,200,255,0.2) 0%, transparent 70%);
+  opacity:0;transform:scale(0.4);
+  animation:ripplePulse 2.4s infinite ease-in-out;
+}
+@keyframes ripplePulse {
+  10% { opacity:0.3; transform:scale(0.8); }
+  25% { opacity:0.45; transform:scale(1.3); }
+  50% { opacity:0.1; transform:scale(1.6); }
+  100% { opacity:0; transform:scale(0.4); }
 }
 </style>
 
 <script>
-// === Splash Fade + Rain Effect ===
+// === Full Splash Sequence ===
 window.addEventListener("load", () => {
   const splash = document.getElementById("splashScreen");
-  const rainContainer = document.getElementById("splashRain");
-  const sound = document.getElementById("dropletSound");
+  const rainFront = document.getElementById("splashRainFront");
+  const rainBack = document.getElementById("splashRainBack");
+  const dropletSound = document.getElementById("dropletSound");
+  const ambientRain = document.getElementById("ambientRain");
 
-  // --- Play droplet sound softly ---
-  if (sound && sound.play) {
-    setTimeout(() => {
-      sound.volume = 0.25;
-      sound.play().catch(()=>{});
-    }, 300);
-  }
+  // 💧 Droplet plink
+  dropletSound?.play?.().catch(()=>{});
+  dropletSound.volume = 0.8;
 
-  // --- Create drizzle effect ---
-  const makeDrop = () => {
+  // 🌫️ Fade in ambient rain
+  ambientRain.volume = 0;
+  ambientRain.play().catch(()=>{});
+  const fadeIn = setInterval(() => {
+    ambientRain.volume = Math.min(ambientRain.volume + 0.01, 0.25);
+    if (ambientRain.volume >= 0.25) clearInterval(fadeIn);
+  }, 100);
+
+  // 🌧️ Drop creation for both layers
+  const makeDrop = (container, speed, opacity) => {
     const d = document.createElement("div");
     d.className = "drop";
     d.style.left = Math.random() * 100 + "vw";
-    d.style.animationDuration = 0.8 + Math.random() * 0.8 + "s";
-    rainContainer.appendChild(d);
+    d.style.animationDuration = (speed + Math.random() * speed) + "s";
+    d.style.background = `rgba(0,200,255,${opacity})`;
+    container.appendChild(d);
     setTimeout(() => d.remove(), 1500);
   };
+  const frontRain = setInterval(() => makeDrop(rainFront, 0.8, 0.7), 60);
+  const backRain = setInterval(() => makeDrop(rainBack, 1.5, 0.3), 120);
 
-  const rainInterval = setInterval(makeDrop, 100);
+  // ❤️ Sync heartbeat = extra rain bursts
+  let beat = 0;
+  const pulseSync = setInterval(() => {
+    beat++;
+    for (let i = 0; i < 8; i++) makeDrop(rainFront, 0.9, 0.7);
+  }, 2400);
 
-  // --- Fade out splash gracefully ---
+  // Fade out sequence
   setTimeout(() => {
-    // stop rain before fade-out
-    clearInterval(rainInterval);
-    rainContainer.style.transition = "opacity 1s ease";
-    rainContainer.style.opacity = "0";
+    clearInterval(frontRain);
+    clearInterval(backRain);
+    clearInterval(pulseSync);
 
+    rainFront.style.transition = rainBack.style.transition = "opacity 1s ease";
+    rainFront.style.opacity = rainBack.style.opacity = "0";
     splash.style.opacity = "0";
+
     setTimeout(() => splash.remove(), 1000);
-  }, 2200); // ~2.2s splash duration
+
+    const fadeOut = setInterval(() => {
+      ambientRain.volume = Math.max(ambientRain.volume - 0.02, 0);
+      if (ambientRain.volume <= 0.01) {
+        clearInterval(fadeOut);
+        ambientRain.pause();
+      }
+    }, 100);
+  }, 3500); // visible duration
 });
 </script>
 
