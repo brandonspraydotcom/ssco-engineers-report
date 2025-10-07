@@ -1085,6 +1085,7 @@ wrapper.addEventListener('dblclick', () => {
   modal.style.display = 'none';
   stage.innerHTML = '';
   currentImgEl = null;
+  unlockScroll();
 
   // Two-stage feedback (after modal close)
   setTimeout(() => {
@@ -1449,18 +1450,7 @@ function buildPdf(){
   doc += prepared.innerHTML;
 
   // photos section
-  function photosHtml(arr,label){
-    let out = '';
-    for(let i=0;i<arr.length;i+=2){
-      out += '<div class="photo-page">';
-      out += '<div class="photo-half"><img src="'+arr[i]+'"><div class="photo-caption">'+label+' '+(i+1)+'</div></div>';
-      if(arr[i+1]) out += '<div class="photo-half"><img src="'+arr[i+1]+'"><div class="photo-caption">'+label+' '+(i+2)+'</div></div>';
-      out += '</div>';
-    }
-    return out;
-  }
-  if(beforeImgs.length) doc += '<div style="page-break-before:always"><h3>Before Photos</h3></div>'+photosHtml(beforeImgs,'Before Photo');
-  if(afterImgs.length) doc += '<div style="page-break-before:always"><h3>After Photos</h3></div>'+photosHtml(afterImgs,'After Photo');
+
 
   // Footer slogan + dynamic page numbers + Bottle.png on later pages
   doc += '<div class="footer"><div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div><div class="page"></div></div>';
