@@ -1134,7 +1134,7 @@ wrapper.addEventListener('dblclick', () => {
   }
 
 
-/* ---------- Prepare clone for PDF (clean, structured layout + photo fix) ---------- */
+/* ---------- Prepare clone for PDF (smart photo pagination + no blanks) ---------- */
 function prepareForPdf(clone, sigData) {
   // Remove UI-only elements
   clone.querySelectorAll(
@@ -1174,7 +1174,6 @@ function prepareForPdf(clone, sigData) {
   // --- Clean and format time records ---
   const timeListClone = $('timeList')?.cloneNode(true);
   let timeRecordsHtml = "";
-
   if (timeListClone) {
     timeListClone.querySelectorAll("button").forEach(b => b.remove());
     const slots = timeListClone.querySelectorAll('.daySlot');
@@ -1210,26 +1209,31 @@ function prepareForPdf(clone, sigData) {
     }
   }
 
-  // --- Gather and format photos (Before & After) ---
-  const formatPhotos = (containerId, label) => {
+  // --- Build vertical (2 per page) photo layout ---
+  const buildVerticalPhotos = (containerId, label, addPageBreakBefore = false) => {
     const container = document.getElementById(containerId);
     if (!container || !container.querySelectorAll('img').length)
       return '';
 
-    const imgs = Array.from(container.querySelectorAll('img')).map(
-      img => `<div class="pdf-photo-wrap"><img src="${img.src}" alt="${label}" /></div>`
-    ).join('');
+    const imgs = Array.from(container.querySelectorAll('img'));
+    let html = `${addPageBreakBefore ? '<div class="page-break"></div>' : ''}`;
+    html += `<div class="divider"></div><div class="pdf-section"><div class="pdf-subtitle">${label} Photos:</div>`;
 
-    return `
-      <div class="divider"></div>
-      <div class="pdf-section">
-        <div class="pdf-subtitle">${label} Photos:</div>
-        <div class="pdf-photo-grid">${imgs}</div>
-      </div>`;
+    imgs.forEach((img, i) => {
+      html += `
+        <div class="pdf-photo-vertical">
+          <img src="${img.src}" alt="${label} photo ${i+1}" />
+        </div>
+        ${(i % 2 === 1) ? '<div class="page-break"></div>' : ''}  <!-- break after every 2 -->
+      `;
+    });
+
+    html += `</div>`;
+    return html;
   };
 
-  const beforePhotos = formatPhotos('beforeThumbs', 'Before');
-  const afterPhotos = formatPhotos('afterThumbs', 'After');
+  const beforePhotos = buildVerticalPhotos('beforeThumbs', 'Before', true);
+  const afterPhotos  = buildVerticalPhotos('afterThumbs', 'After', true);
 
   // --- Build final HTML for PDF ---
   const html = `
@@ -1249,25 +1253,25 @@ function prepareForPdf(clone, sigData) {
       table.time-table th { background: #f5f5f5; font-weight: 700; }
       .time-total { text-align: right; font-size: 12px; margin-top: 4px; font-weight: 700; }
 
-      /* --- Photos layout --- */
-      .pdf-photo-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        page-break-inside: avoid;
-      }
-      .pdf-photo-wrap {
+      /* --- Vertical Photos (two per page) --- */
+      .pdf-photo-vertical {
         page-break-inside: avoid;
         display: flex;
         justify-content: center;
         align-items: center;
+        margin-bottom: 20px;
       }
-      .pdf-photo-wrap img {
-        width: 100%;
+      .pdf-photo-vertical img {
+        max-width: 90%;
+        max-height: 1000px;
+        width: auto;
         height: auto;
         object-fit: contain;
         border: 1px solid #aaa;
         border-radius: 8px;
+      }
+      .page-break {
+        page-break-after: always;
       }
     </style>
 
@@ -1303,9 +1307,6 @@ function prepareForPdf(clone, sigData) {
       ${timeRecordsHtml}
     </div>
 
-    ${beforePhotos}
-    ${afterPhotos}
-
     <div class="divider"></div>
 
     <div style="margin-top:16px;font-size:13px;color:#333;">
@@ -1313,7 +1314,7 @@ function prepareForPdf(clone, sigData) {
       and the work carried out has been completed/progressed to your satisfaction.
     </div>
 
-    <div style="display:flex;gap:60px;margin-top:18px;align-items:flex-start;">
+    <div style="display:flex;gap:60px;margin-top:18px;align-items:flex-start;page-break-after:always;">
       <div>
         <div class="pdf-subtitle">Engineer Signature</div>
         <img src="${sigData[0]}" style="max-width:280px;border:1px solid #000;border-radius:6px;"><br>
@@ -1325,6 +1326,9 @@ function prepareForPdf(clone, sigData) {
         <div style="margin-top:4px;font-size:13px;font-weight:700;">${escapeHtml($('sig2Name')?.value || '—')}</div>
       </div>
     </div>
+
+    ${beforePhotos}
+    ${afterPhotos}
   `;
 
   clone.innerHTML = html;
