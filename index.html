@@ -383,30 +383,34 @@ window.addEventListener("load", () => {
   const dropletSound = document.getElementById("dropletSound");
   const ambientRain = document.getElementById("ambientRain");
 
-  startSplash();
+  // wait a short moment for layout/paint before animating
+  setTimeout(() => startSplash(), 80); // <<-- sync delay ensures simultaneous start
 
   function startSplash() {
-    // --- Try play droplet sound (will silently fail if blocked) ---
+    // reset opacity to avoid visual pop
+    splash.style.opacity = "1";
+    rainFront.style.opacity = rainBack.style.opacity = "1";
+
+    // --- play droplet sound (may fail silently on iOS) ---
     try {
       dropletSound.volume = 0.9;
+      dropletSound.currentTime = 0;
       dropletSound.play().catch(() => {});
     } catch {}
 
-    // --- Try play ambient rain (if browser allows) ---
+    // --- play ambient rain softly (fade in) ---
     try {
       ambientRain.volume = 0;
+      ambientRain.currentTime = 0;
       ambientRain.play().then(() => {
         const fadeIn = setInterval(() => {
           if (ambientRain.volume < 0.25) ambientRain.volume += 0.02;
           else clearInterval(fadeIn);
         }, 80);
-      }).catch(() => {
-        // iOS fallback: muted visual only
-        console.log("Audio autoplay restricted — continuing silently.");
-      });
+      }).catch(() => {});
     } catch {}
 
-    // --- Generate rain drops ---
+    // --- generate rain drops immediately ---
     const makeDrop = (container, speed, opacity) => {
       const d = document.createElement("div");
       d.className = "drop";
@@ -416,11 +420,10 @@ window.addEventListener("load", () => {
       container.appendChild(d);
       setTimeout(() => d.remove(), 1500);
     };
-
     const frontRain = setInterval(() => makeDrop(rainFront, 0.7, 0.7), 40);
     const backRain  = setInterval(() => makeDrop(rainBack, 1.2, 0.3), 90);
 
-    // --- Fade out sequence ---
+    // --- fade-out everything in sync after ~2s ---
     setTimeout(() => {
       clearInterval(frontRain);
       clearInterval(backRain);
@@ -429,7 +432,7 @@ window.addEventListener("load", () => {
       splash.style.transition = "opacity 0.6s ease";
       splash.style.opacity = "0";
 
-      // Fade out ambient rain too
+      // fade ambient audio down smoothly
       const fadeOut = setInterval(() => {
         if (ambientRain.volume > 0.02) ambientRain.volume -= 0.02;
         else {
