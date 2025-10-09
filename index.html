@@ -1,43 +1,64 @@
 <!doctype html>
 <html lang="en">
 <head>
-<base href="/ssco-engineers-report/">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f0f10">
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    function promptUpdate(worker) {
-      // Show your toast with an "Update" button
-      showToast('New version available — tap to update', 'info');
-      // On tap:
-      document.getElementById('toast')?.addEventListener('click', () => {
-        worker.postMessage({ type: 'SKIP_WAITING' });
-      }, { once: true });
-    }
-    if (reg.waiting) promptUpdate(reg.waiting);
-    reg.addEventListener('updatefound', () => {
-      const newSW = reg.installing;
-      newSW?.addEventListener('statechange', () => {
-        if (newSW.state === 'installed' && navigator.serviceWorker.controller) promptUpdate(newSW);
+  <base href="/ssco-engineers-report/">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f0f10">
+
+  <!-- =======================
+       🧩 Service Worker
+  ======================== -->
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      function promptUpdate(worker) {
+        showToast('New version available — tap to update', 'info');
+        document.getElementById('toast')?.addEventListener('click', () => {
+          worker.postMessage({ type: 'SKIP_WAITING' });
+        }, { once: true });
+      }
+
+      if (reg.waiting) promptUpdate(reg.waiting);
+
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW?.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            promptUpdate(newSW);
+          }
+        });
       });
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
     });
-    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-  });
-}
+  }
+  </script>
 
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+  <!-- =======================
+       📄 PDF + JS Libraries
+  ======================== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
-</script>
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SSCo Engineers Report">
-<link rel="apple-touch-icon" href="bottle2.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/ssco-engineer-report/bottle2.png">
+  <!-- =======================
+       🌍 Google Maps Places API
+  ======================== -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
 
-<title>SSCo — Engineers Report</title>
+  <!-- =======================
+       🍏 iOS PWA Meta
+  ======================== -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SSCo Engineers Report">
+  <link rel="apple-touch-icon" href="bottle2.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/ssco-engineer-report/bottle2.png">
+
+  <title>SSCo — Engineers Report</title>
+
 <style>
 /* Prevent iOS Safari auto-zoom on input focus */
 input,
@@ -1745,12 +1766,13 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
     });
   });
 }
+</script>
 
+<script>src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"</script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script>src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"</script>
 
-
+<script>
 // === Global cache for sharing ===
 let lastPdfBlob = null;
 
@@ -2633,15 +2655,13 @@ if (navigator.share) {
 });
 
 
-    // Refresh Lucide icons
+       // Refresh Lucide icons
     if (window.lucide?.createIcons) lucide.createIcons();
-  });
-}
-
-
-
-
+  }); // end window.load
+ } // end if (!window.shareButtonInjected)
+} // end if (navigator.share)
 </script>
+
 
 <!-- Toast Notification -->
 <div id="toast"
