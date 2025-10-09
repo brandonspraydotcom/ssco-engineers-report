@@ -1878,7 +1878,7 @@ async function buildPdf() {
   try {
     // Generate the base PDF first
     const worker = html2pdf().set(opt).from(wrapper);
-    const pdfBlob = await worker.outputPdf("blob");
+    const pdfBlob = await html2pdf().set(opt).from(wrapper).output('blob');
 
     // Convert blob → jsPDF instance to add footer/header
     const arrayBuffer = await pdfBlob.arrayBuffer();
