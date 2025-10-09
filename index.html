@@ -1525,6 +1525,7 @@ function prepareForPdf(clone, sigData) {
 
       /* --- Vertical Photos (two per page) --- */
       .pdf-photo-vertical {
+	    page-break-before: avoid;
         page-break-inside: avoid;
         display: flex;
         justify-content: center;
@@ -1541,7 +1542,7 @@ function prepareForPdf(clone, sigData) {
         border-radius: 8px;
       }
       .page-break {
-        page-break-after: always;
+        page-break-after: avoid;
       }
     </style>
 
