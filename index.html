@@ -1,15 +1,32 @@
 <!doctype html>
 <html lang="en">
 <head>
-<base href="/ssco-engineers-report/">
+<base href="/EngineersReport/">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f0f10">
 <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(console.error);
-  }
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    function promptUpdate(worker) {
+      // Show your toast with an "Update" button
+      showToast('New version available — tap to update', 'info');
+      // On tap:
+      document.getElementById('toast')?.addEventListener('click', () => {
+        worker.postMessage({ type: 'SKIP_WAITING' });
+      }, { once: true });
+    }
+    if (reg.waiting) promptUpdate(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const newSW = reg.installing;
+      newSW?.addEventListener('statechange', () => {
+        if (newSW.state === 'installed' && navigator.serviceWorker.controller) promptUpdate(newSW);
+      });
+    });
+    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+  });
+}
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -362,6 +379,32 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 </style>
 
 <script>
+
+// one worker instance (reused)
+const imgWorker = new Worker('img-worker.js');
+let _reqId = 0;
+function processImageInWorker(file, { maxDim = 2000, quality = 0.72 } = {}) {
+  return new Promise((resolve, reject) => {
+    const id = ++_reqId;
+    const fr = new FileReader();
+    fr.onload = () => {
+      imgWorker.onmessage = (e) => {
+        const msg = e.data;
+        if (msg.id !== id) return;
+        if (msg.error) return reject(new Error(msg.error));
+        const blob = new Blob([msg.buffer], { type: msg.type || 'image/jpeg' });
+        resolve(URL.createObjectURL(blob)); // object URL (fast, revocable)
+      };
+      imgWorker.postMessage({
+        id, arrayBuffer: fr.result, type: file.type, maxDim, quality
+      }, [fr.result]); // transfer
+    };
+    fr.onerror = () => reject(fr.error);
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const splash = document.getElementById("splashScreen");
   const rainFront = document.getElementById("splashRainFront");
@@ -830,47 +873,24 @@ async function compressImage(file, maxDim = 1600, quality = 0.7) {
 }
 
 /* ---------- Photo previews (with remove) — ENHANCED: click to annotate and compress ---------- */
-async function previewFiles(inputEl, targetId) {
+async function previewFiles(inputEl, targetId){
   const target = document.getElementById(targetId);
   const files = Array.from(inputEl.files);
-
+  // process sequentially (bounded) to avoid memory spikes on iPad
   for (const file of files) {
-    // Compress image before displaying
-    const compressedUrl = await compressImage(file);
+    const url = await processImageInWorker(file, { maxDim: 2000, quality: 0.72 });
+    const wrap = document.createElement('div'); wrap.className='photoWrap';
+    const img = document.createElement('img'); img.className='thumb'; img.src = url; img.alt = file.name;
+    const btn = document.createElement('button'); btn.type='button'; btn.className='removePhoto'; btn.textContent='✖';
+    btn.addEventListener('click', ()=>{ URL.revokeObjectURL(url); wrap.remove(); savePhotos(); });
+    // tap to annotate (your existing handler)
+    img.style.cursor = 'zoom-in';
+    img.addEventListener('click', ()=> openAnnotator(img, targetId));
 
-    // Build thumbnail container
-    const wrap = document.createElement("div");
-    wrap.className = "photoWrap";
-
-    // Create image element
-    const img = document.createElement("img");
-    img.className = "thumb";
-    img.src = compressedUrl;
-    img.alt = file.name || "photo";
-
-    // Remove button
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "removePhoto";
-    btn.textContent = "✖";
-    btn.addEventListener("click", () => {
-      URL.revokeObjectURL(compressedUrl);
-      wrap.remove();
-      savePhotos();
-    });
-
-    // Tap image to open annotator
-    img.style.cursor = "zoom-in";
-    img.addEventListener("click", () => openAnnotator(img, targetId));
-
-    // Append everything
-    wrap.appendChild(img);
-    wrap.appendChild(btn);
-    target.appendChild(wrap);
+    wrap.appendChild(img); wrap.appendChild(btn); target.appendChild(wrap);
+    savePhotos();
   }
-
-  // Persist photos to localStorage
-  savePhotos();
+  inputEl.value = '';
 }
 
 $('beforeInput').addEventListener('change', e=> previewFiles(e.target,'beforeThumbs'));
@@ -1589,60 +1609,132 @@ ${data.partsReq
   return clone;
 }
 
-// Print an HTML string via a hidden iframe (Safari/PWA safe)
-async function printHtmlViaIframe(htmlString) {
+// === Safari/PWA-safe 2-up printing via hidden iframe ===
+async function printHtmlViaIframe(beforeImgs, afterImgs) {
   return new Promise((resolve, reject) => {
     const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
+    Object.assign(iframe.style, {
+      position: 'fixed',
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      border: 0
+    });
     document.body.appendChild(iframe);
+
+    // Build rock-solid 2-up layout
+    const twoUpPages = (imgSrcs, label) => {
+      let html = '';
+      for (let i = 0; i < imgSrcs.length; i += 2) {
+        html += `
+          <section class="sheet">
+            <figure class="panel">
+              <img src="${imgSrcs[i]}" alt="${label} ${i + 1}">
+            </figure>
+            ${
+              imgSrcs[i + 1]
+                ? `<figure class="panel">
+                     <img src="${imgSrcs[i + 1]}" alt="${label} ${i + 2}">
+                   </figure>`
+                : `<div class="panel placeholder"></div>`
+            }
+            <footer class="folio">${label} ${i + 1}${imgSrcs[i + 1] ? ` & ${i + 2}` : ''}</footer>
+          </section>`;
+      }
+      return html;
+    };
+
+    const htmlString = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Engineer Report Photos</title>
+        <style>
+          @page { size: A4 portrait; margin: 12mm; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing:border-box; }
+          body { margin:0; background:#fff; font-family:system-ui,sans-serif; }
+          .sheet {
+            display:grid;
+            grid-template-rows: 1fr 1fr auto;
+            row-gap:8mm;
+            min-height: calc(297mm - 24mm);
+            break-after: page;
+            padding:6mm;
+          }
+          .panel {
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border:1px solid #ccc;
+            border-radius:6px;
+            padding:3mm;
+            break-inside: avoid;
+          }
+          .panel img {
+            max-width:100%;
+            max-height:100%;
+            object-fit:contain;
+          }
+          .placeholder { background:#f9f9f9; }
+          .folio {
+            text-align:center;
+            font-size:11px;
+            color:#333;
+            line-height:1.2;
+          }
+        </style>
+      </head>
+      <body>
+        ${twoUpPages(beforeImgs, 'Before')}
+        ${twoUpPages(afterImgs, 'After')}
+      </body>
+      </html>`;
 
     const idoc = iframe.contentDocument || iframe.contentWindow.document;
     idoc.open();
     idoc.write(htmlString);
     idoc.close();
 
-    // Wait for images to load (best-effort), then print
+    // Wait for all images (strictly) before printing
     const imgs = Array.from(idoc.images || []);
-    let done = 0, total = imgs.length;
-    const timeout = setTimeout(goPrint, 1200); // safety net
+    const timeout = setTimeout(goPrint, 2000); // safety fallback
+    let loaded = 0;
 
-    function imgDone() {
-      done++;
-      if (done >= total) goPrint();
-    }
     function goPrint() {
       clearTimeout(timeout);
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       } catch (e) {
-        console.warn('iframe print failed, falling back to preview', e);
+        console.warn('iframe print failed', e);
         reject(e);
       } finally {
-        // remove iframe after a moment
         setTimeout(() => iframe.remove(), 1500);
         resolve();
       }
     }
 
-    if (total === 0) {
-      goPrint();
-    } else {
-      imgs.forEach(img => {
-        if (img.complete) { imgDone(); }
-        else {
-          img.addEventListener('load', imgDone);
-          img.addEventListener('error', imgDone);
-        }
-      });
-    }
+    if (imgs.length === 0) return goPrint();
+    imgs.forEach(img => {
+      if (img.complete) {
+        loaded++;
+        if (loaded === imgs.length) goPrint();
+      } else {
+        img.addEventListener('load', () => {
+          loaded++;
+          if (loaded === imgs.length) goPrint();
+        });
+        img.addEventListener('error', () => {
+          loaded++;
+          if (loaded === imgs.length) goPrint();
+        });
+      }
+    });
   });
 }
+
 
 /* ---------- Build printable doc (light) and open it ---------- */
 function buildPdf(){
@@ -1971,92 +2063,7 @@ document.getElementById("salesName").addEventListener("change", function () {
 })("salesName");
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
 
-<script>
-function fillAddress(place) {
-  const addr1Field = document.getElementById("addr1");
-  const addr2Field = document.getElementById("addr2");
-  const cityField = document.getElementById("city");
-  const regionField = document.getElementById("region");
-  const postalField = document.getElementById("postal");
-  const countryField = document.getElementById("country");
-
-  // Reset fields first
-  addr1Field.value = "";
-  addr2Field.value = "";
-  cityField.value = "";
-  regionField.value = "";
-  postalField.value = "";
-  countryField.value = "";
-
-  if (!place.address_components) return;
-
-  place.address_components.forEach(component => {
-    const types = component.types;
-    if (types.includes("street_number")) {
-      addr1Field.value = component.long_name + " " + addr1Field.value;
-    }
-    if (types.includes("route")) {
-      addr1Field.value = (addr1Field.value.trim() + " " + component.long_name).trim();
-    }
-    if (types.includes("subpremise")) {
-      addr2Field.value = component.long_name;
-    }
-    if (types.includes("locality")) {
-      cityField.value = component.long_name;
-    }
-    if (types.includes("administrative_area_level_1")) {
-      regionField.value = component.long_name;
-    }
-    if (types.includes("postal_code")) {
-      postalField.value = component.long_name;
-    }
-    if (types.includes("country")) {
-      countryField.value = component.long_name;
-    }
-  });
-}
-
-function initAutocomplete() {
-  const addr1Field = document.getElementById("addr1");
-  const companyField = document.getElementById("custCompany");
-
-  // Autocomplete for addresses (addr1)
-  const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
-    fields: ["address_components", "geometry", "name"],
-    types: ["geocode"]
-  });
-  addressAutocomplete.addListener("place_changed", () => {
-    const place = addressAutocomplete.getPlace();
-    fillAddress(place);
-  });
-
-  // --- Autocomplete for companies (custCompany) ---
-  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
-  fields: ["address_components", "geometry", "name"],
-  types: ["establishment"]
-});
-
-companyAutocomplete.addListener("place_changed", () => {
-  const place = companyAutocomplete.getPlace();
-  if (!place) return;
-
-  // ✅ Use only the business name (no address junk)
-  const cleanName = place.name
-    .replace(/,.*/g, "")     // remove anything after a comma
-    .replace(/\s+\d+.*/, "") // remove trailing numbers / street parts
-    .trim();
-
-  companyField.value = cleanName;
-
-  // ✅ Still fill the address fields as before
-  fillAddress(place);
-  });
-}
-
-window.addEventListener("load", initAutocomplete);
-</script>
 
 <script>
 // Set a clean title so Safari doesn't print the URL
@@ -2474,6 +2481,46 @@ document.addEventListener("DOMContentLoaded", () => {
 }, 3000);
   }
 });
+
+// === Native Share API (iPad / Android / Desktop Chrome) ===
+if (navigator.share) {
+  window.addEventListener('load', () => {
+    // Locate the same container as the "Send Email" button
+    const sendEmailBtn = document.getElementById('sendEmail');
+    if (!sendEmailBtn) return;
+
+    const parentContainer = sendEmailBtn.closest('div, section, footer') || document.body;
+
+    // Create Share button
+    const shareBtn = document.createElement('button');
+    shareBtn.id = 'shareReport';
+    shareBtn.className = 'btn btn-primary w-full mt-2';
+    shareBtn.innerHTML = '<i data-lucide="share-2"></i> Share Report';
+
+    // Insert the Share button just *after* the Send Email button
+    sendEmailBtn.insertAdjacentElement('afterend', shareBtn);
+
+    // Click handler
+    shareBtn.addEventListener('click', async () => {
+      const title = `Engineer Report — ${document.getElementById("project")?.value || 'Untitled Project'}`;
+      const text  = `Report by ${document.getElementById("engineer")?.value || 'Engineer'} on ${document.getElementById("date")?.value || ''}.`;
+
+      try {
+        await navigator.share({ title, text });
+        showToast('✅ Shared successfully', 'success');
+      } catch (err) {
+        console.warn('Share canceled', err);
+        showToast('Share canceled', 'info');
+      }
+    });
+
+    // Refresh Lucide icons if present
+    if (window.lucide?.createIcons) lucide.createIcons();
+  });
+}
+
+
+
 </script>
 
 <!-- Toast Notification -->
@@ -2567,7 +2614,7 @@ window.addEventListener('offline', () => {
         .catch(err => console.error('❌ SW registration failed:', err));
     });
   }
-
+ 
   // Toast for online/offline
   window.addEventListener('online', () => {
     showToast('✅ Back online', 'success');
@@ -3369,6 +3416,101 @@ clearModal.querySelector("#confirmClear").addEventListener("click", () => {
     }
   }, 200); // clear after modal starts closing
 });
+</script>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    lucide.createIcons();
+  });
+</script>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
+
+
+<script>
+function fillAddress(place) {
+  const addr1Field = document.getElementById("addr1");
+  const addr2Field = document.getElementById("addr2");
+  const cityField = document.getElementById("city");
+  const regionField = document.getElementById("region");
+  const postalField = document.getElementById("postal");
+  const countryField = document.getElementById("country");
+
+  // Reset fields first
+  addr1Field.value = "";
+  addr2Field.value = "";
+  cityField.value = "";
+  regionField.value = "";
+  postalField.value = "";
+  countryField.value = "";
+
+  if (!place.address_components) return;
+
+  place.address_components.forEach(component => {
+    const types = component.types;
+    if (types.includes("street_number")) {
+      addr1Field.value = component.long_name + " " + addr1Field.value;
+    }
+    if (types.includes("route")) {
+      addr1Field.value = (addr1Field.value.trim() + " " + component.long_name).trim();
+    }
+    if (types.includes("subpremise")) {
+      addr2Field.value = component.long_name;
+    }
+    if (types.includes("locality")) {
+      cityField.value = component.long_name;
+    }
+    if (types.includes("administrative_area_level_1")) {
+      regionField.value = component.long_name;
+    }
+    if (types.includes("postal_code")) {
+      postalField.value = component.long_name;
+    }
+    if (types.includes("country")) {
+      countryField.value = component.long_name;
+    }
+  });
+}
+
+function initAutocomplete() {
+  const addr1Field = document.getElementById("addr1");
+  const companyField = document.getElementById("custCompany");
+
+  // Autocomplete for addresses (addr1)
+  const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
+    fields: ["address_components", "geometry", "name"],
+    types: ["geocode"]
+  });
+  addressAutocomplete.addListener("place_changed", () => {
+    const place = addressAutocomplete.getPlace();
+    fillAddress(place);
+  });
+
+  // --- Autocomplete for companies (custCompany) ---
+  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
+  fields: ["address_components", "geometry", "name"],
+  types: ["establishment"]
+});
+
+companyAutocomplete.addListener("place_changed", () => {
+  const place = companyAutocomplete.getPlace();
+  if (!place) return;
+
+  // ✅ Use only the business name (no address junk)
+  const cleanName = place.name
+    .replace(/,.*/g, "")     // remove anything after a comma
+    .replace(/\s+\d+.*/, "") // remove trailing numbers / street parts
+    .trim();
+
+  companyField.value = cleanName;
+
+  // ✅ Still fill the address fields as before
+  fillAddress(place);
+  });
+}
+
+window.addEventListener("load", initAutocomplete);
 </script>
 
 </body>
