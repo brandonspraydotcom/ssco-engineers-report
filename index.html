@@ -27,6 +27,9 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
   });
 }
+
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1744,87 +1747,162 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 }
 
 
-/* ---------- Build printable doc (light) and open it ---------- */
-function buildPdf(){
-  // capture signatures BEFORE cloning
-  const sig1 = $('sig1').toDataURL();
-  const sig2 = $('sig2').toDataURL();
-  const sigData = [sig1, sig2];
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
-  const clone = $('formContainer').cloneNode(true);
-  const prepared = prepareForPdf(clone, sigData);
 
-  const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i=>i.src);
-  const afterImgs = Array.from(document.querySelectorAll('#afterThumbs img')).map(i=>i.src);
+// === Global cache for sharing ===
+let lastPdfBlob = null;
 
-  const projectNo = escapeHtml($('project').value || '—');
-  const poNo = escapeHtml($('ponumber').value || '—');
-  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
-  const formattedDate = formatDateWithOrdinal(dateVal);
-  const company = escapeHtml($('custCompany').value || '—');
-  const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
+/* ---------- Build & Save True PDF with Headers/Footers ---------- */
+async function buildPdf() {
+  bump("info");
+  showToast("🧾 Generating PDF…", "info");
 
-  const printCss = `
-    @page { counter-increment: page}
-    body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:20px;counter-reset:page}
-    .banner{width:100%;height:auto;margin-bottom:12px}
-    .title{font-size:18px;font-weight:700;text-align:center;margin:6px 0}
-    .subtitle{font-size:14px;text-align:center;color:#333;margin-bottom:14px}
-    h3{margin-top:16px;font-size:15px}
-    table{border-collapse:collapse;width:100%}
-    th,td{border:1px solid #ddd;padding:8px;text-align:center}
-    th{background:#f7f7f7}
-    .sig-img{max-width:320px;border:1px solid #000;border-radius:6px}
-    .photo-page {display: flex;flex-direction: column;justify-content: space-around;align-items: centre;padding: 20px;gap: 12px}
-    .photo-half{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:centre;width:100%}
-    .photo-half img{max-width:100%;height:auto;max-height:45vh;object-fit:contain;border-radius:6px}
-    .photo-caption{text-align:center;color:#000;margin-top:-20px;font-size:12px}
-    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:8px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
-    .footer .page:before{content:"Page " counter(page) " of " counter(pages)}
-    .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
+  // Capture signatures
+  const sig1 = $("sig1").toDataURL();
+  const sig2 = $("sig2").toDataURL();
 
-    /* Custom spacing for specific fields */
-    .row-project-number { margin-bottom: 0px; display:block; }
-	.row-purchase-order-number { margin-bottom: 12px; display:block; }
-    .row-sales-engineer { margin-bottom: 0px; display:block; }
-    .row-sales-email { margin-bottom: 10px; display:block; }
-    .row-point-contact { margin-bottom: -10px; display:block; }
+  const clone = $("formContainer").cloneNode(true);
+
+  // Replace signature canvases with <img> for export
+  const sig1Clone = clone.querySelector("#sig1");
+  const sig2Clone = clone.querySelector("#sig2");
+  if (sig1Clone) {
+    const img1 = document.createElement("img");
+    img1.src = sig1;
+    img1.className = "sig-img";
+    sig1Clone.replaceWith(img1);
+  }
+  if (sig2Clone) {
+    const img2 = document.createElement("img");
+    img2.src = sig2;
+    img2.className = "sig-img";
+    sig2Clone.replaceWith(img2);
+  }
+
+  // Photos (before/after)
+  const beforeImgs = document.querySelectorAll("#beforeThumbs img");
+  const afterImgs = document.querySelectorAll("#afterThumbs img");
+
+  const photoSection = document.createElement("div");
+  photoSection.innerHTML = `
+    <div class="photo-page">
+      <h3>Before Photos</h3>
+      <div class="photo-half">
+        ${Array.from(beforeImgs).map(img => `<img src="${img.src}" />`).join("") || "<p>No photos</p>"}
+      </div>
+      <h3>After Photos</h3>
+      <div class="photo-half">
+        ${Array.from(afterImgs).map(img => `<img src="${img.src}" />`).join("") || "<p>No photos</p>"}
+      </div>
+    </div>
+  `;
+  clone.appendChild(photoSection);
+
+  // Styling identical to your layout
+  const style = document.createElement("style");
+  style.textContent = `
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #111; padding: 20px; }
+    h3 { margin-top: 16px; font-size: 15px; }
+    .sig-img { max-width: 280px; border: 1px solid #000; border-radius: 6px; margin-top: 6px; }
+    .photo-page { page-break-before: always; }
+    .photo-page img { max-width: 100%; margin: 6px auto; display: block; border-radius: 6px; }
+    .photo-half { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .banner { width: 100%; max-height: 120px; object-fit: contain; margin-bottom: 8px; }
+    .title { font-size: 18px; font-weight: bold; text-align: center; margin: 6px 0; }
   `;
 
-  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report - '+ projectNo +' - '+ formattedDate+'</title><style>'+printCss+'</style></head><body>';
+  const wrapper = document.createElement("div");
+  wrapper.appendChild(style);
 
-  // Banner only on first page
-  if(MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0){
-    doc += '<img class="banner" src="'+MAINTENANCE_B64+'">';
+  // Optional banner
+  if (typeof MAINTENANCE_B64 !== "undefined" && MAINTENANCE_B64.indexOf("data:") === 0) {
+    const banner = document.createElement("img");
+    banner.src = MAINTENANCE_B64;
+    banner.className = "banner";
+    wrapper.appendChild(banner);
   }
-  doc += '<div class="title">Engineers Report</div>';
-  doc += '<div style="text-align:center;font-weight:700;margin-bottom:6px">'+sscoTitle+'</div>';
-  doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
-  doc += prepared.innerHTML;
 
-  // photos section
+  // Title + clone
+  const projectNo = $("project")?.value || "Report";
+  const company = $("custCompany")?.value || "";
+  const formattedDate = $("date")?.value || new Date().toISOString().slice(0, 10);
 
+  const titleBlock = document.createElement("div");
+  titleBlock.innerHTML = `
+    <div class="title">Engineer’s Report</div>
+    <div style="text-align:center;font-weight:700;margin-bottom:6px">
+      SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}
+    </div>
+    <div class="subtitle" style="text-align:center;color:#333;margin-bottom:14px;">
+      Prepared for <strong>${company}</strong>
+    </div>
+  `;
+  wrapper.appendChild(titleBlock);
+  wrapper.appendChild(clone);
 
-  // Footer slogan + dynamic page numbers + Bottle.png on later pages
-  doc += '<div class="footer"><div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div><div class="page"></div></div>';
-  if(BOTTLE_B64 && BOTTLE_B64.indexOf('data:') === 0){
-    doc += '<img class="logo-small" src="'+BOTTLE_B64+'">';
-}
+  const pdfName = `Engineer_Report_${projectNo}.pdf`;
 
-  doc += '</body></html>';
+  const opt = {
+    margin: [0.4, 0.3, 0.6, 0.3], // top, left, bottom, right
+    filename: pdfName,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+    pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+  };
 
-    // --- open a blank tab silently (do NOT print yet)
-const w = window.open('', '_blank');
-w.document.open();
-w.document.write(doc);
-w.document.close();
-w.focus();
+  try {
+    // Generate the base PDF first
+    const worker = html2pdf().set(opt).from(wrapper);
+    const pdfBlob = await worker.outputPdf("blob");
 
-// store reference globally so we can print later from the modal
-window.lastBuiltPdfWindow = w;
+    // Convert blob → jsPDF instance to add footer/header
+    const arrayBuffer = await pdfBlob.arrayBuffer();
+    const existingPdf = new jsPDF({ unit: "in", format: "a4", orientation: "portrait" });
+    existingPdf.loadFile(arrayBuffer);
 
-// return the window for reference
-return w;
+    // Add header/footer to each page
+    const pageCount = existingPdf.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      existingPdf.setPage(i);
+      const pageWidth = existingPdf.internal.pageSize.getWidth();
+      const pageHeight = existingPdf.internal.pageSize.getHeight();
+
+      // Header (logo optional)
+      if (typeof BOTTLE_B64 !== "undefined" && BOTTLE_B64.indexOf("data:") === 0) {
+        existingPdf.addImage(BOTTLE_B64, "PNG", 0.5, 0.3, 0.7, 0.7);
+      }
+
+      // Footer slogan + page number
+      existingPdf.setFontSize(8);
+      existingPdf.setTextColor(100);
+      existingPdf.text(
+        "MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count",
+        pageWidth / 2,
+        pageHeight - 0.4,
+        { align: "center" }
+      );
+      existingPdf.text(`Page ${i} of ${pageCount}`, pageWidth - 0.6, pageHeight - 0.4, {
+        align: "right",
+      });
+    }
+
+    // Output final PDF
+    const finalBlob = existingPdf.output("blob");
+    lastPdfBlob = finalBlob;
+
+    const pdfUrl = URL.createObjectURL(finalBlob);
+    window.open(pdfUrl, "_blank");
+
+    showToast("✅ PDF ready!", "success");
+    bump("success");
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+    showToast("❌ PDF generation failed", "error");
+    bump("error");
+  }
 }
 
 
@@ -2492,6 +2570,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // === Native Share API (iPad / Android / Desktop Chrome) ===
 if (navigator.share) {
+  if (!window.shareButtonInjected) {
+  window.shareButtonInjected = true;
   window.addEventListener('load', () => {
     const sendEmailBtn = document.getElementById('sendEmail');
     if (!sendEmailBtn) return;
@@ -2499,7 +2579,7 @@ if (navigator.share) {
     // Create icon-only Share button
     const shareBtn = document.createElement('button');
     shareBtn.id = 'shareReport';
-    shareBtn.className = 'btn btn-primary w-12 flex items-center justify-center ml-2';
+    shareBtn.className = 'btn btn-primary h-[42px] w-[42px] flex items-center justify-center ml-2 rounded-full shadow-sm hover:scale-[1.05] transition-transform';
     shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
 
     // Insert right next to Send Email
@@ -2507,57 +2587,51 @@ if (navigator.share) {
 
     // Click handler (same validation as send email)
     shareBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
+  e.preventDefault();
 
-      // Step 1: Check if PDF saved
-      if (!hasSavedPdf()) {
-        bump('warning');
-        showToast('⚠️ Please save the PDF before sharing.', 'warning');
-        const saveBtn = document.getElementById('savePdf');
-        saveBtn.style.animation = 'pulse 1s ease-in-out 2';
-        setTimeout(() => (saveBtn.style.animation = ''), 2000);
-        return;
-      }
+  // Step 1: Check if PDF saved
+  if (!lastPdfBlob) {
+    bump('warning');
+    showToast('⚠️ Please save the PDF before sharing.', 'warning');
+    const saveBtn = document.getElementById('savePdf');
+    saveBtn.style.animation = 'pulse 1s ease-in-out 2';
+    setTimeout(() => (saveBtn.style.animation = ''), 2000);
+    return;
+  }
 
-      // Step 2: Validate important fields
-      const valid = validateImportantFields();
-      if (!valid) {
-        bump('warning');
-        showToast('⚠️ Please complete highlighted fields before sharing.', 'warning');
-        const firstMissing = document.querySelector('.highlight-missing, [style*="box-shadow"]');
-        if (firstMissing) {
-          firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-        return;
-      }
+  // Step 2: Validate important fields
+  const valid = validateImportantFields();
+  if (!valid) {
+    bump('warning');
+    showToast('⚠️ Please complete highlighted fields before sharing.', 'warning');
+    const firstMissing = document.querySelector('.highlight-missing, [style*="box-shadow"]');
+    if (firstMissing) {
+      firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return;
+  }
 
-      // Step 3: All good → Share the saved PDF
-      try {
-        const pdfName = `Engineer_Report_${document.getElementById('project')?.value || 'Report'}.pdf`;
+  // Step 3: Share the cached PDF blob
+  try {
+    const pdfName = `Engineer_Report_${document.getElementById('project')?.value || 'Report'}.pdf`;
+    const file = new File([lastPdfBlob], pdfName, { type: 'application/pdf' });
 
-        // Find the most recently saved PDF from buildPdf() logic (window.lastBuiltPdfWindow)
-        const w = window.lastBuiltPdfWindow;
-        if (!w) {
-          showToast('⚠️ No saved PDF found. Please Save PDF first.', 'warning');
-          return;
-        }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        title: 'Engineer Report',
+        text: 'Shared from the SSCo Engineer App.',
+        files: [file]
+      });
+      showToast('✅ Shared successfully!', 'success');
+    } else {
+      showToast('Sharing not supported on this device.', 'warning');
+    }
+  } catch (err) {
+    console.warn('Share cancelled or failed', err);
+    showToast('Share cancelled.', 'info');
+  }
+});
 
-        // Convert the PDF window content to Blob
-        const blob = new Blob([w.document.documentElement.outerHTML], { type: 'application/pdf' });
-        const file = new File([blob], pdfName, { type: 'application/pdf' });
-
-        await navigator.share({
-          title: 'Engineer Report',
-          text: 'Shared from the SSCo Engineer App.',
-          files: [file]
-        });
-
-        showToast('✅ Shared successfully!', 'success');
-      } catch (err) {
-        console.warn('Share canceled', err);
-        showToast('Share canceled.', 'info');
-      }
-    });
 
     // Refresh Lucide icons
     if (window.lucide?.createIcons) lucide.createIcons();
