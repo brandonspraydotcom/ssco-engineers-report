@@ -1776,37 +1776,34 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 // === Global cache for sharing ===
 let lastPdfBlob = null;
 
-/* ---------- Build & Save True PDF with Headers/Footers ---------- */
+/* ---------- Build & Save True PDF with Headers/Footers, Compression, Metadata ---------- */
 async function buildPdf() {
   bump("info");
   showToast("🧾 Generating PDF…", "info");
 
+  const { jsPDF } = window.jspdf;
+
   // Capture signatures
-  const sig1 = $("sig1").toDataURL();
-  const sig2 = $("sig2").toDataURL();
+  const sig1 = document.getElementById("sig1").toDataURL();
+  const sig2 = document.getElementById("sig2").toDataURL();
 
-  const clone = $("formContainer").cloneNode(true);
+  // Clone form for PDF (don’t modify live DOM)
+  const clone = document.getElementById("formContainer").cloneNode(true);
 
-  // Replace signature canvases with <img> for export
-  const sig1Clone = clone.querySelector("#sig1");
-  const sig2Clone = clone.querySelector("#sig2");
-  if (sig1Clone) {
-    const img1 = document.createElement("img");
-    img1.src = sig1;
-    img1.className = "sig-img";
-    sig1Clone.replaceWith(img1);
-  }
-  if (sig2Clone) {
-    const img2 = document.createElement("img");
-    img2.src = sig2;
-    img2.className = "sig-img";
-    sig2Clone.replaceWith(img2);
-  }
+  // Replace signature canvases with images
+  ["sig1", "sig2"].forEach((id, i) => {
+    const c = clone.querySelector(`#${id}`);
+    if (c) {
+      const img = document.createElement("img");
+      img.src = i === 0 ? sig1 : sig2;
+      img.className = "sig-img";
+      c.replaceWith(img);
+    }
+  });
 
   // Photos (before/after)
   const beforeImgs = document.querySelectorAll("#beforeThumbs img");
   const afterImgs = document.querySelectorAll("#afterThumbs img");
-
   const photoSection = document.createElement("div");
   photoSection.innerHTML = `
     <div class="photo-page">
@@ -1822,7 +1819,7 @@ async function buildPdf() {
   `;
   clone.appendChild(photoSection);
 
-  // Styling identical to your layout
+  // Inline styles for print
   const style = document.createElement("style");
   style.textContent = `
     body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #111; padding: 20px; }
@@ -1831,28 +1828,28 @@ async function buildPdf() {
     .photo-page { page-break-before: always; }
     .photo-page img { max-width: 100%; margin: 6px auto; display: block; border-radius: 6px; }
     .photo-half { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-    .banner { width: 100%; max-height: 120px; object-fit: contain; margin-bottom: 8px; }
+    .banner { width: 100%; max-height: 100px; object-fit: contain; margin-bottom: 10px; }
     .title { font-size: 18px; font-weight: bold; text-align: center; margin: 6px 0; }
   `;
 
   const wrapper = document.createElement("div");
   wrapper.appendChild(style);
 
-  // Optional banner
-  if (typeof MAINTENANCE_B64 !== "undefined" && MAINTENANCE_B64.indexOf("data:") === 0) {
+  // Header banner (optional)
+  if (typeof MAINTENANCE_B64 === "string" && MAINTENANCE_B64.startsWith("data:")) {
     const banner = document.createElement("img");
     banner.src = MAINTENANCE_B64;
     banner.className = "banner";
     wrapper.appendChild(banner);
   }
 
-  // Title + clone
-  const projectNo = $("project")?.value || "Report";
-  const company = $("custCompany")?.value || "";
-  const formattedDate = $("date")?.value || new Date().toISOString().slice(0, 10);
+  // Header info
+  const projectNo = document.getElementById("project")?.value || "Report";
+  const company = document.getElementById("custCompany")?.value || "";
+  const engineer = document.getElementById("engineer")?.value || "Engineer";
+  const formattedDate = document.getElementById("date")?.value || new Date().toISOString().slice(0, 10);
 
-  const titleBlock = document.createElement("div");
-  titleBlock.innerHTML = `
+  wrapper.innerHTML += `
     <div class="title">Engineer’s Report</div>
     <div style="text-align:center;font-weight:700;margin-bottom:6px">
       SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}
@@ -1861,64 +1858,71 @@ async function buildPdf() {
       Prepared for <strong>${company}</strong>
     </div>
   `;
-  wrapper.appendChild(titleBlock);
   wrapper.appendChild(clone);
 
   const pdfName = `Engineer_Report_${projectNo}.pdf`;
 
   const opt = {
-    margin: [0.4, 0.3, 0.6, 0.3], // top, left, bottom, right
+    margin: [0.5, 0.3, 0.7, 0.3],
     filename: pdfName,
-    image: { type: "jpeg", quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: "in", format: "a4", orientation: "portrait" },
+    image: { type: "jpeg", quality: 0.85 }, // slightly lower = smaller file
+    html2canvas: { scale: 1.8, useCORS: true },
+    jsPDF: { unit: "in", format: "a4", orientation: "portrait", compress: true },
     pagebreak: { mode: ["avoid-all", "css", "legacy"] },
   };
 
   try {
-    // Generate the base PDF first
-    const worker = html2pdf().set(opt).from(wrapper);
-    const pdfBlob = await html2pdf().set(opt).from(wrapper).output('blob');
+    // 1️⃣ Generate HTML → PDF blob
+    const pdfBlob = await html2pdf().set(opt).from(wrapper).output("blob");
 
-    // Convert blob → jsPDF instance to add footer/header
+    // 2️⃣ Load blob into jsPDF to add headers/footers/metadata
     const arrayBuffer = await pdfBlob.arrayBuffer();
-    const existingPdf = new jsPDF({ unit: "in", format: "a4", orientation: "portrait" });
-    existingPdf.loadFile(arrayBuffer);
+    const pdfDoc = new jsPDF({ unit: "in", format: "a4", orientation: "portrait", compress: true });
 
-    // Add header/footer to each page
-    const pageCount = existingPdf.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      existingPdf.setPage(i);
-      const pageWidth = existingPdf.internal.pageSize.getWidth();
-      const pageHeight = existingPdf.internal.pageSize.getHeight();
+    // Load existing PDF
+    const loadedPdf = await pdfDoc.load(arrayBuffer).catch(() => null);
+    const totalPages = loadedPdf ? loadedPdf.internal.getNumberOfPages() : 1;
 
-      // Header (logo optional)
-      if (typeof BOTTLE_B64 !== "undefined" && BOTTLE_B64.indexOf("data:") === 0) {
-        existingPdf.addImage(BOTTLE_B64, "PNG", 0.5, 0.3, 0.7, 0.7);
+    for (let i = 1; i <= totalPages; i++) {
+      pdfDoc.setPage(i);
+      const pageWidth = pdfDoc.internal.pageSize.getWidth();
+      const pageHeight = pdfDoc.internal.pageSize.getHeight();
+
+      // Header logo
+      if (typeof BOTTLE_B64 === "string" && BOTTLE_B64.startsWith("data:")) {
+        pdfDoc.addImage(BOTTLE_B64, "PNG", 0.5, 0.4, 0.7, 0.7);
       }
 
-      // Footer slogan + page number
-      existingPdf.setFontSize(8);
-      existingPdf.setTextColor(100);
-      existingPdf.text(
+      // Footer slogan
+      pdfDoc.setFontSize(8);
+      pdfDoc.setTextColor(100);
+      pdfDoc.text(
         "MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count",
         pageWidth / 2,
         pageHeight - 0.4,
         { align: "center" }
       );
-      existingPdf.text(`Page ${i} of ${pageCount}`, pageWidth - 0.6, pageHeight - 0.4, {
-        align: "right",
-      });
+      pdfDoc.text(`Page ${i} of ${totalPages}`, pageWidth - 0.5, pageHeight - 0.4, { align: "right" });
     }
 
-    // Output final PDF
-    const finalBlob = existingPdf.output("blob");
+    // 3️⃣ Add metadata
+    pdfDoc.setProperties({
+      title: `Engineers Report - ${projectNo}`,
+      subject: `Engineer report for ${company}`,
+      author: engineer,
+      keywords: `SSCo, Engineers Report, Spray Systems`,
+      creator: `SSCo Engineers App`,
+    });
+
+    // 4️⃣ Output final compressed blob
+    const finalBlob = pdfDoc.output("blob");
     lastPdfBlob = finalBlob;
 
+    // 5️⃣ Preview + toast
     const pdfUrl = URL.createObjectURL(finalBlob);
     window.open(pdfUrl, "_blank");
 
-    showToast("✅ PDF ready!", "success");
+    showToast("✅ PDF ready & compressed!", "success");
     bump("success");
   } catch (err) {
     console.error("PDF generation failed:", err);
@@ -1926,6 +1930,7 @@ async function buildPdf() {
     bump("error");
   }
 }
+
 
 
 
