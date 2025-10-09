@@ -286,6 +286,13 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   font-style: normal !important;
 }
 
+#shareReport {
+  height: 42px;
+  aspect-ratio: 1/1;
+  padding: 0;
+  border-radius: 8px;
+}
+
 </style>
 </head>
 
@@ -2485,39 +2492,77 @@ document.addEventListener("DOMContentLoaded", () => {
 // === Native Share API (iPad / Android / Desktop Chrome) ===
 if (navigator.share) {
   window.addEventListener('load', () => {
-    // Locate the same container as the "Send Email" button
     const sendEmailBtn = document.getElementById('sendEmail');
     if (!sendEmailBtn) return;
 
-    const parentContainer = sendEmailBtn.closest('div, section, footer') || document.body;
-
-    // Create Share button
+    // Create icon-only Share button
     const shareBtn = document.createElement('button');
     shareBtn.id = 'shareReport';
-    shareBtn.className = 'btn btn-primary w-full mt-2';
-    shareBtn.innerHTML = '<i data-lucide="share-2"></i> Share Report';
+    shareBtn.className = 'btn btn-primary w-12 flex items-center justify-center ml-2';
+    shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
 
-    // Insert the Share button just *after* the Send Email button
+    // Insert right next to Send Email
     sendEmailBtn.insertAdjacentElement('afterend', shareBtn);
 
-    // Click handler
-    shareBtn.addEventListener('click', async () => {
-      const title = `Engineer Report — ${document.getElementById("project")?.value || 'Untitled Project'}`;
-      const text  = `Report by ${document.getElementById("engineer")?.value || 'Engineer'} on ${document.getElementById("date")?.value || ''}.`;
+    // Click handler (same validation as send email)
+    shareBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
 
+      // Step 1: Check if PDF saved
+      if (!hasSavedPdf()) {
+        bump('warning');
+        showToast('⚠️ Please save the PDF before sharing.', 'warning');
+        const saveBtn = document.getElementById('savePdf');
+        saveBtn.style.animation = 'pulse 1s ease-in-out 2';
+        setTimeout(() => (saveBtn.style.animation = ''), 2000);
+        return;
+      }
+
+      // Step 2: Validate important fields
+      const valid = validateImportantFields();
+      if (!valid) {
+        bump('warning');
+        showToast('⚠️ Please complete highlighted fields before sharing.', 'warning');
+        const firstMissing = document.querySelector('.highlight-missing, [style*="box-shadow"]');
+        if (firstMissing) {
+          firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
+
+      // Step 3: All good → Share the saved PDF
       try {
-        await navigator.share({ title, text });
-        showToast('✅ Shared successfully', 'success');
+        const pdfName = `Engineer_Report_${document.getElementById('project')?.value || 'Report'}.pdf`;
+
+        // Find the most recently saved PDF from buildPdf() logic (window.lastBuiltPdfWindow)
+        const w = window.lastBuiltPdfWindow;
+        if (!w) {
+          showToast('⚠️ No saved PDF found. Please Save PDF first.', 'warning');
+          return;
+        }
+
+        // Convert the PDF window content to Blob
+        const blob = new Blob([w.document.documentElement.outerHTML], { type: 'application/pdf' });
+        const file = new File([blob], pdfName, { type: 'application/pdf' });
+
+        await navigator.share({
+          title: 'Engineer Report',
+          text: 'Shared from the SSCo Engineer App.',
+          files: [file]
+        });
+
+        showToast('✅ Shared successfully!', 'success');
       } catch (err) {
         console.warn('Share canceled', err);
-        showToast('Share canceled', 'info');
+        showToast('Share canceled.', 'info');
       }
     });
 
-    // Refresh Lucide icons if present
+    // Refresh Lucide icons
     if (window.lucide?.createIcons) lucide.createIcons();
   });
 }
+
 
 
 
