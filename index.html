@@ -2626,7 +2626,7 @@ if (navigator.share) {
   e.preventDefault();
 
   // Step 1: Check if PDF saved
-  if (!lastPdfBlob) {
+  if (!hasSavedPdf()) {
     bump('warning');
     showToast('⚠️ Please save the PDF before sharing.', 'warning');
     const saveBtn = document.getElementById('savePdf');
@@ -2647,24 +2647,30 @@ if (navigator.share) {
     return;
   }
 
-  // Step 3: Share the cached PDF blob
+  // Step 3: All good → Share the same built PDF
   try {
-    const pdfName = `Engineer_Report_${document.getElementById('project')?.value || 'Report'}.pdf`;
-    const file = new File([lastPdfBlob], pdfName, { type: 'application/pdf' });
-
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({
-        title: 'Engineer Report',
-        text: 'Shared from the SSCo Engineer App.',
-        files: [file]
-      });
-      showToast('✅ Shared successfully!', 'success');
-    } else {
-      showToast('Sharing not supported on this device.', 'warning');
+    const w = window.lastBuiltPdfWindow;
+    if (!w || w.closed) {
+      showToast('⚠️ PDF not available, please Save PDF again.', 'warning');
+      return;
     }
+
+    const pdfName = `Engineer_Report_${document.getElementById('project')?.value || 'Report'}.pdf`;
+
+    // ✅ Convert window HTML to PDF blob
+    const blob = await html2pdf().from(w.document.body).output('blob');
+    const file = new File([blob], pdfName, { type: 'application/pdf' });
+
+    await navigator.share({
+      title: 'Engineer Report',
+      text: 'Shared from the SSCo Engineer App.',
+      files: [file]
+    });
+
+    showToast('✅ Shared successfully!', 'success');
   } catch (err) {
-    console.warn('Share cancelled or failed', err);
-    showToast('Share cancelled.', 'info');
+    console.warn('Share canceled or failed', err);
+    showToast('Share canceled or failed.', 'info');
   }
 });
 
@@ -3115,41 +3121,57 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // --- Confirm & Print (no preview tab) ---
-ok.addEventListener("click", () => {
+ok.addEventListener("click", async () => {
   bump("info");
   showToast("Building PDF…", "info");
 
-  // ✅ Save signatures first
+  // ✅ Save signatures before building
   saveSignature("sig1");
   saveSignature("sig2");
 
   try {
-    // Build PDF immediately (inside same click context)
     const w = buildPdf();
     window.lastBuiltPdfWindow = w;
 
-    // Safari-safe: focus + print right away
+    // ✅ Wait until the document finishes loading
+    const waitUntilReady = () => new Promise((resolve, reject) => {
+      const start = Date.now();
+      const check = () => {
+        if (w.document && w.document.readyState === "complete" && w.document.body.innerHTML.trim() !== "") {
+          resolve();
+        } else if (Date.now() - start > 5000) {
+          reject(new Error("PDF window timeout"));
+        } else {
+          setTimeout(check, 150);
+        }
+      };
+      check();
+    });
+
+    await waitUntilReady();
+
+    // ✅ Focus + open print dialog silently
     w.focus();
     setTimeout(() => {
       try {
         w.print();
         markPdfSaved();
         bump("success");
-        showToast("✅ Sent to printer", "success");
+        showToast("✅ PDF ready and sent to print", "success");
       } catch (err) {
-        console.warn("Print blocked:", err);
-        showToast("⚠️ Printing blocked, preview opened instead", "warning");
+        console.warn("⚠️ Print blocked:", err);
+        showToast("⚠️ Printing blocked, but preview opened", "warning");
       }
-    }, 400);
+    }, 600);
 
-    // Close modal immediately
+    // ✅ Close modal after triggering print
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
     setTimeout(() => (modal.style.display = "none"), 300);
 
   } catch (err) {
-    console.error("PDF build failed:", err);
+    console.error("❌ PDF build failed:", err);
     bump("error");
     showToast("❌ PDF failed to generate", "error");
   }
