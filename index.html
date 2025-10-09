@@ -1871,66 +1871,75 @@ async function buildPdf() {
     pagebreak: { mode: ["avoid-all", "css", "legacy"] },
   };
 
-  try {
-    // 1️⃣ Generate HTML → PDF blob
-    const pdfBlob = await html2pdf().set(opt).from(wrapper).output("blob");
+try {
+  // ✅ Build PDF content and keep window reference
+  const w = buildPdf();
+  window.lastBuiltPdfWindow = w;
 
-    // 2️⃣ Load blob into jsPDF to add headers/footers/metadata
-    const arrayBuffer = await pdfBlob.arrayBuffer();
-    const pdfDoc = new jsPDF({ unit: "in", format: "a4", orientation: "portrait", compress: true });
-
-    // Load existing PDF
-    const loadedPdf = await pdfDoc.load(arrayBuffer).catch(() => null);
-    const totalPages = loadedPdf ? loadedPdf.internal.getNumberOfPages() : 1;
-
-    for (let i = 1; i <= totalPages; i++) {
-      pdfDoc.setPage(i);
-      const pageWidth = pdfDoc.internal.pageSize.getWidth();
-      const pageHeight = pdfDoc.internal.pageSize.getHeight();
-
-      // Header logo
-      if (typeof BOTTLE_B64 === "string" && BOTTLE_B64.startsWith("data:")) {
-        pdfDoc.addImage(BOTTLE_B64, "PNG", 0.5, 0.4, 0.7, 0.7);
-      }
-
-      // Footer slogan
-      pdfDoc.setFontSize(8);
-      pdfDoc.setTextColor(100);
-      pdfDoc.text(
-        "MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count",
-        pageWidth / 2,
-        pageHeight - 0.4,
-        { align: "center" }
-      );
-      pdfDoc.text(`Page ${i} of ${totalPages}`, pageWidth - 0.5, pageHeight - 0.4, { align: "right" });
-    }
-
-    // 3️⃣ Add metadata
-    pdfDoc.setProperties({
-      title: `Engineers Report - ${projectNo}`,
-      subject: `Engineer report for ${company}`,
-      author: engineer,
-      keywords: `SSCo, Engineers Report, Spray Systems`,
-      creator: `SSCo Engineers App`,
-    });
-
-    // 4️⃣ Output final compressed blob
-    const finalBlob = pdfDoc.output("blob");
-    lastPdfBlob = finalBlob;
-
-    // 5️⃣ Preview + toast
-    const pdfUrl = URL.createObjectURL(finalBlob);
-    window.open(pdfUrl, "_blank");
-
-    showToast("✅ PDF ready & compressed!", "success");
-    bump("success");
-  } catch (err) {
-    console.error("PDF generation failed:", err);
-    showToast("❌ PDF generation failed", "error");
-    bump("error");
+  // ✅ Detect if document was actually written
+  if (!w || w.document.readyState === "uninitialized" || w.document.body.innerHTML.trim() === "") {
+    throw new Error("Empty PDF document – build failed");
   }
+
+  // ✅ Give browser a moment to render before printing
+  w.focus();
+  setTimeout(() => {
+    try {
+      w.print();
+      markPdfSaved();
+      bump("success");
+      showToast("✅ PDF generated and ready to print", "success");
+    } catch (err) {
+      console.warn("⚠️ Print blocked:", err);
+      showToast("⚠️ Printing blocked, but PDF preview opened", "warning");
+    }
+  }, 800);
+
+  // ✅ Cleanly close modal
+  modal.classList.remove("show");
+  box.style.transform = "scale(0.85)";
+  box.style.opacity = "0";
+  setTimeout(() => (modal.style.display = "none"), 300);
+
+} catch (err) {
+  console.error("❌ PDF generation error:", err);
+  bump("error");
+  showToast("❌ Failed to generate PDF — please retry", "error");
 }
 
+}
+
+async function generateRealPdfBlob() {
+  const w = window.lastBuiltPdfWindow;
+  if (!w) {
+    showToast("⚠️ No saved report found. Please Save PDF first.", "warning");
+    return null;
+  }
+
+  // Extract the HTML string that buildPdf() created
+  const html = w.document.documentElement.outerHTML;
+
+  // Use html2pdf to make a true binary PDF blob
+  const opt = {
+    margin: 0.2,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+  };
+
+  // Create a temporary hidden element so html2pdf can render it
+  const temp = document.createElement('iframe');
+  temp.style.display = 'none';
+  document.body.appendChild(temp);
+  const doc = temp.contentDocument;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const blob = await html2pdf().set(opt).from(doc.body).output('blob');
+  document.body.removeChild(temp);
+  return blob;
+}
 
 
 
