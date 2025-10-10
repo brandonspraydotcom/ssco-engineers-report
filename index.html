@@ -1882,15 +1882,46 @@ function buildPdf() {
     </div>
   </body></html>`;
 
-  // --- Open preview silently ---
-  const w = window.open('', '_blank');
-  w.document.open();
-  w.document.write(doc);
-  w.document.close();
-  w.focus();
+    // --- Detect Safari PWA mode ---
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-  window.lastBuiltPdfWindow = w;
-  return w;
+  if (isPWA) {
+    // ✅ Safari PWA-safe method: use hidden iframe
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    const docStream = iframe.contentWindow.document;
+    docStream.open();
+    docStream.write(doc);
+    docStream.close();
+
+    // Wait until iframe fully loads
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        bump('success');
+        showToast('✅ PDF ready and sent to print', 'success');
+      } catch (err) {
+        console.warn('⚠️ Print blocked:', err);
+        showToast('⚠️ Printing blocked in PWA', 'warning');
+      }
+    }, 800);
+
+    // Store reference
+    window.lastBuiltPdfWindow = iframe.contentWindow;
+  } else {
+    // ✅ Regular browser method
+    const w = window.open('', '_blank');
+    w.document.open();
+    w.document.write(doc);
+    w.document.close();
+    w.focus();
+
+    window.lastBuiltPdfWindow = w;
+  }
+
+  return window.lastBuiltPdfWindow;
 }
 
 
