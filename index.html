@@ -1778,22 +1778,18 @@ let lastPdfBlob = null;
 
 /* ---------- Build printable doc (light) and open it ---------- */
 function buildPdf() {
-  // Capture signatures before cloning
+  // --- Capture signatures first ---
   const sig1 = $('sig1').toDataURL();
   const sig2 = $('sig2').toDataURL();
   const clone = $('formContainer').cloneNode(true);
   const prepared = prepareForPdf(clone, [sig1, sig2]);
 
-  // --- Extract values BEFORE removing fields ---
+  // --- Get textarea values before removing them ---
   const reportVal = ($('report')?.value || '').trim();
   const partsUsedVal = ($('partsUsed')?.value || '').trim();
   const partsReqVal = ($('partsReq')?.value || '').trim();
 
-  // --- Clean up the old textarea card ---
-  const reportCard = prepared.querySelector('#report')?.closest('.card');
-  if (reportCard) reportCard.remove();
-
-  // --- Build bullet sections manually ---
+  // --- Create bullet sections ---
   const makeBullets = (title, val) => {
     if (!val) return '';
     const items = val
@@ -1802,36 +1798,33 @@ function buildPdf() {
       .filter(Boolean)
       .map(l => `<li>${l}</li>`)
       .join('');
-    return `<div class="card"><h3>${title}</h3><ul>${items}</ul></div>`;
+    return `<h3>${title}</h3><ul>${items}</ul>`;
   };
 
-  const bulletSections = `
+  const bulletHTML = `
     ${makeBullets('Report Details', reportVal)}
     ${makeBullets('Parts Used', partsUsedVal)}
     ${makeBullets('Parts Required (To Be Quoted)', partsReqVal)}
   `;
 
-  // --- Insert bullet lists just after Project Description ---
-  const projectDesc = prepared.querySelector('#projectDesc');
-  if (projectDesc) {
-    const container = projectDesc.closest('.card') || projectDesc.parentNode;
-    container.insertAdjacentHTML('afterend', bulletSections);
-  } else {
-    prepared.insertAdjacentHTML('beforeend', bulletSections);
+  // --- Replace the report/parts card in the cloned form with bullet version ---
+  const reportCard = prepared.querySelector('#report')?.closest('.card');
+  if (reportCard) {
+    reportCard.innerHTML = bulletHTML; // replaces it in-place (no duplicates!)
   }
 
-  // --- Title and header data ---
+  // --- Title and metadata ---
   const projectNo = $('project').value || '—';
-  const dateVal = $('date').value || new Date().toISOString().slice(0, 10);
+  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
   const formattedDate = formatDateWithOrdinal(dateVal);
   const company = $('custCompany').value || '—';
   const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
 
-  // --- Before/After Photos ---
+  // --- Before / After Photos ---
   const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i => i.src);
   const afterImgs  = Array.from(document.querySelectorAll('#afterThumbs img')).map(i => i.src);
 
-  const photosHTML = `
+  const photoHTML = `
     <div class="photo-page">
       <h3>Before Photos</h3>
       <div class="photo-half">
@@ -1843,9 +1836,11 @@ function buildPdf() {
       </div>
     </div>
   `;
-  prepared.insertAdjacentHTML('beforeend', photosHTML);
 
-  // --- Print CSS ---
+  // Append photos to end of prepared form
+  prepared.insertAdjacentHTML('beforeend', photoHTML);
+
+  // --- Print styling ---
   const css = `
     @page { margin: 20mm; counter-increment: page; }
     body { font-family: Helvetica, Arial, sans-serif; color: #111; padding: 20px; }
@@ -1856,27 +1851,26 @@ function buildPdf() {
     li { margin:4px 0; line-height:1.4; }
     .photo-page { page-break-before: always; }
     .photo-half img { max-width: 100%; height: auto; max-height: 45vh; border-radius: 6px; object-fit: contain; }
-    .footer { position:fixed; bottom:2px; left:0; right:0; font-size:8px; color:#666; 
+    .footer { position:fixed; bottom:2px; left:0; right:0; font-size:8px; color:#666;
               display:flex; justify-content:space-between; padding:0 20px; opacity:0.5; }
     .footer .page:before { content:"Page " counter(page); }
   `;
 
-  // --- Build printable HTML ---
+  // --- Build PDF document ---
   let doc = `
-    <!doctype html>
-    <html>
-    <head>
+    <!doctype html><html><head>
       <meta charset="utf-8">
       <title>${sscoTitle}</title>
       <style>${css}</style>
-    </head>
-    <body>
+    </head><body>
   `;
 
+  // Banner
   if (MAINTENANCE_B64?.startsWith('data:')) {
     doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="">`;
   }
 
+  // Title block
   doc += `
     <div class="title">Engineers Report</div>
     <div style="text-align:center;font-weight:700">${sscoTitle}</div>
@@ -1888,6 +1882,7 @@ function buildPdf() {
     </div>
   </body></html>`;
 
+  // --- Open preview silently ---
   const w = window.open('', '_blank');
   w.document.open();
   w.document.write(doc);
