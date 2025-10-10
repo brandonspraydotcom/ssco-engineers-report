@@ -1778,32 +1778,23 @@ let lastPdfBlob = null;
 
 /* ---------- Build printable document (stable) ---------- */
 function buildPdf() {
-  console.log("✅ buildPdf started");
-
-  // Capture signatures *before* cloning
-  const sig1 = document.getElementById("sig1")?.toDataURL?.() || "";
-  const sig2 = document.getElementById("sig2")?.toDataURL?.() || "";
-  const sigData = [sig1, sig2];
-
-  // Clone the form safely
   const form = document.getElementById("formContainer");
-  if (!form) {
-    console.error("❌ buildPdf: formContainer not found!");
-    return null;
-  }
-
+  if (!form) return alert("Form not found!");
   const clone = form.cloneNode(true);
 
-  // Replace signature canvases with static images
-  const sigCanvases = clone.querySelectorAll("canvas.signature");
-  sigCanvases.forEach((canvas, i) => {
-    if (sigData[i]) {
+  // capture signatures before clearing or animating anything
+  const sig1 = document.getElementById("sig1")?.toDataURL?.() || "";
+  const sig2 = document.getElementById("sig2")?.toDataURL?.() || "";
+  const sigs = [sig1, sig2];
+  clone.querySelectorAll("canvas.signature").forEach((c, i) => {
+    if (sigs[i]) {
       const img = document.createElement("img");
-      img.src = sigData[i];
+      img.src = sigs[i];
       img.className = "sig-img";
-      canvas.replaceWith(img);
+      c.replaceWith(img);
     }
   });
+}
 
   // Include photos
   const beforeImgs = Array.from(document.querySelectorAll("#beforeThumbs img")).map(i => i.src);
@@ -2978,7 +2969,7 @@ function showToast(message, type = 'info') {
 </style>
 
 <script>
-// --- SAVE PDF (Persistent + Safari Safe) ---
+// === SAVE PDF (Fully Fixed — Modal + Print + PDF Preview Sync) ===
 document.addEventListener("DOMContentLoaded", () => {
   const saveBtn = document.getElementById("savePdf");
   const modal = document.getElementById("saveConfirmModal");
@@ -2990,7 +2981,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const printNow = document.getElementById("printNow");
   const closeModal = document.getElementById("closeModal");
 
-  // --- Track PDF Saved state ---
+  // === Track PDF Saved state ===
   function markPdfSaved() {
     localStorage.setItem("pdfSaved", "true");
   }
@@ -2998,15 +2989,12 @@ document.addEventListener("DOMContentLoaded", () => {
     return localStorage.getItem("pdfSaved") === "true";
   }
 
-  // Optional: uncomment if you want to clear saved PDF flag each new session
-  // clearPdfSaved();
-
+  // === Show Modal when clicking "Save PDF" ===
   if (!saveBtn || !modal || !ok || !cancel) {
     console.warn("❌ Save PDF modal setup failed — missing elements.");
     return;
   }
 
-  // --- Step 1: Click Save PDF ---
   saveBtn.addEventListener("click", (e) => {
     e.preventDefault();
 
@@ -3014,13 +3002,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!valid) return;
 
     bump("info");
-    showToast("All fields complete — ready to save", "info");
+    showToast("✅ All fields complete — ready to save", "info");
 
-    // Reset to Step 1 every time
+    // Reset modal steps
     step1.style.display = "block";
     step2.style.display = "none";
 
-    // Display + animate modal
+    // Show modal
     modal.style.display = "flex";
     lockScroll();
     setTimeout(() => {
@@ -3030,85 +3018,86 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 50);
   });
 
-  // --- Cancel Save ---
+  // === Cancel Save ===
   cancel.addEventListener("click", () => {
     bump("info");
     showToast("Save cancelled", "info");
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 300);
+    setTimeout(() => {
+      modal.style.display = "none";
+      unlockScroll();
+    }, 300);
   });
 
-  // --- Confirm & Print (no preview tab) ---
-ok.addEventListener("click", async () => {
-  bump("info");
-  showToast("Building PDF…", "info");
+  // === Confirm Save + Auto Print ===
+  ok.addEventListener("click", async () => {
+    bump("info");
+    showToast("🧾 Building PDF…", "info");
 
-  // ✅ Save signatures before building
-  saveSignature("sig1");
-  saveSignature("sig2");
+    // Save signatures before clone
+    saveSignature("sig1");
+    saveSignature("sig2");
 
-  try {
-    const w = buildPdf();
-    window.lastBuiltPdfWindow = w;
-
-    // ✅ Wait until the document finishes loading
-    const waitUntilReady = () => new Promise((resolve, reject) => {
-      const start = Date.now();
-      const check = () => {
-        if (w.document && w.document.readyState === "complete" && w.document.body.innerHTML.trim() !== "") {
-          resolve();
-        } else if (Date.now() - start > 5000) {
-          reject(new Error("PDF window timeout"));
-        } else {
-          setTimeout(check, 150);
-        }
-      };
-      check();
-    });
-
-    await waitUntilReady();
-
-    // ✅ Focus + open print dialog silently
-    w.focus();
-    setTimeout(() => {
-      try {
-        w.print();
-        markPdfSaved();
-        bump("success");
-        showToast("✅ PDF ready and sent to print", "success");
-      } catch (err) {
-        console.warn("⚠️ Print blocked:", err);
-        showToast("⚠️ Printing blocked, but preview opened", "warning");
-      }
-    }, 600);
-
-    // ✅ Close modal after triggering print
+    // Hide modal smoothly before building
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 300);
+    setTimeout(() => {
+      modal.style.display = "none";
+      unlockScroll();
+    }, 300);
 
-  } catch (err) {
-    console.error("❌ PDF build failed:", err);
-    bump("error");
-    showToast("❌ PDF failed to generate", "error");
-  }
-});
+    try {
+      // 🧩 Wait a moment for modal hide animation before cloning DOM
+      await new Promise(r => setTimeout(r, 400));
 
-  // --- Print Now ---
+      const w = buildPdf();
+      if (!w || !w.document) throw new Error("buildPdf failed or returned blank");
+
+      window.lastBuiltPdfWindow = w;
+
+      // Wait for new window to fully render content
+      await new Promise((resolve, reject) => {
+        const start = Date.now();
+        const check = () => {
+          if (w.document.readyState === "complete" && w.document.body.innerHTML.trim() !== "") {
+            resolve();
+          } else if (Date.now() - start > 6000) {
+            reject(new Error("PDF window timeout"));
+          } else {
+            setTimeout(check, 120);
+          }
+        };
+        check();
+      });
+
+      // Delay slightly before print (for Safari rendering)
+      await new Promise(r => setTimeout(r, 600));
+
+      w.focus();
+      w.print();
+
+      markPdfSaved();
+      bump("success");
+      showToast("✅ PDF built and sent to print", "success");
+    } catch (err) {
+      console.error("❌ PDF build failed:", err);
+      bump("error");
+      showToast("❌ PDF failed to generate", "error");
+    }
+  });
+
+  // === Manual "Print Now" from Step 2 ===
   printNow.addEventListener("click", () => {
     bump("info");
     showToast("Opening print dialog…", "info");
-
     try {
-      // ✅ Try to print if window reference exists
       if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
         window.lastBuiltPdfWindow.focus();
         window.lastBuiltPdfWindow.print();
       } else if (hasSavedPdf()) {
-        // ✅ If the PDF window is gone (Safari PWA), rebuild & print again
         const w = buildPdf();
         window.lastBuiltPdfWindow = w;
         setTimeout(() => w.print(), 800);
@@ -3121,17 +3110,16 @@ ok.addEventListener("click", async () => {
     }
   });
 
-  	// --- Close modal after Step 2 ---
-	closeModal.addEventListener("click", () => {
-  	modal.classList.remove("show");
-  	box.style.transform = "scale(0.85)";
-  	box.style.opacity = "0";
-
-  	setTimeout(() => {
-    	modal.style.display = "none";
-    	unlockScroll(); // ✅ restore scroll once hidden
-  	}, 300);
- });
+  // === Close Modal from Step 2 ===
+  closeModal.addEventListener("click", () => {
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => {
+      modal.style.display = "none";
+      unlockScroll();
+    }, 300);
+  });
 });
 </script>
 
