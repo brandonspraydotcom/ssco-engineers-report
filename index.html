@@ -1908,20 +1908,32 @@ function buildPdf() {
       }
     }, 800);
 
-    // Store reference
-    window.lastBuiltPdfWindow = iframe.contentWindow;
-  } else {
-    // ✅ Regular browser method
-    const w = window.open('', '_blank');
-    w.document.open();
-    w.document.write(doc);
-    w.document.close();
-    w.focus();
+    // --- Detect if running as PWA (iPad/Safari) ---
+const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-    window.lastBuiltPdfWindow = w;
-  }
+if (isPWA) {
+  // ✅ Hidden iframe print for Safari PWA (no blank tab)
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
 
-  return window.lastBuiltPdfWindow;
+  const docStream = iframe.contentWindow.document;
+  docStream.open();
+  docStream.write(doc);
+  docStream.close();
+
+  // Return print reference (used by save handler)
+  return { iframePrint: iframe.contentWindow };
+} else {
+  // ✅ Regular browser method
+  const w = window.open('', '_blank');
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
+  w.focus();
+
+  return w;
+}
 }
 
 
@@ -3040,144 +3052,146 @@ function showToast(message, type = 'info') {
 </style>
 
 <script>
-// --- SAVE PDF (Persistent + Safari Safe) ---
+// --- SAVE PDF (Desktop + Safari PWA safe) ---
 document.addEventListener("DOMContentLoaded", () => {
-  const saveBtn = document.getElementById("savePdf");
-  const modal = document.getElementById("saveConfirmModal");
-  const box = document.getElementById("saveConfirmBox");
-  const ok = document.getElementById("saveConfirmOk");
-  const cancel = document.getElementById("saveConfirmCancel");
-  const step1 = document.getElementById("saveConfirmStep1");
-  const step2 = document.getElementById("saveConfirmStep2");
-  const printNow = document.getElementById("printNow");
-  const closeModal = document.getElementById("closeModal");
- 
-  // --- Track PDF Saved state ---
-  function markPdfSaved() {
-    localStorage.setItem("pdfSaved", "true");
-  }
-  function hasSavedPdf() {
-    return localStorage.getItem("pdfSaved") === "true";
-  }
- 
-  // Optional: uncomment if you want to clear saved PDF flag each new session
-  // clearPdfSaved();
- 
-  if (!saveBtn || !modal || !ok || !cancel) {
-    console.warn("❌ Save PDF modal setup failed — missing elements.");
-    return;
-  }
- 
-  // --- Step 1: Click Save PDF ---
-  saveBtn.addEventListener("click", (e) => {
-    e.preventDefault();
- 
-    const valid = validateImportantFields();
-    if (!valid) return;
- 
-    bump("info");
-    showToast("All fields complete — ready to save", "info");
- 
-    // Reset to Step 1 every time
-    step1.style.display = "block";
-    step2.style.display = "none";
- 
-    // Display + animate modal
-    modal.style.display = "flex";
-    lockScroll();
-    setTimeout(() => {
-      modal.classList.add("show");
-      box.style.transform = "scale(1)";
-      box.style.opacity = "1";
-    }, 50);
-  });
- 
-  // --- Cancel Save ---
-  cancel.addEventListener("click", () => {
-    bump("info");
-    showToast("Save cancelled", "info");
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 300);
-  });
- 
-  // --- Confirm & Print (no preview tab) ---
-ok.addEventListener("click", () => {
-  bump("info");
-  showToast("Building PDF…", "info");
- 
-  // ✅ Save signatures first
-  saveSignature("sig1");
-  saveSignature("sig2");
- 
-  try {
-    // Build PDF immediately (inside same click context)
-    const w = buildPdf();
-    window.lastBuiltPdfWindow = w;
- 
-    // Safari-safe: focus + print right away
-    w.focus();
-    setTimeout(() => {
-      try {
-        w.print();
-        markPdfSaved();
-        bump("success");
-        showToast("✅ Sent to printer", "success");
-      } catch (err) {
-        console.warn("Print blocked:", err);
-        showToast("⚠️ Printing blocked, preview opened instead", "warning");
-      }
-    }, 400);
- 
-    // Close modal immediately
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 300);
- 
-  } catch (err) {
-    console.error("PDF build failed:", err);
-    bump("error");
-    showToast("❌ PDF failed to generate", "error");
-  }
-});
- 
-  // --- Print Now ---
-  printNow.addEventListener("click", () => {
-    bump("info");
-    showToast("Opening print dialog…", "info");
- 
-    try {
-      // ✅ Try to print if window reference exists
-      if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
-        window.lastBuiltPdfWindow.focus();
-        window.lastBuiltPdfWindow.print();
-      } else if (hasSavedPdf()) {
-        // ✅ If the PDF window is gone (Safari PWA), rebuild & print again
-        const w = buildPdf();
-        window.lastBuiltPdfWindow = w;
-        setTimeout(() => w.print(), 800);
-      } else {
-        showToast("⚠️ Please save the PDF first", "warning");
-      }
-    } catch (err) {
-      console.warn("Print blocked or unavailable:", err);
-      showToast("⚠️ Unable to open print window", "warning");
-    }
-  });
- 
-    // --- Close modal after Step 2 ---
-  closeModal.addEventListener("click", () => {
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
- 
-    setTimeout(() => {
-      modal.style.display = "none";
-      unlockScroll(); // ✅ restore scroll once hidden
-    }, 300);
-});
+  const saveBtn = document.getElementById("savePdf");
+  const modal = document.getElementById("saveConfirmModal");
+  const box = document.getElementById("saveConfirmBox");
+  const ok = document.getElementById("saveConfirmOk");
+  const cancel = document.getElementById("saveConfirmCancel");
+  const step1 = document.getElementById("saveConfirmStep1");
+  const step2 = document.getElementById("saveConfirmStep2");
+  const printNow = document.getElementById("printNow");
+  const closeModal = document.getElementById("closeModal");
+
+  function markPdfSaved() { localStorage.setItem("pdfSaved", "true"); }
+  function hasSavedPdf() { return localStorage.getItem("pdfSaved") === "true"; }
+
+  // --- Step 1: click Save PDF button ---
+  saveBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+
+    const valid = validateImportantFields();
+    if (!valid) return;
+
+    bump("info");
+    showToast("All fields complete — ready to save", "info");
+
+    // Reset modal each time
+    step1.style.display = "block";
+    step2.style.display = "none";
+
+    // Show modal (no PDF built yet!)
+    modal.style.display = "flex";
+    lockScroll();
+    setTimeout(() => {
+      modal.classList.add("show");
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    }, 50);
+  });
+
+  // --- Cancel Save ---
+  cancel.addEventListener("click", () => {
+    bump("info");
+    showToast("Save cancelled", "info");
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 300);
+  });
+
+  // --- Confirm Save: build PDF only now ---
+  ok.addEventListener("click", async () => {
+    bump("info");
+    showToast("Building PDF…", "info");
+
+    // Save signatures first
+    saveSignature("sig1");
+    saveSignature("sig2");
+
+    try {
+      // ✅ Build PDF *only after confirmation*
+      const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      const w = isPWA ? null : window.open('', '_blank'); // don’t open tab in PWA
+      const pdfWin = buildPdf(w); // pass window ref to buildPdf
+      window.lastBuiltPdfWindow = pdfWin;
+
+      // Safari PWA: we don’t open new tab, we’ll trigger hidden iframe print
+      if (isPWA && pdfWin?.iframePrint) {
+        setTimeout(() => {
+          try {
+            pdfWin.iframePrint.focus();
+            pdfWin.iframePrint.print();
+            markPdfSaved();
+            showToast("✅ PDF ready and sent to print", "success");
+            bump("success");
+          } catch (err) {
+            console.warn("⚠️ PWA print blocked:", err);
+            showToast("⚠️ Printing blocked in PWA", "warning");
+          }
+        }, 600);
+      } else if (pdfWin) {
+        // Normal browsers
+        setTimeout(() => {
+          try {
+            pdfWin.focus();
+            pdfWin.print();
+            markPdfSaved();
+            bump("success");
+            showToast("✅ PDF ready and sent to print", "success");
+          } catch (err) {
+            console.warn("⚠️ Print blocked:", err);
+            showToast("⚠️ Printing blocked, preview opened instead", "warning");
+          }
+        }, 600);
+      }
+
+      // Close modal after
+      modal.classList.remove("show");
+      box.style.transform = "scale(0.85)";
+      box.style.opacity = "0";
+      setTimeout(() => (modal.style.display = "none"), 300);
+      unlockScroll();
+
+    } catch (err) {
+      console.error("❌ PDF build failed:", err);
+      bump("error");
+      showToast("❌ PDF failed to generate", "error");
+    }
+  });
+
+  // --- Print Now (from Step 2) ---
+  printNow.addEventListener("click", () => {
+    bump("info");
+    showToast("Opening print dialog…", "info");
+    try {
+      if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
+        window.lastBuiltPdfWindow.focus();
+        window.lastBuiltPdfWindow.print();
+      } else if (hasSavedPdf()) {
+        const w = buildPdf();
+        window.lastBuiltPdfWindow = w;
+        setTimeout(() => w.print(), 800);
+      } else {
+        showToast("⚠️ Please save the PDF first", "warning");
+      }
+    } catch (err) {
+      console.warn("⚠️ Print unavailable:", err);
+      showToast("⚠️ Unable to open print window", "warning");
+    }
+  });
+
+  // --- Close modal manually ---
+  closeModal.addEventListener("click", () => {
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => {
+      modal.style.display = "none";
+      unlockScroll();
+    }, 300);
+  });
 });
 </script>
 
