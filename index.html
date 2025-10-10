@@ -1885,29 +1885,6 @@ function buildPdf() {
     // --- Detect Safari PWA mode ---
   const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-  if (isPWA) {
-    // ✅ Safari PWA-safe method: use hidden iframe
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-    const docStream = iframe.contentWindow.document;
-    docStream.open();
-    docStream.write(doc);
-    docStream.close();
-
-    // Wait until iframe fully loads
-    setTimeout(() => {
-      try {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        bump('success');
-        showToast('✅ PDF ready and sent to print', 'success');
-      } catch (err) {
-        console.warn('⚠️ Print blocked:', err);
-        showToast('⚠️ Printing blocked in PWA', 'warning');
-      }
-    }, 800);
-
     // --- Detect if running as PWA (iPad/Safari) ---
 const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
@@ -1933,7 +1910,6 @@ if (isPWA) {
   w.focus();
 
   return w;
-}
 }
 
 
