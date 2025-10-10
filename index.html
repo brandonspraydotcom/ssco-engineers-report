@@ -38,12 +38,6 @@
   </script>
 
   <!-- =======================
-       📄 PDF + JS Libraries
-  ======================== -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
-
-  <!-- =======================
        🌍 Google Maps Places API
   ======================== -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
@@ -1767,10 +1761,6 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
   });
 }
 </script>
-
-<script>src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"</script>
-
-<script>src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"</script>
 
 <script>
 // === Global cache for sharing ===
@@ -3644,6 +3634,10 @@ companyAutocomplete.addListener("place_changed", () => {
 
 window.addEventListener("load", initAutocomplete);
 </script>
+
+<!-- PDF generation libraries (must be loaded BEFORE buildPdf runs) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
 </body>
 </html>
