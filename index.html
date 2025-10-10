@@ -1776,169 +1776,89 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 // === Global cache for sharing ===
 let lastPdfBlob = null;
 
-/* ---------- Build & Save True PDF with Headers/Footers, Compression, Metadata ---------- */
-async function buildPdf() {
-  bump("info");
-  showToast("🧾 Generating PDF…", "info");
+/* ---------- Build printable document (stable) ---------- */
+function buildPdf() {
+  console.log("✅ buildPdf started");
 
-  const { jsPDF } = window.jspdf;
+  // Capture signatures *before* cloning
+  const sig1 = document.getElementById("sig1")?.toDataURL?.() || "";
+  const sig2 = document.getElementById("sig2")?.toDataURL?.() || "";
+  const sigData = [sig1, sig2];
 
-  // Capture signatures
-  const sig1 = document.getElementById("sig1").toDataURL();
-  const sig2 = document.getElementById("sig2").toDataURL();
-
-  // Clone form for PDF (don’t modify live DOM)
-  const clone = document.getElementById("formContainer").cloneNode(true);
-
-  // Replace signature canvases with images
-  ["sig1", "sig2"].forEach((id, i) => {
-    const c = clone.querySelector(`#${id}`);
-    if (c) {
-      const img = document.createElement("img");
-      img.src = i === 0 ? sig1 : sig2;
-      img.className = "sig-img";
-      c.replaceWith(img);
-    }
-  });
-
-  // Photos (before/after)
-  const beforeImgs = document.querySelectorAll("#beforeThumbs img");
-  const afterImgs = document.querySelectorAll("#afterThumbs img");
-  const photoSection = document.createElement("div");
-  photoSection.innerHTML = `
-    <div class="photo-page">
-      <h3>Before Photos</h3>
-      <div class="photo-half">
-        ${Array.from(beforeImgs).map(img => `<img src="${img.src}" />`).join("") || "<p>No photos</p>"}
-      </div>
-      <h3>After Photos</h3>
-      <div class="photo-half">
-        ${Array.from(afterImgs).map(img => `<img src="${img.src}" />`).join("") || "<p>No photos</p>"}
-      </div>
-    </div>
-  `;
-  clone.appendChild(photoSection);
-
-  // Inline styles for print
-  const style = document.createElement("style");
-  style.textContent = `
-    body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #111; padding: 20px; }
-    h3 { margin-top: 16px; font-size: 15px; }
-    .sig-img { max-width: 280px; border: 1px solid #000; border-radius: 6px; margin-top: 6px; }
-    .photo-page { page-break-before: always; }
-    .photo-page img { max-width: 100%; margin: 6px auto; display: block; border-radius: 6px; }
-    .photo-half { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-    .banner { width: 100%; max-height: 100px; object-fit: contain; margin-bottom: 10px; }
-    .title { font-size: 18px; font-weight: bold; text-align: center; margin: 6px 0; }
-  `;
-
-  const wrapper = document.createElement("div");
-  wrapper.appendChild(style);
-
-  // Header banner (optional)
-  if (typeof MAINTENANCE_B64 === "string" && MAINTENANCE_B64.startsWith("data:")) {
-    const banner = document.createElement("img");
-    banner.src = MAINTENANCE_B64;
-    banner.className = "banner";
-    wrapper.appendChild(banner);
-  }
-
-  // Header info
-  const projectNo = document.getElementById("project")?.value || "Report";
-  const company = document.getElementById("custCompany")?.value || "";
-  const engineer = document.getElementById("engineer")?.value || "Engineer";
-  const formattedDate = document.getElementById("date")?.value || new Date().toISOString().slice(0, 10);
-
-  wrapper.innerHTML += `
-    <div class="title">Engineer’s Report</div>
-    <div style="text-align:center;font-weight:700;margin-bottom:6px">
-      SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}
-    </div>
-    <div class="subtitle" style="text-align:center;color:#333;margin-bottom:14px;">
-      Prepared for <strong>${company}</strong>
-    </div>
-  `;
-  wrapper.appendChild(clone);
-
-  const pdfName = `Engineer_Report_${projectNo}.pdf`;
-
-  const opt = {
-    margin: [0.5, 0.3, 0.7, 0.3],
-    filename: pdfName,
-    image: { type: "jpeg", quality: 0.85 }, // slightly lower = smaller file
-    html2canvas: { scale: 1.8, useCORS: true },
-    jsPDF: { unit: "in", format: "a4", orientation: "portrait", compress: true },
-    pagebreak: { mode: ["avoid-all", "css", "legacy"] },
-  };
-
-try {
-  // ✅ Build PDF content and keep window reference
-  const w = buildPdf();
-  window.lastBuiltPdfWindow = w;
-
-  // ✅ Detect if document was actually written
-  if (!w || w.document.readyState === "uninitialized" || w.document.body.innerHTML.trim() === "") {
-    throw new Error("Empty PDF document – build failed");
-  }
-
-  // ✅ Give browser a moment to render before printing
-  w.focus();
-  setTimeout(() => {
-    try {
-      w.print();
-      markPdfSaved();
-      bump("success");
-      showToast("✅ PDF generated and ready to print", "success");
-    } catch (err) {
-      console.warn("⚠️ Print blocked:", err);
-      showToast("⚠️ Printing blocked, but PDF preview opened", "warning");
-    }
-  }, 800);
-
-  // ✅ Cleanly close modal
-  modal.classList.remove("show");
-  box.style.transform = "scale(0.85)";
-  box.style.opacity = "0";
-  setTimeout(() => (modal.style.display = "none"), 300);
-
-} catch (err) {
-  console.error("❌ PDF generation error:", err);
-  bump("error");
-  showToast("❌ Failed to generate PDF — please retry", "error");
-}
-
-}
-
-async function generateRealPdfBlob() {
-  const w = window.lastBuiltPdfWindow;
-  if (!w) {
-    showToast("⚠️ No saved report found. Please Save PDF first.", "warning");
+  // Clone the form safely
+  const form = document.getElementById("formContainer");
+  if (!form) {
+    console.error("❌ buildPdf: formContainer not found!");
     return null;
   }
 
-  // Extract the HTML string that buildPdf() created
-  const html = w.document.documentElement.outerHTML;
+  const clone = form.cloneNode(true);
 
-  // Use html2pdf to make a true binary PDF blob
-  const opt = {
-    margin: 0.2,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-  };
+  // Replace signature canvases with static images
+  const sigCanvases = clone.querySelectorAll("canvas.signature");
+  sigCanvases.forEach((canvas, i) => {
+    if (sigData[i]) {
+      const img = document.createElement("img");
+      img.src = sigData[i];
+      img.className = "sig-img";
+      canvas.replaceWith(img);
+    }
+  });
 
-  // Create a temporary hidden element so html2pdf can render it
-  const temp = document.createElement('iframe');
-  temp.style.display = 'none';
-  document.body.appendChild(temp);
-  const doc = temp.contentDocument;
-  doc.open();
-  doc.write(html);
-  doc.close();
+  // Include photos
+  const beforeImgs = Array.from(document.querySelectorAll("#beforeThumbs img")).map(i => i.src);
+  const afterImgs = Array.from(document.querySelectorAll("#afterThumbs img")).map(i => i.src);
 
-  const blob = await html2pdf().set(opt).from(doc.body).output('blob');
-  document.body.removeChild(temp);
-  return blob;
+  const photoSection = document.createElement("section");
+  photoSection.innerHTML = `
+    <h3>Before Photos</h3>
+    <div class="photo-half">${beforeImgs.map(src => `<img src="${src}" alt="Before">`).join("") || "<p>No photos</p>"}</div>
+    <h3>After Photos</h3>
+    <div class="photo-half">${afterImgs.map(src => `<img src="${src}" alt="After">`).join("") || "<p>No photos</p>"}</div>
+  `;
+  clone.appendChild(photoSection);
+
+  // Header info
+  const projectNo = document.getElementById("project")?.value || "—";
+  const company = document.getElementById("custCompany")?.value || "—";
+  const dateVal = document.getElementById("date")?.value || new Date().toISOString().slice(0, 10);
+  const formattedDate = formatDateWithOrdinal(dateVal);
+  const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
+
+  const css = `
+    @page { margin: 0.5in; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #111; padding: 20px; }
+    h1,h2,h3 { text-align: center; margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th,td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    .sig-img { max-width: 280px; border: 1px solid #000; border-radius: 6px; margin: 6px 0; }
+    .photo-half img { width: 100%; max-width: 350px; margin: 6px auto; display: block; border-radius: 8px; }
+    .footer { position: fixed; bottom: 8px; width: 100%; text-align: center; font-size: 9px; color: #555; }
+  `;
+
+  // Build final HTML document
+  let html = `
+  <!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"><title>${sscoTitle}</title><style>${css}</style></head>
+  <body>
+    <h1>Engineers Report</h1>
+    <h2>${sscoTitle}</h2>
+    <h3>Prepared for ${company}</h3>
+    ${clone.innerHTML}
+    <div class="footer">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
+  </body>
+  </html>
+  `;
+
+  // Open preview silently
+  const w = window.open("", "_blank");
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+
+  console.log("✅ buildPdf completed and written to new window");
+  return w;
 }
 
 
