@@ -1783,115 +1783,120 @@ function buildPdf() {
   const sig2 = $('sig2').toDataURL();
   const sigData = [sig1, sig2];
 
+  // clone + prepare (your existing function)
   const clone = $('formContainer').cloneNode(true);
-  const prepared = prepareForPdf(clone, sigData);
+  const prepared = prepareForPdf(clone, sigData); // returns a DOM node
 
+  // Read live values BEFORE we remove anything from the clone
+  const reportVal    = ($('report')    && $('report').value    || '').trim();
+  const partsUsedVal = ($('partsUsed') && $('partsUsed').value || '').trim();
+  const partsReqVal  = ($('partsReq')  && $('partsReq').value  || '').trim();
+
+  // Helper: turn textarea text into bullet <ul>
+  const makeBullets = (text) => {
+    if (!text) return '';
+    const items = text.split(/\n+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+      .map(s => `<li>${s}</li>`)
+      .join('');
+    return `<ul>${items}</ul>`;
+  };
+
+  // 1) Remove NON-bullet versions from the printable clone
+  ['report', 'partsUsed', 'partsReq'].forEach(id => {
+    const el = prepared.querySelector('#' + id);
+    if (el) {
+      // remove its label if it’s explicitly tied via for=""
+      const lab = prepared.querySelector(`label[for="${id}"]`);
+      if (lab) lab.remove();
+      // try to remove a neat container row if possible, else just remove the field
+      const row = el.closest('.row') || el.closest('.card') || el.parentElement;
+      (row || el).remove();
+    }
+  });
+
+  // 2) Insert bullet sections AFTER Project Description
+  //    We’ll try to find project description’s nearest “row/card” container
+  const projDescEl = prepared.querySelector('#projectDesc');
+  let insertAfterNode = null;
+  if (projDescEl) {
+    insertAfterNode = projDescEl.closest('.row') || projDescEl.closest('.card') || projDescEl.parentElement;
+  }
+
+  const bulletsBlock = `
+    ${reportVal    ? `<h3>Report Details</h3>${makeBullets(reportVal)}` : ''}
+    ${partsUsedVal ? `<h3>Parts Used</h3>${makeBullets(partsUsedVal)}`   : ''}
+    ${partsReqVal  ? `<h3>Parts Required (To Be Quoted)</h3>${makeBullets(partsReqVal)}` : ''}
+  `;
+
+  if (bulletsBlock.trim()) {
+    const frag = document.createElement('div');
+    frag.innerHTML = bulletsBlock;
+    if (insertAfterNode && insertAfterNode.parentNode) {
+      insertAfterNode.parentNode.insertBefore(frag, insertAfterNode.nextSibling);
+    } else {
+      // Fallback: append near top so that meta → desc → bullets → rest still makes sense
+      prepared.insertBefore(frag, prepared.firstChild);
+    }
+  }
+
+  // Photos (before/after) – as you had it
   const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i => i.src);
-  const afterImgs = Array.from(document.querySelectorAll('#afterThumbs img')).map(i => i.src);
+  const afterImgs  = Array.from(document.querySelectorAll('#afterThumbs img')).map(i => i.src);
 
+  const photoSection = document.createElement('div');
+  photoSection.innerHTML = `
+    <div class="photo-page">
+      <h3>Before Photos</h3>
+      <div class="photo-half">
+        ${beforeImgs.length ? beforeImgs.map(src => `<img src="${src}">`).join('') : '<p>No photos</p>'}
+      </div>
+      <h3>After Photos</h3>
+      <div class="photo-half">
+        ${afterImgs.length ? afterImgs.map(src => `<img src="${src}">`).join('') : '<p>No photos</p>'}
+      </div>
+    </div>
+  `;
+  prepared.appendChild(photoSection);
+
+  // Header/title info
   const projectNo = escapeHtml($('project').value || '—');
-  const poNo = escapeHtml($('ponumber').value || '—');
-  const dateVal = $('date').value || new Date().toISOString().slice(0, 10);
+  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
   const formattedDate = formatDateWithOrdinal(dateVal);
   const company = escapeHtml($('custCompany').value || '—');
   const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
 
+  // Print CSS (banner fit + tidy bullets + layout)
   const printCss = `
     @page { counter-increment: page; margin: 20mm; }
-    body {
-      font-family: Helvetica, Arial, sans-serif;
-      color: #111;
-      margin: 0;
-      padding: 20px;
-      counter-reset: page;
-    }
-    .banner {
-      display: block;
-      width: 100%;
-      max-width: 720px;
-      height: auto;
-      margin: 0 auto 12px;
-      object-fit: contain;
-    }
-    .title {
-      font-size: 18px;
-      font-weight: 700;
-      text-align: center;
-      margin: 6px 0;
-    }
-    .subtitle {
-      font-size: 14px;
-      text-align: center;
-      color: #333;
-      margin-bottom: 14px;
-    }
-    h3 {
-      margin-top: 16px;
-      font-size: 15px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: center;
-    }
-    th { background: #f7f7f7; }
-    .sig-img {
-      max-width: 320px;
-      border: 1px solid #000;
-      border-radius: 6px;
-    }
-    .photo-page {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-around;
-      align-items: center;
-      padding: 20px;
-      gap: 12px;
-    }
-    .photo-half img {
-      max-width: 100%;
-      height: auto;
-      max-height: 45vh;
-      object-fit: contain;
-      border-radius: 6px;
-    }
-    .photo-caption {
-      text-align: center;
-      color: #000;
-      margin-top: -20px;
-      font-size: 12px;
-    }
-    .footer {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 1px;
-      font-size: 8px;
-      color: #666;
-      display: flex;
-      justify-content: space-between;
-      padding: 0 20px;
-      width: 100%;
-      opacity: 0.5;
-    }
-    .footer .page:before {
-      content: "Page " counter(page);
-    }
-    .logo-small {
-      position: fixed;
-      left: 16px;
-      top: 1px;
-      width: 64px;
-      opacity: 0.0;
-    }
-    ul { margin: 4px 0 12px 24px; padding: 0; }
-    li { margin-bottom: 4px; line-height: 1.45; }
+    body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:20px;counter-reset:page}
+    .banner{display:block;width:100%;max-width:720px;height:auto;margin:0 auto 12px;object-fit:contain}
+    .title{font-size:18px;font-weight:700;text-align:center;margin:6px 0}
+    .subtitle{font-size:14px;text-align:center;color:#333;margin-bottom:14px}
+    h3{margin-top:16px;font-size:15px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #ddd;padding:8px;text-align:center}
+    th{background:#f7f7f7}
+    ul{margin:6px 0 12px 20px;padding:0}
+    li{margin:4px 0;line-height:1.45}
+    .sig-img{max-width:320px;border:1px solid #000;border-radius:6px}
+    .photo-page{display:flex;flex-direction:column;gap:12px;page-break-before:always}
+    .photo-half{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%}
+    .photo-half img{max-width:100%;height:auto;max-height:45vh;object-fit:contain;border-radius:6px}
+    .photo-caption{text-align:center;color:#000;margin-top:-20px;font-size:12px}
+    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:8px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
+    .footer .page:before{content:"Page " counter(page)}
+    .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0}
+    /* keep your custom row spacing if you use those classes */
+    .row-project-number{margin-bottom:0px;display:block}
+    .row-purchase-order-number{margin-bottom:12px;display:block}
+    .row-sales-engineer{margin-bottom:0px;display:block}
+    .row-sales-email{margin-bottom:10px;display:block}
+    .row-point-contact{margin-bottom:-10px;display:block}
   `;
 
+  // Build full printable doc
   let doc = `
     <!doctype html>
     <html>
@@ -1904,50 +1909,30 @@ function buildPdf() {
   `;
 
   // Banner only on first page
-  if (MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0) {
-    doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="SSCo Banner">`;
+  if (typeof MAINTENANCE_B64 === 'string' && MAINTENANCE_B64.indexOf('data:') === 0){
+    doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="">`;
   }
 
+  // Title block
   doc += `
     <div class="title">Engineers Report</div>
     <div style="text-align:center;font-weight:700;margin-bottom:6px">${sscoTitle}</div>
     <div class="subtitle">Prepared for <strong>${company}</strong></div>
   `;
 
-  // --- Convert specific textareas into bullet lists ---
-  const bulletify = (id, label) => {
-    const el = $(id);
-    if (el && el.value.trim()) {
-      const items = el.value
-        .split(/\n+/)
-        .map(line => line.trim())
-        .filter(line => line)
-        .map(line => `<li>${line}</li>`)
-        .join("");
-      return `<h3>${label}</h3><ul>${items}</ul>`;
-    }
-    return "";
-  };
-
-  doc += bulletify("report", "Report Details:");
-  doc += bulletify("partsUsed", "Parts Used:");
-  doc += bulletify("partsReq", "Parts Required (To Be Quoted):");
-
-  // --- Rest of form fields ---
+  // Inject the transformed prepared DOM (correct order inside it)
   doc += prepared.innerHTML;
 
-  // Footer + slogan
+  // Footer
   doc += `
     <div class="footer">
-      <div style="font-style:italic">
-        MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count
-      </div>
+      <div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
       <div class="page"></div>
     </div>
   `;
 
-  if (BOTTLE_B64 && BOTTLE_B64.indexOf('data:') === 0) {
-    doc += `<img class="logo-small" src="${BOTTLE_B64}">`;
+  if (typeof BOTTLE_B64 === 'string' && BOTTLE_B64.indexOf('data:') === 0){
+    doc += `<img class="logo-small" src="${BOTTLE_B64}" alt="">`;
   }
 
   doc += `</body></html>`;
