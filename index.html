@@ -3669,22 +3669,5 @@ companyAutocomplete.addListener("place_changed", () => {
 window.addEventListener("load", initAutocomplete);
 </script>
 
-<script>
-document.getElementById("savePdf").addEventListener("click", () => {
-  const element = document.getElementById("formContainer");
-
-  const opt = {
-    margin: 0.2,
-    filename: `engineers-report-${new Date().toISOString().split('T')[0]}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-  };
-
-  html2pdf().set(opt).from(element).save();
-});
-</script>
-
-
 </body>
 </html>
