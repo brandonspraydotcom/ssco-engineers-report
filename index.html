@@ -1776,82 +1776,88 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 // === Global cache for sharing ===
 let lastPdfBlob = null;
 
-/* ---------- Build printable document (stable) ---------- */
-function buildPdf() {
-  const form = document.getElementById("formContainer");
-  if (!form) return alert("Form not found!");
-  const clone = form.cloneNode(true);
-
-  // capture signatures before clearing or animating anything
-  const sig1 = document.getElementById("sig1")?.toDataURL?.() || "";
-  const sig2 = document.getElementById("sig2")?.toDataURL?.() || "";
-  const sigs = [sig1, sig2];
-  clone.querySelectorAll("canvas.signature").forEach((c, i) => {
-    if (sigs[i]) {
-      const img = document.createElement("img");
-      img.src = sigs[i];
-      img.className = "sig-img";
-      c.replaceWith(img);
-    }
-  });
+/* ---------- Build printable doc (light) and open it ---------- */
+function buildPdf(){
+  // capture signatures BEFORE cloning
+  const sig1 = $('sig1').toDataURL();
+  const sig2 = $('sig2').toDataURL();
+  const sigData = [sig1, sig2];
+ 
+  const clone = $('formContainer').cloneNode(true);
+  const prepared = prepareForPdf(clone, sigData);
+ 
+  const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i=>i.src);
+  const afterImgs = Array.from(document.querySelectorAll('#afterThumbs img')).map(i=>i.src);
+ 
+  const projectNo = escapeHtml($('project').value || '—');
+  const poNo = escapeHtml($('ponumber').value || '—');
+  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
+  const formattedDate = formatDateWithOrdinal(dateVal);
+  const company = escapeHtml($('custCompany').value || '—');
+  const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
+ 
+  const printCss = `
+    @page { counter-increment: page}
+    body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:20px;counter-reset:page}
+    .banner{width:100%;height:auto;margin-bottom:12px}
+    .title{font-size:18px;font-weight:700;text-align:center;margin:6px 0}
+    .subtitle{font-size:14px;text-align:center;color:#333;margin-bottom:14px}
+    h3{margin-top:16px;font-size:15px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #ddd;padding:8px;text-align:center}
+    th{background:#f7f7f7}
+    .sig-img{max-width:320px;border:1px solid #000;border-radius:6px}
+    .photo-page {display: flex;flex-direction: column;justify-content: space-around;align-items: centre;padding: 20px;gap: 12px}
+    .photo-half{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:centre;width:100%}
+    .photo-half img{max-width:100%;height:auto;max-height:45vh;object-fit:contain;border-radius:6px}
+    .photo-caption{text-align:center;color:#000;margin-top:-20px;font-size:12px}
+    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:8px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
+    .footer .page:before{content:"Page " counter(page) " of " counter(pages)}
+    .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
+ 
+    /* Custom spacing for specific fields */
+    .row-project-number { margin-bottom: 0px; display:block; }
+  .row-purchase-order-number { margin-bottom: 12px; display:block; }
+    .row-sales-engineer { margin-bottom: 0px; display:block; }
+    .row-sales-email { margin-bottom: 10px; display:block; }
+    .row-point-contact { margin-bottom: -10px; display:block; }
+  `;
+ 
+  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report - '+ projectNo +' - '+ formattedDate+'</title><style>'+printCss+'</style></head><body>';
+ 
+  // Banner only on first page
+  if(MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0){
+    doc += '<img class="banner" src="'+MAINTENANCE_B64+'">';
+  }
+  doc += '<div class="title">Engineers Report</div>';
+  doc += '<div style="text-align:center;font-weight:700;margin-bottom:6px">'+sscoTitle+'</div>';
+  doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
+  doc += prepared.innerHTML;
+ 
+  // photos section
+ 
+ 
+  // Footer slogan + dynamic page numbers + Bottle.png on later pages
+  doc += '<div class="footer"><div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div><div class="page"></div></div>';
+  if(BOTTLE_B64 && BOTTLE_B64.indexOf('data:') === 0){
+    doc += '<img class="logo-small" src="'+BOTTLE_B64+'">';
 }
-
-  // Include photos
-  const beforeImgs = Array.from(document.querySelectorAll("#beforeThumbs img")).map(i => i.src);
-  const afterImgs = Array.from(document.querySelectorAll("#afterThumbs img")).map(i => i.src);
-
-  const photoSection = document.createElement("section");
-  photoSection.innerHTML = `
-    <h3>Before Photos</h3>
-    <div class="photo-half">${beforeImgs.map(src => `<img src="${src}" alt="Before">`).join("") || "<p>No photos</p>"}</div>
-    <h3>After Photos</h3>
-    <div class="photo-half">${afterImgs.map(src => `<img src="${src}" alt="After">`).join("") || "<p>No photos</p>"}</div>
-  `;
-  clone.appendChild(photoSection);
-
-  // Header info
-  const projectNo = document.getElementById("project")?.value || "—";
-  const company = document.getElementById("custCompany")?.value || "—";
-  const dateVal = document.getElementById("date")?.value || new Date().toISOString().slice(0, 10);
-  const formattedDate = formatDateWithOrdinal(dateVal);
-  const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
-
-  const css = `
-    @page { margin: 0.5in; }
-    body { font-family: Helvetica, Arial, sans-serif; color: #111; padding: 20px; }
-    h1,h2,h3 { text-align: center; margin: 6px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    th,td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    .sig-img { max-width: 280px; border: 1px solid #000; border-radius: 6px; margin: 6px 0; }
-    .photo-half img { width: 100%; max-width: 350px; margin: 6px auto; display: block; border-radius: 8px; }
-    .footer { position: fixed; bottom: 8px; width: 100%; text-align: center; font-size: 9px; color: #555; }
-  `;
-
-  // Build final HTML document
-  let html = `
-  <!DOCTYPE html>
-  <html>
-  <head><meta charset="utf-8"><title>${sscoTitle}</title><style>${css}</style></head>
-  <body>
-    <h1>Engineers Report</h1>
-    <h2>${sscoTitle}</h2>
-    <h3>Prepared for ${company}</h3>
-    ${clone.innerHTML}
-    <div class="footer">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
-  </body>
-  </html>
-  `;
-
-  // Open preview silently
-  const w = window.open("", "_blank");
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
-
-  console.log("✅ buildPdf completed and written to new window");
-  return w;
+ 
+  doc += '</body></html>';
+ 
+    // --- open a blank tab silently (do NOT print yet)
+const w = window.open('', '_blank');
+w.document.open();
+w.document.write(doc);
+w.document.close();
+w.focus();
+ 
+// store reference globally so we can print later from the modal
+window.lastBuiltPdfWindow = w;
+ 
+// return the window for reference
+return w;
 }
-
 
 
 /* ---------- Buttons ---------- */
@@ -2969,157 +2975,144 @@ function showToast(message, type = 'info') {
 </style>
 
 <script>
-// === SAVE PDF (Fully Fixed — Modal + Print + PDF Preview Sync) ===
+// --- SAVE PDF (Persistent + Safari Safe) ---
 document.addEventListener("DOMContentLoaded", () => {
-  const saveBtn = document.getElementById("savePdf");
-  const modal = document.getElementById("saveConfirmModal");
-  const box = document.getElementById("saveConfirmBox");
-  const ok = document.getElementById("saveConfirmOk");
-  const cancel = document.getElementById("saveConfirmCancel");
-  const step1 = document.getElementById("saveConfirmStep1");
-  const step2 = document.getElementById("saveConfirmStep2");
-  const printNow = document.getElementById("printNow");
-  const closeModal = document.getElementById("closeModal");
-
-  // === Track PDF Saved state ===
-  function markPdfSaved() {
-    localStorage.setItem("pdfSaved", "true");
-  }
-  function hasSavedPdf() {
-    return localStorage.getItem("pdfSaved") === "true";
-  }
-
-  // === Show Modal when clicking "Save PDF" ===
-  if (!saveBtn || !modal || !ok || !cancel) {
-    console.warn("❌ Save PDF modal setup failed — missing elements.");
-    return;
-  }
-
-  saveBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-
-    const valid = validateImportantFields();
-    if (!valid) return;
-
-    bump("info");
-    showToast("✅ All fields complete — ready to save", "info");
-
-    // Reset modal steps
-    step1.style.display = "block";
-    step2.style.display = "none";
-
-    // Show modal
-    modal.style.display = "flex";
-    lockScroll();
-    setTimeout(() => {
-      modal.classList.add("show");
-      box.style.transform = "scale(1)";
-      box.style.opacity = "1";
-    }, 50);
-  });
-
-  // === Cancel Save ===
-  cancel.addEventListener("click", () => {
-    bump("info");
-    showToast("Save cancelled", "info");
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    setTimeout(() => {
-      modal.style.display = "none";
-      unlockScroll();
-    }, 300);
-  });
-
-  // === Confirm Save + Auto Print ===
-  ok.addEventListener("click", async () => {
-    bump("info");
-    showToast("🧾 Building PDF…", "info");
-
-    // Save signatures before clone
-    saveSignature("sig1");
-    saveSignature("sig2");
-
-    // Hide modal smoothly before building
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    setTimeout(() => {
-      modal.style.display = "none";
-      unlockScroll();
-    }, 300);
-
-    try {
-      // 🧩 Wait a moment for modal hide animation before cloning DOM
-      await new Promise(r => setTimeout(r, 400));
-
-      const w = buildPdf();
-      if (!w || !w.document) throw new Error("buildPdf failed or returned blank");
-
-      window.lastBuiltPdfWindow = w;
-
-      // Wait for new window to fully render content
-      await new Promise((resolve, reject) => {
-        const start = Date.now();
-        const check = () => {
-          if (w.document.readyState === "complete" && w.document.body.innerHTML.trim() !== "") {
-            resolve();
-          } else if (Date.now() - start > 6000) {
-            reject(new Error("PDF window timeout"));
-          } else {
-            setTimeout(check, 120);
-          }
-        };
-        check();
-      });
-
-      // Delay slightly before print (for Safari rendering)
-      await new Promise(r => setTimeout(r, 600));
-
-      w.focus();
-      w.print();
-
-      markPdfSaved();
-      bump("success");
-      showToast("✅ PDF built and sent to print", "success");
-    } catch (err) {
-      console.error("❌ PDF build failed:", err);
-      bump("error");
-      showToast("❌ PDF failed to generate", "error");
-    }
-  });
-
-  // === Manual "Print Now" from Step 2 ===
-  printNow.addEventListener("click", () => {
-    bump("info");
-    showToast("Opening print dialog…", "info");
-    try {
-      if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
-        window.lastBuiltPdfWindow.focus();
-        window.lastBuiltPdfWindow.print();
-      } else if (hasSavedPdf()) {
-        const w = buildPdf();
-        window.lastBuiltPdfWindow = w;
-        setTimeout(() => w.print(), 800);
-      } else {
-        showToast("⚠️ Please save the PDF first", "warning");
-      }
-    } catch (err) {
-      console.warn("Print blocked or unavailable:", err);
-      showToast("⚠️ Unable to open print window", "warning");
-    }
-  });
-
-  // === Close Modal from Step 2 ===
-  closeModal.addEventListener("click", () => {
-    modal.classList.remove("show");
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    setTimeout(() => {
-      modal.style.display = "none";
-      unlockScroll();
-    }, 300);
-  });
+  const saveBtn = document.getElementById("savePdf");
+  const modal = document.getElementById("saveConfirmModal");
+  const box = document.getElementById("saveConfirmBox");
+  const ok = document.getElementById("saveConfirmOk");
+  const cancel = document.getElementById("saveConfirmCancel");
+  const step1 = document.getElementById("saveConfirmStep1");
+  const step2 = document.getElementById("saveConfirmStep2");
+  const printNow = document.getElementById("printNow");
+  const closeModal = document.getElementById("closeModal");
+ 
+  // --- Track PDF Saved state ---
+  function markPdfSaved() {
+    localStorage.setItem("pdfSaved", "true");
+  }
+  function hasSavedPdf() {
+    return localStorage.getItem("pdfSaved") === "true";
+  }
+ 
+  // Optional: uncomment if you want to clear saved PDF flag each new session
+  // clearPdfSaved();
+ 
+  if (!saveBtn || !modal || !ok || !cancel) {
+    console.warn("❌ Save PDF modal setup failed — missing elements.");
+    return;
+  }
+ 
+  // --- Step 1: Click Save PDF ---
+  saveBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+ 
+    const valid = validateImportantFields();
+    if (!valid) return;
+ 
+    bump("info");
+    showToast("All fields complete — ready to save", "info");
+ 
+    // Reset to Step 1 every time
+    step1.style.display = "block";
+    step2.style.display = "none";
+ 
+    // Display + animate modal
+    modal.style.display = "flex";
+    lockScroll();
+    setTimeout(() => {
+      modal.classList.add("show");
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    }, 50);
+  });
+ 
+  // --- Cancel Save ---
+  cancel.addEventListener("click", () => {
+    bump("info");
+    showToast("Save cancelled", "info");
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 300);
+  });
+ 
+  // --- Confirm & Print (no preview tab) ---
+ok.addEventListener("click", () => {
+  bump("info");
+  showToast("Building PDF…", "info");
+ 
+  // ✅ Save signatures first
+  saveSignature("sig1");
+  saveSignature("sig2");
+ 
+  try {
+    // Build PDF immediately (inside same click context)
+    const w = buildPdf();
+    window.lastBuiltPdfWindow = w;
+ 
+    // Safari-safe: focus + print right away
+    w.focus();
+    setTimeout(() => {
+      try {
+        w.print();
+        markPdfSaved();
+        bump("success");
+        showToast("✅ Sent to printer", "success");
+      } catch (err) {
+        console.warn("Print blocked:", err);
+        showToast("⚠️ Printing blocked, preview opened instead", "warning");
+      }
+    }, 400);
+ 
+    // Close modal immediately
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => (modal.style.display = "none"), 300);
+ 
+  } catch (err) {
+    console.error("PDF build failed:", err);
+    bump("error");
+    showToast("❌ PDF failed to generate", "error");
+  }
+});
+ 
+  // --- Print Now ---
+  printNow.addEventListener("click", () => {
+    bump("info");
+    showToast("Opening print dialog…", "info");
+ 
+    try {
+      // ✅ Try to print if window reference exists
+      if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
+        window.lastBuiltPdfWindow.focus();
+        window.lastBuiltPdfWindow.print();
+      } else if (hasSavedPdf()) {
+        // ✅ If the PDF window is gone (Safari PWA), rebuild & print again
+        const w = buildPdf();
+        window.lastBuiltPdfWindow = w;
+        setTimeout(() => w.print(), 800);
+      } else {
+        showToast("⚠️ Please save the PDF first", "warning");
+      }
+    } catch (err) {
+      console.warn("Print blocked or unavailable:", err);
+      showToast("⚠️ Unable to open print window", "warning");
+    }
+  });
+ 
+    // --- Close modal after Step 2 ---
+  closeModal.addEventListener("click", () => {
+    modal.classList.remove("show");
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+ 
+    setTimeout(() => {
+      modal.style.display = "none";
+      unlockScroll(); // ✅ restore scroll once hidden
+    }, 300);
+});
 });
 </script>
 
