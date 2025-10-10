@@ -1783,70 +1783,122 @@ function buildPdf() {
   const sig2 = $('sig2').toDataURL();
   const sigData = [sig1, sig2];
 
-  // clone + prepare (your existing function)
-  const clone = $('formContainer').cloneNode(true);
-  const prepared = prepareForPdf(clone, sigData); // returns a DOM node
+  const form = $('formContainer');
+  const clone = form.cloneNode(true);
+  const prepared = prepareForPdf(clone, sigData);
 
-  // Read live values BEFORE we remove anything from the clone
-  const reportVal    = ($('report')    && $('report').value    || '').trim();
-  const partsUsedVal = ($('partsUsed') && $('partsUsed').value || '').trim();
-  const partsReqVal  = ($('partsReq')  && $('partsReq').value  || '').trim();
+  // Extract values for bullets
+  const reportVal    = ($('report')?.value || '').trim();
+  const partsUsedVal = ($('partsUsed')?.value || '').trim();
+  const partsReqVal  = ($('partsReq')?.value || '').trim();
 
-  // Helper: turn textarea text into bullet <ul>
-  const makeBullets = (text) => {
-    if (!text) return '';
-    const items = text.split(/\n+/)
-      .map(s => s.trim())
+  // Make bullet HTML from textareas
+  const makeBullets = (title, val) => {
+    if (!val) return '';
+    const list = val.split(/\n+/)
+      .map(l => l.trim())
       .filter(Boolean)
-      .map(s => `<li>${s}</li>`)
+      .map(l => `<li>${l}</li>`)
       .join('');
-    return `<ul>${items}</ul>`;
+    return `<h3>${title}</h3><ul>${list}</ul>`;
   };
 
-  // 1) Remove NON-bullet versions from the printable clone
-  ['report', 'partsUsed', 'partsReq'].forEach(id => {
-    const el = prepared.querySelector('#' + id);
-    if (el) {
-      // remove its label if it’s explicitly tied via for=""
-      const lab = prepared.querySelector(`label[for="${id}"]`);
-      if (lab) lab.remove();
-      // try to remove a neat container row if possible, else just remove the field
-      const row = el.closest('.row') || el.closest('.card') || el.parentElement;
-      (row || el).remove();
+  // Values for title/header
+  const projectNo = escapeHtml($('project')?.value || '—');
+  const dateVal = $('date')?.value || new Date().toISOString().slice(0,10);
+  const formattedDate = formatDateWithOrdinal(dateVal);
+  const company = escapeHtml($('custCompany')?.value || '—');
+  const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
+
+  // Banner + layout CSS
+  const printCss = `
+    @page { counter-increment: page; margin: 20mm; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #111; margin: 0; padding: 20px; counter-reset: page; }
+    .banner { display:block; width:100%; max-width:720px; height:auto; margin:0 auto 12px; object-fit:contain; }
+    .title { font-size:18px; font-weight:700; text-align:center; margin:6px 0; }
+    .subtitle { font-size:14px; text-align:center; color:#333; margin-bottom:14px; }
+    h3 { margin-top:16px; font-size:15px; }
+    ul { margin:6px 0 12px 20px; padding:0; }
+    li { margin:4px 0; line-height:1.45; }
+    table { border-collapse:collapse; width:100%; }
+    th,td { border:1px solid #ddd; padding:8px; text-align:center; }
+    th { background:#f7f7f7; }
+    .sig-img { max-width:320px; border:1px solid #000; border-radius:6px; }
+    .photo-page { page-break-before: always; display:flex; flex-direction:column; gap:12px; }
+    .photo-half img { max-width:100%; height:auto; max-height:45vh; object-fit:contain; border-radius:6px; }
+    .footer { position:fixed; left:0; right:0; bottom:1px; font-size:8px; color:#666;
+              display:flex; justify-content:space-between; padding:0 20px; width:100%; opacity:0.5; }
+    .footer .page:before { content:"Page " counter(page); }
+    .logo-small { position:fixed; left:16px; top:1px; width:64px; opacity:0; }
+  `;
+
+  // Build fresh document in your preferred order
+  let doc = `
+    <!doctype html><html><head>
+      <meta charset="utf-8">
+      <title>SSCo Report - ${projectNo} - ${formattedDate}</title>
+      <style>${printCss}</style>
+    </head><body>
+  `;
+
+  // Banner
+  if (MAINTENANCE_B64?.startsWith('data:')) {
+    doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="SSCo Banner">`;
+  }
+
+  // Title + subtitle
+  doc += `
+    <div class="title">Engineers Report</div>
+    <div style="text-align:center;font-weight:700;margin-bottom:6px">${sscoTitle}</div>
+    <div class="subtitle">Prepared for <strong>${company}</strong></div>
+  `;
+
+  // --- Grab key groups explicitly from clone in correct order ---
+  const selectorOrder = [
+    '#engineer',
+    '#date',
+    '#visitType',
+    '#project',
+    '#ponumber',
+    '#SalesName',
+    '#salesEmail',
+    '#custName',
+    '#custEmail',
+    '#custCompany',
+    '#addr1',
+    '#addr2',
+    '#city',
+    '#region',
+    '#postal',
+    '#country',
+    '#projectDesc'
+  ];
+
+  selectorOrder.forEach(sel => {
+    const field = prepared.querySelector(sel);
+    if (field) {
+      const label = prepared.querySelector(`label[for="${sel.replace('#','')}"]`);
+      if (label) doc += `<h3>${label.textContent}</h3>`;
+      doc += `<p>${escapeHtml(field.value || '—')}</p>`;
     }
   });
 
-  // 2) Insert bullet sections AFTER Project Description
-  //    We’ll try to find project description’s nearest “row/card” container
-  const projDescEl = prepared.querySelector('#projectDesc');
-  let insertAfterNode = null;
-  if (projDescEl) {
-    insertAfterNode = projDescEl.closest('.row') || projDescEl.closest('.card') || projDescEl.parentElement;
-  }
+  // --- Bullet lists ---
+  doc += makeBullets('Report Details', reportVal);
+  doc += makeBullets('Parts Used', partsUsedVal);
+  doc += makeBullets('Parts Required (To Be Quoted)', partsReqVal);
 
-  const bulletsBlock = `
-    ${reportVal    ? `<h3>Report Details</h3>${makeBullets(reportVal)}` : ''}
-    ${partsUsedVal ? `<h3>Parts Used</h3>${makeBullets(partsUsedVal)}`   : ''}
-    ${partsReqVal  ? `<h3>Parts Required (To Be Quoted)</h3>${makeBullets(partsReqVal)}` : ''}
-  `;
-
-  if (bulletsBlock.trim()) {
-    const frag = document.createElement('div');
-    frag.innerHTML = bulletsBlock;
-    if (insertAfterNode && insertAfterNode.parentNode) {
-      insertAfterNode.parentNode.insertBefore(frag, insertAfterNode.nextSibling);
-    } else {
-      // Fallback: append near top so that meta → desc → bullets → rest still makes sense
-      prepared.insertBefore(frag, prepared.firstChild);
-    }
-  }
-
-  // Photos (before/after) – as you had it
+  // --- Append Time Records / Cert line / Signatures / Photos from clone ---
+  const timeRecords = prepared.querySelector('#timeRecords')?.closest('.card')?.outerHTML || '';
+  const certLine = prepared.querySelector('.certLine')?.outerHTML || '';
+  const sigWrap = prepared.querySelector('.sigRow')?.closest('.card')?.outerHTML || '';
   const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i => i.src);
   const afterImgs  = Array.from(document.querySelectorAll('#afterThumbs img')).map(i => i.src);
 
-  const photoSection = document.createElement('div');
-  photoSection.innerHTML = `
+  doc += timeRecords + certLine + sigWrap;
+
+  // Photos block
+  doc += `
     <div class="photo-page">
       <h3>Before Photos</h3>
       <div class="photo-half">
@@ -1858,95 +1910,28 @@ function buildPdf() {
       </div>
     </div>
   `;
-  prepared.appendChild(photoSection);
 
-  // Header/title info
-  const projectNo = escapeHtml($('project').value || '—');
-  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
-  const formattedDate = formatDateWithOrdinal(dateVal);
-  const company = escapeHtml($('custCompany').value || '—');
-  const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
-
-  // Print CSS (banner fit + tidy bullets + layout)
-  const printCss = `
-    @page { counter-increment: page; margin: 20mm; }
-    body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:20px;counter-reset:page}
-    .banner{display:block;width:100%;max-width:720px;height:auto;margin:0 auto 12px;object-fit:contain}
-    .title{font-size:18px;font-weight:700;text-align:center;margin:6px 0}
-    .subtitle{font-size:14px;text-align:center;color:#333;margin-bottom:14px}
-    h3{margin-top:16px;font-size:15px}
-    table{border-collapse:collapse;width:100%}
-    th,td{border:1px solid #ddd;padding:8px;text-align:center}
-    th{background:#f7f7f7}
-    ul{margin:6px 0 12px 20px;padding:0}
-    li{margin:4px 0;line-height:1.45}
-    .sig-img{max-width:320px;border:1px solid #000;border-radius:6px}
-    .photo-page{display:flex;flex-direction:column;gap:12px;page-break-before:always}
-    .photo-half{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:100%}
-    .photo-half img{max-width:100%;height:auto;max-height:45vh;object-fit:contain;border-radius:6px}
-    .photo-caption{text-align:center;color:#000;margin-top:-20px;font-size:12px}
-    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:8px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
-    .footer .page:before{content:"Page " counter(page)}
-    .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0}
-    /* keep your custom row spacing if you use those classes */
-    .row-project-number{margin-bottom:0px;display:block}
-    .row-purchase-order-number{margin-bottom:12px;display:block}
-    .row-sales-engineer{margin-bottom:0px;display:block}
-    .row-sales-email{margin-bottom:10px;display:block}
-    .row-point-contact{margin-bottom:-10px;display:block}
-  `;
-
-  // Build full printable doc
-  let doc = `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>SSCo Report - ${projectNo} - ${formattedDate}</title>
-        <style>${printCss}</style>
-      </head>
-      <body>
-  `;
-
-  // Banner only on first page
-  if (typeof MAINTENANCE_B64 === 'string' && MAINTENANCE_B64.indexOf('data:') === 0){
-    doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="">`;
-  }
-
-  // Title block
-  doc += `
-    <div class="title">Engineers Report</div>
-    <div style="text-align:center;font-weight:700;margin-bottom:6px">${sscoTitle}</div>
-    <div class="subtitle">Prepared for <strong>${company}</strong></div>
-  `;
-
-  // Inject the transformed prepared DOM (correct order inside it)
-  doc += prepared.innerHTML;
-
-  // Footer
+  // Footer + logo
   doc += `
     <div class="footer">
       <div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
       <div class="page"></div>
     </div>
   `;
-
-  if (typeof BOTTLE_B64 === 'string' && BOTTLE_B64.indexOf('data:') === 0){
+  if (BOTTLE_B64?.startsWith('data:')) {
     doc += `<img class="logo-small" src="${BOTTLE_B64}" alt="">`;
   }
 
-  doc += `</body></html>`;
+  doc += '</body></html>';
 
-  // --- open a blank tab silently (do NOT print yet)
+  // --- Open print preview ---
   const w = window.open('', '_blank');
   w.document.open();
   w.document.write(doc);
   w.document.close();
   w.focus();
 
-  // store reference globally so we can print later from the modal
   window.lastBuiltPdfWindow = w;
-
   return w;
 }
 
