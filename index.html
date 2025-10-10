@@ -1873,10 +1873,7 @@ function buildPdf() {
   </body></html>`;
 
     // --- Detect Safari PWA mode ---
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-
-    // --- Detect if running as PWA (iPad/Safari) ---
-const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  let isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
 if (isPWA) {
   // ✅ Hidden iframe print for Safari PWA (no blank tab)
