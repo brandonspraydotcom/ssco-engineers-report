@@ -1777,86 +1777,192 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 let lastPdfBlob = null;
 
 /* ---------- Build printable doc (light) and open it ---------- */
-function buildPdf(){
-  // capture signatures BEFORE cloning
-  const sig1 = $('sig1').toDataURL();
-  const sig2 = $('sig2').toDataURL();
-  const sigData = [sig1, sig2];
- 
-  const clone = $('formContainer').cloneNode(true);
-  const prepared = prepareForPdf(clone, sigData);
- 
-  const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i=>i.src);
-  const afterImgs = Array.from(document.querySelectorAll('#afterThumbs img')).map(i=>i.src);
- 
-  const projectNo = escapeHtml($('project').value || '—');
-  const poNo = escapeHtml($('ponumber').value || '—');
-  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
-  const formattedDate = formatDateWithOrdinal(dateVal);
-  const company = escapeHtml($('custCompany').value || '—');
-  const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
- 
-  const printCss = `
-    @page { counter-increment: page}
-    body{font-family:Helvetica,Arial,sans-serif;color:#111;margin:0;padding:20px;counter-reset:page}
-    .banner{width:100%;height:auto;margin-bottom:12px}
-    .title{font-size:18px;font-weight:700;text-align:center;margin:6px 0}
-    .subtitle{font-size:14px;text-align:center;color:#333;margin-bottom:14px}
-    h3{margin-top:16px;font-size:15px}
-    table{border-collapse:collapse;width:100%}
-    th,td{border:1px solid #ddd;padding:8px;text-align:center}
-    th{background:#f7f7f7}
-    .sig-img{max-width:320px;border:1px solid #000;border-radius:6px}
-    .photo-page {display: flex;flex-direction: column;justify-content: space-around;align-items: centre;padding: 20px;gap: 12px}
-    .photo-half{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:centre;width:100%}
-    .photo-half img{max-width:100%;height:auto;max-height:45vh;object-fit:contain;border-radius:6px}
-    .photo-caption{text-align:center;color:#000;margin-top:-20px;font-size:12px}
-    .footer{position:fixed;left:0;right:0;bottom:1px;font-size:8px;color:#666;display:flex;justify-content:space-between;padding:0 20px;width:100%;opacity:0.5}
-    .footer .page:before{content:"Page " counter(page) " of " counter(pages)}
-    .logo-small{position:fixed;left:16px;top:1px;width:64px;opacity:0.0}
- 
-    /* Custom spacing for specific fields */
-    .row-project-number { margin-bottom: 0px; display:block; }
-  .row-purchase-order-number { margin-bottom: 12px; display:block; }
-    .row-sales-engineer { margin-bottom: 0px; display:block; }
-    .row-sales-email { margin-bottom: 10px; display:block; }
-    .row-point-contact { margin-bottom: -10px; display:block; }
-  `;
- 
-  let doc = '<!doctype html><html><head><meta charset="utf-8"><title>SSCo Report - '+ projectNo +' - '+ formattedDate+'</title><style>'+printCss+'</style></head><body>';
- 
-  // Banner only on first page
-  if(MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0){
-    doc += '<img class="banner" src="'+MAINTENANCE_B64+'">';
-  }
-  doc += '<div class="title">Engineers Report</div>';
-  doc += '<div style="text-align:center;font-weight:700;margin-bottom:6px">'+sscoTitle+'</div>';
-  doc += '<div class="subtitle">Prepared for <strong>'+company+'</strong></div>';
-  doc += prepared.innerHTML;
- 
-  // photos section
- 
- 
-  // Footer slogan + dynamic page numbers + Bottle.png on later pages
-  doc += '<div class="footer"><div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div><div class="page"></div></div>';
-  if(BOTTLE_B64 && BOTTLE_B64.indexOf('data:') === 0){
-    doc += '<img class="logo-small" src="'+BOTTLE_B64+'">';
-}
- 
-  doc += '</body></html>';
- 
-    // --- open a blank tab silently (do NOT print yet)
-const w = window.open('', '_blank');
-w.document.open();
-w.document.write(doc);
-w.document.close();
-w.focus();
- 
-// store reference globally so we can print later from the modal
-window.lastBuiltPdfWindow = w;
- 
-// return the window for reference
-return w;
+function buildPdf() {
+  // capture signatures BEFORE cloning
+  const sig1 = $('sig1').toDataURL();
+  const sig2 = $('sig2').toDataURL();
+  const sigData = [sig1, sig2];
+
+  const clone = $('formContainer').cloneNode(true);
+  const prepared = prepareForPdf(clone, sigData);
+
+  const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i => i.src);
+  const afterImgs = Array.from(document.querySelectorAll('#afterThumbs img')).map(i => i.src);
+
+  const projectNo = escapeHtml($('project').value || '—');
+  const poNo = escapeHtml($('ponumber').value || '—');
+  const dateVal = $('date').value || new Date().toISOString().slice(0, 10);
+  const formattedDate = formatDateWithOrdinal(dateVal);
+  const company = escapeHtml($('custCompany').value || '—');
+  const sscoTitle = 'SSCo – Engineers Report — Project ' + projectNo + ' — ' + formattedDate;
+
+  const printCss = `
+    @page { counter-increment: page; margin: 20mm; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      color: #111;
+      margin: 0;
+      padding: 20px;
+      counter-reset: page;
+    }
+    .banner {
+      display: block;
+      width: 100%;
+      max-width: 720px;
+      height: auto;
+      margin: 0 auto 12px;
+      object-fit: contain;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      margin: 6px 0;
+    }
+    .subtitle {
+      font-size: 14px;
+      text-align: center;
+      color: #333;
+      margin-bottom: 14px;
+    }
+    h3 {
+      margin-top: 16px;
+      font-size: 15px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    th { background: #f7f7f7; }
+    .sig-img {
+      max-width: 320px;
+      border: 1px solid #000;
+      border-radius: 6px;
+    }
+    .photo-page {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      padding: 20px;
+      gap: 12px;
+    }
+    .photo-half img {
+      max-width: 100%;
+      height: auto;
+      max-height: 45vh;
+      object-fit: contain;
+      border-radius: 6px;
+    }
+    .photo-caption {
+      text-align: center;
+      color: #000;
+      margin-top: -20px;
+      font-size: 12px;
+    }
+    .footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 1px;
+      font-size: 8px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      width: 100%;
+      opacity: 0.5;
+    }
+    .footer .page:before {
+      content: "Page " counter(page);
+    }
+    .logo-small {
+      position: fixed;
+      left: 16px;
+      top: 1px;
+      width: 64px;
+      opacity: 0.0;
+    }
+    ul { margin: 4px 0 12px 24px; padding: 0; }
+    li { margin-bottom: 4px; line-height: 1.45; }
+  `;
+
+  let doc = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>SSCo Report - ${projectNo} - ${formattedDate}</title>
+        <style>${printCss}</style>
+      </head>
+      <body>
+  `;
+
+  // Banner only on first page
+  if (MAINTENANCE_B64 && MAINTENANCE_B64.indexOf('data:') === 0) {
+    doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="SSCo Banner">`;
+  }
+
+  doc += `
+    <div class="title">Engineers Report</div>
+    <div style="text-align:center;font-weight:700;margin-bottom:6px">${sscoTitle}</div>
+    <div class="subtitle">Prepared for <strong>${company}</strong></div>
+  `;
+
+  // --- Convert specific textareas into bullet lists ---
+  const bulletify = (id, label) => {
+    const el = $(id);
+    if (el && el.value.trim()) {
+      const items = el.value
+        .split(/\n+/)
+        .map(line => line.trim())
+        .filter(line => line)
+        .map(line => `<li>${line}</li>`)
+        .join("");
+      return `<h3>${label}</h3><ul>${items}</ul>`;
+    }
+    return "";
+  };
+
+  doc += bulletify("report", "Report Details:");
+  doc += bulletify("partsUsed", "Parts Used:");
+  doc += bulletify("partsReq", "Parts Required (To Be Quoted):");
+
+  // --- Rest of form fields ---
+  doc += prepared.innerHTML;
+
+  // Footer + slogan
+  doc += `
+    <div class="footer">
+      <div style="font-style:italic">
+        MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count
+      </div>
+      <div class="page"></div>
+    </div>
+  `;
+
+  if (BOTTLE_B64 && BOTTLE_B64.indexOf('data:') === 0) {
+    doc += `<img class="logo-small" src="${BOTTLE_B64}">`;
+  }
+
+  doc += `</body></html>`;
+
+  // --- open a blank tab silently (do NOT print yet)
+  const w = window.open('', '_blank');
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
+  w.focus();
+
+  // store reference globally so we can print later from the modal
+  window.lastBuiltPdfWindow = w;
+
+  return w;
 }
 
 
