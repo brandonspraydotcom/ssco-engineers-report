@@ -1807,26 +1807,6 @@ function buildPdf(existingWindow = null) {
   const company = $('custCompany').value || '—';
   const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
 
-  // --- Before / After Photos ---
-  const beforeImgs = Array.from(document.querySelectorAll('#beforeThumbs img')).map(i => i.src);
-  const afterImgs  = Array.from(document.querySelectorAll('#afterThumbs img')).map(i => i.src);
-
-  const photoHTML = `
-    <div class="photo-page">
-      <h3>Before Photos</h3>
-      <div class="photo-half">
-        ${beforeImgs.length ? beforeImgs.map(src => `<img src="${src}" alt="">`).join('') : '<p>No photos</p>'}
-      </div>
-      <h3>After Photos</h3>
-      <div class="photo-half">
-        ${afterImgs.length ? afterImgs.map(src => `<img src="${src}" alt="">`).join('') : '<p>No photos</p>'}
-      </div>
-    </div>
-  `;
-
-  // Append photos to end of prepared form
-  prepared.insertAdjacentHTML('beforeend', photoHTML);
-
   // --- Print styling ---
   const css = `
     @page { margin: 20mm; counter-increment: page; }
@@ -1859,7 +1839,7 @@ function buildPdf(existingWindow = null) {
 
   // Title block
   doc += `
-    <div class="title">Engineers Report</div>
+    // <div class="title">Engineers Report</div>
     <div style="text-align:center;font-weight:700">${sscoTitle}</div>
     <div style="text-align:center;margin-bottom:14px">Prepared for <strong>${company}</strong></div>
     ${prepared.innerHTML}
