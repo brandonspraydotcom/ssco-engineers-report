@@ -69,7 +69,7 @@ select {
   color: #fff;
   padding: 8px 14px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 600;
   z-index: 999999;
   pointer-events: none;
@@ -1769,6 +1769,14 @@ function buildPdf(existingWindow = null) {
   const sig1 = $('sig1').toDataURL();
   const sig2 = $('sig2').toDataURL();
   const clone = $('formContainer').cloneNode(true);
+  // ✅ Copy photo thumbnails into the cloned form before building PDF
+["beforeThumbs", "afterThumbs"].forEach(id => {
+  const originalList = document.getElementById(id);
+  const cloneList = clone.querySelector("#" + id);
+  if (originalList && cloneList) {
+    cloneList.innerHTML = originalList.innerHTML;
+  }
+});
   const prepared = prepareForPdf(clone, [sig1, sig2]);
 
   // --- Get textarea values before removing them ---
