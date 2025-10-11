@@ -1839,7 +1839,7 @@ function buildPdf(existingWindow = null) {
 
   // Title block
   doc += `
-    // <div class="title">Engineers Report</div>
+    
     <div style="text-align:center;font-weight:700">${sscoTitle}</div>
     <div style="text-align:center;margin-bottom:14px">Prepared for <strong>${company}</strong></div>
     ${prepared.innerHTML}
@@ -2518,83 +2518,71 @@ document.addEventListener("DOMContentLoaded", () => {
 }, 3000);
   }
 });
+</script>
 
+<script>
 // === Native Share API (iPad / Android / Desktop Chrome) ===
 if (navigator.share) {
   if (!window.shareButtonInjected) {
-  window.shareButtonInjected = true;
-  window.addEventListener('load', () => {
-    const sendEmailBtn = document.getElementById('sendEmail');
-    if (!sendEmailBtn) return;
+    window.shareButtonInjected = true;
+    window.addEventListener('load', () => {
+      const sendEmailBtn = document.getElementById('sendEmail');
+      if (!sendEmailBtn) return;
 
-    // Create icon-only Share button
-    const shareBtn = document.createElement('button');
-    shareBtn.id = 'shareReport';
-    shareBtn.className = 'btn btn-primary h-[42px] w-[42px] flex items-center justify-center ml-2 rounded-full shadow-sm hover:scale-[1.05] transition-transform';
-    shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
+      const shareBtn = document.createElement('button');
+      shareBtn.id = 'shareReport';
+      shareBtn.className = 'btn btn-primary h-[42px] w-[42px] flex items-center justify-center ml-2 rounded-full shadow-sm hover:scale-[1.05] transition-transform';
+      shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
+      sendEmailBtn.insertAdjacentElement('afterend', shareBtn);
 
-    // Insert right next to Send Email
-    sendEmailBtn.insertAdjacentElement('afterend', shareBtn);
+      shareBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
 
-    // Click handler (same validation as send email)
-    shareBtn.addEventListener('click', async (e) => {
-  e.preventDefault();
+        // 🔸 Require that PDF has been saved
+        if (!localStorage.getItem("pdfSaved") || !lastPdfBlob) {
+          bump('warning');
+          showToast('⚠️ Please save the PDF before sharing.', 'warning');
+          const saveBtn = document.getElementById('savePdf');
+          saveBtn.style.animation = 'pulse 1s ease-in-out 2';
+          setTimeout(() => (saveBtn.style.animation = ''), 2000);
+          return;
+        }
 
-  // Step 1: Check if PDF saved
-  if (!hasSavedPdf()) {
-    bump('warning');
-    showToast('⚠️ Please save the PDF before sharing.', 'warning');
-    const saveBtn = document.getElementById('savePdf');
-    saveBtn.style.animation = 'pulse 1s ease-in-out 2';
-    setTimeout(() => (saveBtn.style.animation = ''), 2000);
-    return;
-  }
+        try {
+          bump("info");
+          showToast("Preparing PDF for sharing…", "info");
 
-  // Step 2: Validate important fields
-  const valid = validateImportantFields();
-  if (!valid) {
-    bump('warning');
-    showToast('⚠️ Please complete highlighted fields before sharing.', 'warning');
-    const firstMissing = document.querySelector('.highlight-missing, [style*="box-shadow"]');
-    if (firstMissing) {
-      firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-    return;
-  }
+          const projectNo = document.getElementById('project')?.value || 'Report';
+          const pdfName = `Engineer_Report_${projectNo}.pdf`;
 
-  // Step 3: All good → Share the same built PDF
-  try {
-    const w = window.lastBuiltPdfWindow;
-    if (!w || w.closed) {
-      showToast('⚠️ PDF not available, please Save PDF again.', 'warning');
-      return;
-    }
+          // 🧩 Create a file from the stored blob
+          const file = new File([lastPdfBlob], pdfName, { type: 'application/pdf' });
 
-    const pdfName = `Engineer_Report_${document.getElementById('project')?.value || 'Report'}.pdf`;
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: 'Engineer Report',
+              text: 'Shared from the SSCo Engineer App',
+              files: [file],
+            });
+            bump('success');
+            showToast('✅ Shared successfully!', 'success');
+          } else {
+            // fallback — open preview
+            const url = URL.createObjectURL(lastPdfBlob);
+            window.open(url, '_blank');
+            showToast('⚠️ Sharing not supported, preview opened', 'warning');
+          }
+        } catch (err) {
+          console.error('Share failed:', err);
+          bump('error');
+          showToast('❌ Sharing failed or canceled', 'error');
+        }
+      });
 
-    // ✅ Convert window HTML to PDF blob
-    const blob = await html2pdf().from(w.document.body).output('blob');
-    const file = new File([blob], pdfName, { type: 'application/pdf' });
-
-    await navigator.share({
-      title: 'Engineer Report',
-      text: 'Shared from the SSCo Engineer App.',
-      files: [file]
+      if (window.lucide?.createIcons) lucide.createIcons();
     });
-
-    showToast('✅ Shared successfully!', 'success');
-  } catch (err) {
-    console.warn('Share canceled or failed', err);
-    showToast('Share canceled or failed.', 'info');
   }
-});
-
-
-       // Refresh Lucide icons
-    if (window.lucide?.createIcons) lucide.createIcons();
-  }); // end window.load
- } // end if (!window.shareButtonInjected)
-} // end if (navigator.share)
+}
 </script>
 
 
@@ -2636,26 +2624,6 @@ if (navigator.share) {
     <button id="qbSave" class="btn green">💾 Save PDF</button>
     <button id="qbEmail" class="btn" style="background:#2b6cff;color:white">📧 Email</button>
   </div>
-</div>
-
-<!-- Zoom Indicator -->
-<div id="zoomIndicator"
-     style="
-       position: fixed;
-       top: 20px;
-       right: 20px;
-       background: rgba(0, 0, 0, 0.8);
-       color: #fff;
-       padding: 8px 14px;
-       border-radius: 8px;
-       font-size: 14px;
-       font-weight: 600;
-       z-index: 999999;
-       pointer-events: none;
-       opacity: 0;
-       transition: opacity 0.3s ease;
-       font-family: system-ui, sans-serif;">
-  100%
 </div>
 
 <script>
@@ -3037,6 +3005,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const w = isPWA ? null : window.open('', '_blank'); // don’t open tab in PWA
       const pdfWin = buildPdf(w); // pass window ref to buildPdf
       window.lastBuiltPdfWindow = pdfWin;
+      lastPdfBlob = await html2pdf().from(pdfWin.document?.body || document.body).output('blob');
 
       // Safari PWA: we don’t open new tab, we’ll trigger hidden iframe print
       if (isPWA && pdfWin?.iframePrint) {
@@ -3116,96 +3085,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
-<script>
-// --- 🧹 Clear Form Modal (Animated) ---
-document.addEventListener("DOMContentLoaded", () => {
-  const clearBtn   = document.getElementById("clearForm");
-  const modal      = document.getElementById("clearConfirmModal");
-  const box        = document.getElementById("clearConfirmBox");
-  const ok         = document.getElementById("clearConfirmOk");
-  const cancel     = document.getElementById("clearConfirmCancel");
-
-  if (!clearBtn || !modal || !box) {
-    console.warn("❌ Clear Form setup failed — missing elements.");
-    return;
-  }
-
-  // --- Show modal ---
-  clearBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    bump("warning");
-    showToast("⚠️ Preparing to clear form", "warning");
-
-  // Show modal
-  modal.style.display = "flex";
-  // ensure the CSS class gets applied next frame even if something slow runs
-  requestAnimationFrame(() => modal.classList.add("show"));
-  // don't let a missing helper kill it
-  if (typeof lockScroll === "function") lockScroll();
-  });
-
-  // --- Cancel button ---
-  cancel.addEventListener("click", () => {
-    bump("info");
-    showToast("Action cancelled", "info");
-    closeModal();
-  });
-
-  // --- Confirm clear ---
-  ok.addEventListener("click", () => {
-    try {
-      bump("error");
-      showToast("🧹 Clearing all data…", "error");
-
-      // 1️⃣ Clear all non-button, non-file inputs & textareas
-      document.querySelectorAll("input, textarea, select").forEach(el => {
-        if (!el || ["button", "submit", "file"].includes(el.type)) return;
-        el.value = "";
-      });
-
-      // 2️⃣ Clear signatures
-      ["sig1", "sig2"].forEach(id => {
-        const c = document.getElementById(id);
-        if (c && c.getContext) {
-          const ctx = c.getContext("2d");
-          ctx.clearRect(0, 0, c.width, c.height);
-          localStorage.removeItem("sig_" + id);
-        }
-      });
-
-      // 3️⃣ Clear thumbnails
-      ["beforeThumbs", "afterThumbs"].forEach(id => {
-        const list = document.getElementById(id);
-        if (list) list.innerHTML = "";
-        localStorage.removeItem(id);
-      });
-
-      // 4️⃣ Reset flags + storage safely
-      if (typeof clearPdfSaved === "function") clearPdfSaved();
-
-      bump("success");
-      showToast("✅ Form cleared successfully", "success");
-
-    } catch (err) {
-      console.error("⚠️ Clear form failed:", err);
-      showToast("❌ Error clearing form", "error");
-    } finally {
-      closeModal();
-    }
-  });
-
-  // --- Close helper ---
-  function closeModal() {
-    modal.classList.remove("show");
-    unlockScroll(); // unlock scroll
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
-    modal.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 250);
-  }
-});
-</script>
-
 <style>
 /* 🔥 Clear Form Modal (same style language as Save PDF) */
 
@@ -3229,16 +3108,6 @@ document.addEventListener("DOMContentLoaded", () => {
   transition:transform 0.2s ease;
 }
 </style>
-
-<script>
-function lockScroll() {
-  document.body.classList.add("modal-open");
-}
-
-function unlockScroll() {
-  document.body.classList.remove("modal-open");
-}
-</script>
 
 <style>
 @keyframes glowPulse {
