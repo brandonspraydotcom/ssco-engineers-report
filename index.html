@@ -863,7 +863,6 @@ async function compressImage(file, maxDim = 1600, quality = 0.7) {
 
     reader.onload = e => {
       img.onload = () => {
-        // --- Resize proportionally to fit within maxDim ---
         let { width, height } = img;
         if (width > height && width > maxDim) {
           height *= maxDim / width;
@@ -872,20 +871,14 @@ async function compressImage(file, maxDim = 1600, quality = 0.7) {
           width *= maxDim / height;
           height = maxDim;
         }
-
-        // --- Draw resized image onto canvas ---
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        // --- Convert back to compressed Blob URL ---
-        canvas.toBlob(
-          blob => resolve(URL.createObjectURL(blob)),
-          "image/jpeg",
-          quality
-        );
+        // ✅ Return inline data URL (works 100% with html2pdf)
+        resolve(canvas.toDataURL("image/jpeg", quality));
       };
       img.src = e.target.result;
     };
