@@ -483,6 +483,8 @@ document.addEventListener("DOMContentLoaded", () => {
     container.appendChild(frag);
   }
 });
+
+window.clearPdfSaved = clearPdfSaved;
 </script>
 
 <style>
@@ -738,13 +740,6 @@ document.addEventListener("DOMContentLoaded", () => {
 					</div>
 				</div>
 			</div>
-     <!-- Zoom Indicator -->
-	<div id="zoomIndicator"
-     style="display:none;position:absolute;top:16px;right:16px;
-            background:rgba(0,0,0,0.7);color:white;padding:6px 12px;
-            border-radius:8px;font-size:14px;font-weight:500;
-            z-index:9999;transition:opacity 0.3s ease;">
-	</div>
 			<!-- /Annotator Modal -->
 
   
@@ -767,6 +762,8 @@ function clearPdfSaved() {
 function hasSavedPdf() {
   return localStorage.getItem('pdfSaved') === 'true';
 }
+window.markPdfSaved = markPdfSaved;
+window.hasSavedPdf = hasSavedPdf;
 
 
 /* ---------- Helpers ---------- */
@@ -903,7 +900,7 @@ async function previewFiles(inputEl, targetId){
   const files = Array.from(inputEl.files);
   // process sequentially (bounded) to avoid memory spikes on iPad
   for (const file of files) {
-    const url = await processImageInWorker(file, { maxDim: 2000, quality: 0.72 });
+    const url = await compressImage(file, 2000, 0.72);
     const wrap = document.createElement('div'); wrap.className='photoWrap';
     const img = document.createElement('img'); img.className='thumb'; img.src = url; img.alt = file.name;
     const btn = document.createElement('button'); btn.type='button'; btn.className='removePhoto'; btn.textContent='✖';
@@ -1767,7 +1764,7 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 let lastPdfBlob = null;
 
 /* ---------- Build printable doc (light) and open it ---------- */
-function buildPdf() {
+function buildPdf(existingWindow = null) {
   // --- Capture signatures first ---
   const sig1 = $('sig1').toDataURL();
   const sig2 = $('sig2').toDataURL();
@@ -1890,29 +1887,39 @@ if (isPWA) {
   return { iframePrint: iframe.contentWindow };
 } else {
   // ✅ Regular browser method
-  const w = window.open('', '_blank');
-  w.document.open();
-  w.document.write(doc);
-  w.document.close();
-  w.focus();
+  if (existingWindow) {
+  // ✅ Use provided window (e.g., if already opened elsewhere)
+  existingWindow.document.open();
+  existingWindow.document.write(doc);
+  existingWindow.document.close();
+  existingWindow.focus();
+  return existingWindow;
+}
 
-  return w;
+if (isPWA) {
+  // ✅ Hidden iframe (no visible tab)
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+  const idoc = iframe.contentWindow.document;
+  idoc.open();
+  idoc.write(doc);
+  idoc.close();
+  return { iframePrint: iframe.contentWindow };
+}
+
+// ✅ Normal browser fallback
+const w = window.open('', '_blank');
+w.document.open();
+w.document.write(doc);
+w.document.close();
+w.focus();
+return w;
 }
 }
 
 
 /* ---------- Buttons ---------- */
-
-// $('sendEmail').addEventListener('click', e => {
-  // e.preventDefault();
-  // const to = document.getElementById("custEmail").value || "";
-  // const cc = document.getElementById("salesEmail").value || "";  // from input field
-  // const bcc = "info.uk@spray.com"; // fixed hardcoded address
-  // const subject = `Engineers Report — ${$('project').value || ''} — ${$('date').value || ''}`;
-
-  // const custName = $('custName').value.trim() || 'Customer';
-  // const engineer = $('engineer').value.trim() || 'Your SSCo Engineer';
-  // const salesName = $('SalesName').value.trim() || '';
 
   // Build email body
   let body = `Hi ${custName},\n\n`;
@@ -2320,36 +2327,6 @@ function playClickSound(type = "medium") {
   } catch (e) {
     console.warn("AudioContext unavailable:", e);
   }
-}
-</script>
-
-<script>
-// --- Toast Helper ---
-function showToast(message, type = 'success') {
-  const el = document.getElementById('toast');
-  if (!el) return;
-
-  const colors = {
-    success: '#1ea64a',
-    error:   '#e43c3c',
-    info:    '#1f6feb'
-  };
-
-  el.textContent = message;
-  el.style.background = colors[type] || colors.success;
-
-// Haptic feedback based on type
-  bump(type);
-
-  // Start visible + slightly lifted
-  el.style.opacity = '1';
-  el.style.transform = 'translateX(-50%) translateY(0)';
-
-  // Hide after 3s
-  setTimeout(() => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(-50%) translateY(20px)';
-  }, 3000);
 }
 </script>
 
@@ -3402,27 +3379,6 @@ if ('serviceWorker' in navigator) {
 }
 
 </script>
-
-<!-- Clear Form Confirmation Modal -->
-<div id="clearConfirmModal" style="
-  display:none;position:fixed;inset:0;z-index:2000;
-  background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);
-  align-items:center;justify-content:center;">
-  <div style="
-    background:#b32121;color:white;padding:22px 28px;
-    border-radius:12px;max-width:360px;text-align:center;
-    box-shadow:0 0 20px rgba(0,0,0,0.6);">
-    <h3 style="margin-top:0;">⚠️ Clear All Fields?</h3>
-    <p style="font-size:15px;margin:12px 0 20px;">
-      This will permanently erase <strong>every input, image, and signature</strong> on this page.<br><br>
-      Are you sure you wish to proceed?
-    </p>
-    <div style="display:flex;gap:10px;justify-content:center;">
-      <button id="confirmClear" class="btn remove" style="background:#ff4d4d;">Yes, Clear</button>
-      <button id="cancelClear" class="btn ghost" style="border-color:white;color:white;">Cancel</button>
-    </div>
-  </div>
-</div>
 
 <script>
 // --- CLEAR FORM CONFIRMATION MODAL ---
