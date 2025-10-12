@@ -15,7 +15,7 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then(reg => {
       function promptUpdate(worker) {
-        showToast('New version available — tap to update', 'info');
+        showToast('New version availabl — tap to update', 'info');
         document.getElementById('toast')?.addEventListener('click', () => {
           worker.postMessage({ type: 'SKIP_WAITING' });
         }, { once: true });
@@ -62,20 +62,23 @@ select {
 }
 
 #zoomIndicator {
-  position: fixed !important;
-  top: 20px;
-  right: 20px;
-  background: rgba(0,0,0,0.75);
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 20, 0.9);
   color: #fff;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 20px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 15px;
   font-weight: 600;
-  z-index: 999999;
-  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  z-index: 999999 !important; /* ← must be above annotator modal */
   opacity: 0;
-  transition: opacity 0.3s ease;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
 }
+
 #zoomIndicator.visible {
   opacity: 1 !important;
 }
@@ -84,6 +87,15 @@ select {
   0% { transform: scale(1); }
   50% { transform: scale(1.15); }
   100% { transform: scale(1); }
+}
+
+#annotatorCanvas,
+#annotatorContainer,
+#annotatorModal {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
 }
 
 #annotatorModal .btn.ghost { background: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.06); }
@@ -309,6 +321,19 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   aspect-ratio: 1/1;
   padding: 0;
   border-radius: 8px;
+}
+
+/* Remove Safari blue touch highlight during zoom/pinch */
+#annotatorModal img,
+#annotatorStage canvas,
+#annotatorStage div,
+#annotatorStage {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: none !important;
+  outline: none !important;
 }
 
 </style>
@@ -946,7 +971,7 @@ function applyTransform(animated = false, springy = false) {
   // --- Apply transition styles ---
   if (animated) {
     wrapperEl.style.transition = springy
-      ? 'transform 0.4s cubic-bezier(0.22, 1.15, 0.55, 1.0)' // natural spring
+      ? 'transform 0.4s cubic-bezier(0.22, 1.15, 0.55, 1.0)'
       : 'transform 0.25s ease-out';
   } else {
     wrapperEl.style.transition = 'none';
@@ -956,17 +981,8 @@ function applyTransform(animated = false, springy = false) {
   wrapperEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
   wrapperEl.style.transformOrigin = 'center center';
 
-  // --- Show zoom indicator (top-right overlay) ---
-showZoomIndicator(zoom);
-const indicator = document.getElementById('zoomIndicator');
-  if (indicator) {
-    indicator.textContent = `Zoom: ${(zoom * 100).toFixed(0)}%`;
-    indicator.style.opacity = '1';
-    clearTimeout(indicator.hideTimeout);
-    indicator.hideTimeout = setTimeout(() => {
-      indicator.style.opacity = '0';
-    }, 1200);
-  }
+  // ✅ Show zoom overlay indicator
+  showZoomIndicator(zoom);
 }
 
   function getTouchDist(touches){
@@ -1056,21 +1072,6 @@ const indicator = document.getElementById('zoomIndicator');
       showZoomIndicator(zoom);
       bump('info');
     }, { passive:false });
-
-// --- Zoom Overlay Indicator ---
-let zoomIndicatorTimeout;
-function showZoomIndicator(level) {
-  const el = document.getElementById('zoomIndicator');
-  if (!el) return;
-
-  el.textContent = `${Math.round(level * 100)}%`;
-  el.style.opacity = '1';
-  clearTimeout(zoomIndicatorTimeout);
-
-  zoomIndicatorTimeout = setTimeout(() => {
-    el.style.opacity = '0';
-  }, 1000); // fade out after 1 s
-}
 
     // --- Touch and pan / pinch ---
 // --- Touch and pan / pinch (2-finger) ---
@@ -1377,20 +1378,24 @@ wrapper.addEventListener('dblclick', () => {
 
 })();
 
-  const zoomIndicator = document.getElementById('zoomIndicator');
-  let zoomTimeout;
+let zoomIndicator;
+let zoomTimeout;
 
-  function showZoomIndicator(level) {
-    if (!zoomIndicator) return;
-    zoomIndicator.textContent = Math.round(level * 100) + '%';
-    zoomIndicator.style.display = 'block';
-    zoomIndicator.style.opacity = '1';
-    clearTimeout(zoomTimeout);
-    zoomTimeout = setTimeout(() => {
-      zoomIndicator.style.opacity = '0';
-      setTimeout(() => zoomIndicator.style.display = 'none', 300);
-    }, 800);
-  }
+document.addEventListener('DOMContentLoaded', () => {
+  zoomIndicator = document.getElementById('zoomIndicator');
+});
+
+function showZoomIndicator(level) {
+  if (!zoomIndicator) return;
+  zoomIndicator.textContent = Math.round(level * 100) + '%';
+  zoomIndicator.style.display = 'block';
+  zoomIndicator.style.opacity = '1';
+  clearTimeout(zoomTimeout);
+  zoomTimeout = setTimeout(() => {
+    zoomIndicator.style.opacity = '0';
+    setTimeout(() => zoomIndicator.style.display = 'none', 300);
+  }, 800);
+}
 
 // ✅ Helper — preserve bullet points and paragraphs in text fields
 function formatTextForPdf(text) {
@@ -2626,26 +2631,6 @@ if (navigator.share) {
             transition:all .35s cubic-bezier(0.23,1,0.32,1);">
 </div>
 
-<!-- Zoom Overlay Indicator (always on top) -->
-<div id="zoomIndicator"
-     style="position:fixed;
-            bottom:90px;
-            left:50%;
-            transform:translateX(-50%);
-            background:rgba(20,20,20,0.9);
-            color:#fff;
-            font-size:15px;
-            padding:6px 16px;
-            border-radius:24px;
-            opacity:0;
-            pointer-events:none;
-            transition:opacity .25s ease;
-            z-index:99999;
-            box-shadow:0 2px 8px rgba(0,0,0,0.5);
-            font-family:system-ui, sans-serif;">
-  100%
-</div>
-
 <!-- Quick Actions Bar -->
 <div id="quickBar" style="display:none;position:fixed;left:50%;bottom:28px;
   transform:translateX(-50%);z-index:3500;background:rgba(30,30,31,0.92);
@@ -3471,6 +3456,9 @@ window.addEventListener("load", initAutocomplete);
 <!-- PDF generation libraries (must be loaded BEFORE buildPdf runs) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+<!-- Zoom indicator (global, visible for annotator zoom) -->
+<div id="zoomIndicator">100%</div>
 
 </body>
 </html>
