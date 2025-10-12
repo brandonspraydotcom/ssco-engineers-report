@@ -1872,12 +1872,51 @@ function buildPdf(existingWindow = null) {
     doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="">`;
   }
 
-  // Title block
+// Title block
+doc += `
+  <div style="text-align:center;font-weight:700">${sscoTitle}</div>
+  <div style="text-align:center;margin-bottom:14px">
+    Prepared for <strong>${company}</strong>
+  </div>
+  ${prepared.innerHTML}
+`;
+
+// === Include Before / After photos ===
+const beforeImgs = JSON.parse(localStorage.getItem("beforeThumbs") || "[]");
+const afterImgs = JSON.parse(localStorage.getItem("afterThumbs") || "[]");
+
+function buildTwoUp(label, images) {
+  let html = "";
+  for (let i = 0; i < images.length; i += 2) {
+    html += `
+      <div class="photo-page">
+        <div class="photo-slot">
+          <img src="${images[i]}" alt="${label} ${i + 1}">
+        </div>
+        <div class="photo-slot">
+          ${
+            images[i + 1]
+              ? `<img src="${images[i + 1]}" alt="${label} ${i + 2}">`
+              : `<div style="height:100%"></div>`
+          }
+        </div>
+      </div>
+    `;
+  }
+  return html;
+}
+
+// Append photos to PDF doc
+if (beforeImgs.length || afterImgs.length) {
   doc += `
-    
-    <div style="text-align:center;font-weight:700">${sscoTitle}</div>
-    <div style="text-align:center;margin-bottom:14px">Prepared for <strong>${company}</strong></div>
-    ${prepared.innerHTML}
+    <h2 style="page-break-before:always;text-align:center">Before Photos</h2>
+    ${buildTwoUp("Before", beforeImgs)}
+    <h2 style="page-break-before:always;text-align:center">After Photos</h2>
+    ${buildTwoUp("After", afterImgs)}
+  `;
+}
+
+doc += `
     <div class="footer">
       <div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
       <div class="page"></div>
