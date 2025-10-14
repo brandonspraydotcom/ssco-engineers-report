@@ -1829,7 +1829,7 @@ function buildPdf(existingWindow = null) {
 h3 {
   text-align: center;
   font-size: 18px;
-  margin: 6mm 0 2mm 0; /* Reduced gap above/below */
+  margin: 5mm 0 3mm 0; /* Reduced gap above/below */
   break-after: avoid;
   page-break-after: avoid;
 }
@@ -1837,10 +1837,11 @@ h3 {
 .photo-page {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: centre;
   align-items: center;
   height: calc(297mm - 24mm); /* A4 height minus margins */
   padding: 6mm 8mm;
+  gap: 8mm;
   page-break-after: always;
   break-after: always;
   box-sizing: border-box;
@@ -1852,10 +1853,12 @@ h3 {
 }
 
 .photo-slot {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 90%;
+  height: 42%;
+  max-height: 120mm;
   border: none;
   border-radius: 6px;
   margin: 4mm 0;
