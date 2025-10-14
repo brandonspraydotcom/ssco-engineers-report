@@ -1910,16 +1910,6 @@ doc += `
   ${prepared.innerHTML}
 `;
 
-// === Include Before / After photos ===
-if (beforeImgs.length || afterImgs.length) {
-  doc += `
-    <h2 style="page-break-before:always;text-align:center">Before Photos</h2>
-    ${buildSmartPhotoPages("beforeThumbs", "Before")}
-    <h2 style="page-break-before:always;text-align:center">After Photos</h2>
-    ${buildSmartPhotoPages("afterThumbs", "After")}
-  `;
-}
-
 doc += `
     <div class="footer">
       <div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
