@@ -1492,32 +1492,6 @@ function prepareForPdf(clone, sigData) {
     }
   }
 
-  // --- Build vertical (2 per page) photo layout ---
-  const buildVerticalPhotos = (containerId, label, addPageBreakBefore = false) => {
-    const container = document.getElementById(containerId);
-    if (!container || !container.querySelectorAll('img').length)
-      return '';
-
-    const imgs = Array.from(container.querySelectorAll('img'));
-    let html = `${addPageBreakBefore ? '<div class="page-break"></div>' : ''}`;
-    html += `<div class="divider"></div><div class="pdf-section"><div class="pdf-subtitle">${label} Photos:</div>`;
-
-    imgs.forEach((img, i) => {
-      html += `
-        <div class="pdf-photo-vertical">
-          <img src="${img.src}" alt="${label} photo ${i+1}" />
-        </div>
-        ${(i % 2 === 1) ? '<div class="page-break"></div>' : ''}  <!-- break after every 2 -->
-      `;
-    });
-
-    html += `</div>`;
-    return html;
-  };
-
-  const beforePhotos = buildVerticalPhotos('beforeThumbs', 'Before', true);
-  const afterPhotos  = buildVerticalPhotos('afterThumbs', 'After', true);
-
   // --- Build final HTML for PDF ---
   const html = `
     <style>
@@ -1621,13 +1595,46 @@ ${data.partsReq
         <div style="margin-top:4px;font-size:13px;font-weight:700;">${escapeHtml($('sig2Name')?.value || '—')}</div>
       </div>
     </div>
-
-    ${beforePhotos}
-    ${afterPhotos}
   `;
 
-  clone.innerHTML = html;
-  return clone;
+// ✅ Unified auto-scaling photo layout (2 per page, portrait-safe)
+function buildSmartPhotoPages(listId, label) {
+  const list = document.getElementById(listId);
+  if (!list) return "";
+
+  const imgs = Array.from(list.querySelectorAll("img"));
+  if (!imgs.length) return "";
+
+  let html = `<div class="page-break"></div><h2 style="text-align:center">${label} Photos</h2>`;
+
+  for (let i = 0; i < imgs.length; i += 2) {
+    html += `
+      <div class="photo-page">
+        <div class="photo-slot">
+          <img src="${imgs[i].src}" alt="${label} ${i + 1}">
+        </div>
+        <div class="photo-slot">
+          ${
+            imgs[i + 1]
+              ? `<img src="${imgs[i + 1].src}" alt="${label} ${i + 2}">`
+              : ""
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  return html;
+}
+
+// Append before/after photo pages to the HTML
+const photoPages = `
+  ${buildSmartPhotoPages('beforeThumbs', 'Before')}
+  ${buildSmartPhotoPages('afterThumbs', 'After')}
+`;
+
+clone.innerHTML = html + photoPages;
+return clone;
 }
 
 // === Safari/PWA-safe 2-up printing via hidden iframe ===
@@ -1822,12 +1829,14 @@ function buildPdf(existingWindow = null) {
     h3 { margin: 12px 0 6px; font-size: 15px; }
     ul { margin:6px 0 12px 20px; padding:0; }
     li { margin:4px 0; line-height:1.4; }
-    /* === Uniform 2-Up Photo Layout === */
+
+/* --- Smart Auto-Scaling 2-Per-Page Photo Layout --- */
 .photo-page {
   display: grid;
   grid-template-rows: 1fr 1fr;
-  gap: 12mm;
+  gap: 10mm;
   page-break-after: always;
+  min-height: calc(297mm - 20mm); /* full A4 minus margins */
   padding: 10mm;
   box-sizing: border-box;
 }
@@ -1836,21 +1845,21 @@ function buildPdf(existingWindow = null) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 0.5px solid #ccc;
+  border: 0.5px solid #aaa;
   border-radius: 6px;
-  overflow: hidden;
   background: #fafafa;
-  min-height: 120mm; /* ensures half-page size on A4 */
+  overflow: hidden;
+  page-break-inside: avoid;
 }
 
 .photo-slot img {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  object-position: center;
-  max-height: 100%;
   max-width: 100%;
+  max-height: 100%;
   aspect-ratio: auto;
+  border-radius: 4px;
 }
     .photo-half img { max-width: 100%; height: auto; max-height: 45vh; border-radius: 6px; object-fit: contain; }
     .footer { position:fixed; bottom:2px; left:0; right:0; font-size:8px; color:#666;
@@ -1882,39 +1891,7 @@ doc += `
 `;
 
 // === Include Before / After photos ===
-const beforeImgs = JSON.parse(localStorage.getItem("beforeThumbs") || "[]");
-const afterImgs = JSON.parse(localStorage.getItem("afterThumbs") || "[]");
 
-function buildTwoUp(label, images) {
-  let html = "";
-  for (let i = 0; i < images.length; i += 2) {
-    html += `
-      <div class="photo-page">
-        <div class="photo-slot">
-          <img src="${images[i]}" alt="${label} ${i + 1}">
-        </div>
-        <div class="photo-slot">
-          ${
-            images[i + 1]
-              ? `<img src="${images[i + 1]}" alt="${label} ${i + 2}">`
-              : `<div style="height:100%"></div>`
-          }
-        </div>
-      </div>
-    `;
-  }
-  return html;
-}
-
-// Append photos to PDF doc
-if (beforeImgs.length || afterImgs.length) {
-  doc += `
-    <h2 style="page-break-before:always;text-align:center">Before Photos</h2>
-    ${buildTwoUp("Before", beforeImgs)}
-    <h2 style="page-break-before:always;text-align:center">After Photos</h2>
-    ${buildTwoUp("After", afterImgs)}
-  `;
-}
 
 doc += `
     <div class="footer">
