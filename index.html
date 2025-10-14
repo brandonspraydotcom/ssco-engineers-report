@@ -54,6 +54,27 @@
   <title>SSCo — Engineers Report</title>
 
 <style>
+#testModeToggle {
+  position: relative;
+  z-index: 9999;
+}
+#testModeContainer { display: show; }
+#testModeBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #ff4747;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 0;
+  font-family: system-ui, sans-serif;
+  letter-spacing: 0.5px;
+  z-index: 9980;
+  pointer-events: none; /* ✅ allows clicks to pass through */
+}
+
 /* Prevent iOS Safari auto-zoom on input focus */
 input,
 textarea,
@@ -335,7 +356,6 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   touch-action: none !important;
   outline: none !important;
 }
-
 </style>
 </head>
 
@@ -568,6 +588,9 @@ document.addEventListener("DOMContentLoaded", () => {
        alt="Spraying Systems Co. Header"
        style="width:100%;max-height:90px;object-fit:contain;
               margin:6px 0;opacity:0;transition:opacity .6s ease;">
+</div>
+<div id="testModeContainer" style="position:absolute;top:50px;right:12px;font-size:12px;z-index:999;">
+  <label><input type="checkbox" id="testModeToggle"> Test Mode</label>
 </div>
   <div class="container" id="formContainer">
     <h1>Engineers Report</h1>
@@ -2414,6 +2437,221 @@ function validateBeforeEmail() {
 }
 
 </script>
+
+<script>
+// === Quick Fill / TEST MODE ===
+// === Quick Fill / Test Mode ===
+const testToggle = document.getElementById('testModeToggle');
+
+// --- Create a visible banner ---
+const banner = document.createElement('div');
+banner.id = 'testModeBanner';
+banner.textContent = '⚙️ TEST MODE ACTIVE';
+Object.assign(banner.style, {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  background: '#ff4747',
+  color: '#fff',
+  fontWeight: '700',
+  textAlign: 'center',
+  padding: '6px 0',
+  fontFamily: 'system-ui, sans-serif',
+  letterSpacing: '0.5px',
+  zIndex: 9998, // lower than checkbox overlay
+  display: 'none',
+});
+document.body.appendChild(banner);
+
+// --- Make sure the test toggle stays above the banner ---
+if (testToggle) {
+  testToggle.style.position = 'relative';
+  testToggle.style.zIndex = 9999;
+}
+
+testToggle?.addEventListener('change', e => {
+  const enabled = e.target.checked;
+
+  if (enabled) {
+    console.log("✅ Test Mode enabled");
+    banner.style.display = 'block';
+
+    const fill = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    };
+
+    // --- Fill important fields ---
+    fill('engineer', 'John Smith');
+    fill('date', new Date().toISOString().slice(0, 10));
+
+    // ✅ Randomize visit type
+    const visitTypes = [
+      "Maintenance Visit",
+      "Installation",
+      "Service Call",
+      "Site Survey",
+      "Commissioning",
+      "Repair & Calibration"
+    ];
+    const randomVisit = visitTypes[Math.floor(Math.random() * visitTypes.length)];
+    fill('visit', randomVisit);
+
+    fill('project', 'P-12345');
+    fill('ponumber', 'PO-98765');
+    fill('salesName', 'Sarah Johnson');
+    fill('salesEmail', 'sarah@ssco.com');
+    fill('custName', 'Mark Davies');
+    fill('custEmail', 'mark@greentech.com');
+    fill('custCompany', 'GreenTech Ltd.');
+    fill('addr1', '123 Industrial Park');
+    fill('city', 'Auckland');
+    fill('region', 'North Island');
+    fill('postal', '1010');
+    fill('country', 'New Zealand');
+    fill('projectDesc', 'Routine service and nozzle alignment.');
+    fill('report', 'Inspected the spray system. Replaced worn nozzles. Calibrated for uniform distribution.');
+    fill('partsUsed', '- 4x FlatFan 110-05 nozzles\n- 1x Gasket set');
+    fill('partsReq', '- New control valve\n- Spray monitor sensor');
+
+    // --- Fill signature print names ---
+    fill('sig1Name', 'John Smith');
+    fill('sig2Name', 'Mark Davies');
+
+    // --- Random test photos (portrait + landscape) ---
+    const randomImage = (isPortrait) => {
+      const w = isPortrait ? 820 : 1180;
+      const h = isPortrait ? 1180 : 820;
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = `hsl(${Math.random()*360}, 60%, 75%)`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#333';
+      ctx.font = `${Math.floor(w/15)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isPortrait ? '📱 Portrait' : '🖼️ Landscape', w/2, h/2);
+      return c.toDataURL();
+    };
+
+    const beforeThumbs = document.getElementById('beforeThumbs');
+    const afterThumbs = document.getElementById('afterThumbs');
+
+    if (beforeThumbs) {
+      beforeThumbs.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        const img = document.createElement('img');
+        const isPortrait = Math.random() < 0.5;
+        img.src = randomImage(isPortrait);
+        img.style.width = '120px';
+        img.style.height = 'auto';
+        beforeThumbs.appendChild(img);
+      }
+    }
+
+    if (afterThumbs) {
+      afterThumbs.innerHTML = '';
+      for (let i = 0; i < 5; i++) {
+        const img = document.createElement('img');
+        const isPortrait = Math.random() < 0.5;
+        img.src = randomImage(isPortrait);
+        img.style.width = '120px';
+        img.style.height = 'auto';
+        afterThumbs.appendChild(img);
+      }
+    }
+
+    // --- Signature squiggles ---
+    const drawSquiggle = (canvas, variation = 1) => {
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+
+      const startY = canvas.height / 2;
+      let amplitude = 6 + Math.random() * 4;
+      let freq = 18 + Math.random() * 8;
+
+      for (let x = 0; x < canvas.width; x += 10) {
+        const phase = (variation === 2 ? Math.PI / 3 : 0);
+        const y = startY + Math.sin(x / freq + phase) * amplitude + Math.random() * 3;
+        ctx.lineTo(x, y);
+      }
+
+      ctx.stroke();
+    };
+
+    drawSquiggle(document.getElementById('sig1'), 1);
+    drawSquiggle(document.getElementById('sig2'), 2);
+
+    // --- Time Records (auto-generate 1–3 days) ---
+    const timeList = document.getElementById('timeList');
+    if (timeList) {
+      timeList.innerHTML = '';
+      const numDays = Math.floor(Math.random() * 3) + 1;
+      for (let i = 0; i < numDays; i++) {
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'daySlot';
+
+        const baseDate = new Date();
+        baseDate.setDate(baseDate.getDate() - i);
+        const dateStr = baseDate.toISOString().slice(0, 10);
+
+        const start = 7 + Math.floor(Math.random() * 2);
+        const arrive = start + 1;
+        const depart = arrive + 6 + Math.floor(Math.random() * 2);
+        const end = depart + 1;
+
+        const total = (end - start);
+
+        dayDiv.innerHTML = `
+          <label>Date: <input type="date" value="${dateStr}"></label>
+          <div>Departed: <input type="time" value="${String(start).padStart(2, '0')}:00"></div>
+          <div>Arrived Site: <input type="time" value="${String(arrive).padStart(2, '0')}:00"></div>
+          <div>Departed Site: <input type="time" value="${String(depart).padStart(2, '0')}:00"></div>
+          <div>Arrival: <input type="time" value="${String(end).padStart(2, '0')}:00"></div>
+          <div class="dayTotal">${total}:00 hrs</div>
+        `;
+        timeList.appendChild(dayDiv);
+      }
+    }
+
+    console.log(`✅ Demo fields populated\nVisit Type: ${randomVisit}`);
+  } 
+  
+  // === CLEAR MODE ===
+  else {
+    console.log("🧹 Test Mode disabled — clearing form");
+    banner.style.display = 'none';
+
+    // Clear all inputs & textareas
+    document.querySelectorAll('input, textarea').forEach(el => {
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+      else el.value = '';
+    });
+
+    // Clear photos
+    document.getElementById('beforeThumbs')?.replaceChildren();
+    document.getElementById('afterThumbs')?.replaceChildren();
+
+    // Clear signatures
+    ['sig1', 'sig2'].forEach(id => {
+      const c = document.getElementById(id);
+      if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    });
+
+    // Clear time records
+    document.getElementById('timeList')?.replaceChildren();
+  }
+});
+// === TEST MODE END ===
+</script>
+
+
 
 <script>
 // === Important Field Validation ===
