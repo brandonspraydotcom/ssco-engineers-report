@@ -1868,12 +1868,13 @@ function buildPdf(existingWindow = null) {
   height: calc(297mm - 28mm);
   padding: 6mm 6mm 4mm;
   gap: 4mm;
-  page-break-after: always;
   box-sizing: border-box;
+  page-break-inside: avoid;
 }
 
-.photo-page.last {
-  page-break-after: auto;
+/* Apply page break only if it’s NOT the last photo-page in its section */
+.photo-page:not(:last-of-type) {
+  page-break-after: always;
 }
 
 .photo-slot {
