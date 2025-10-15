@@ -1599,9 +1599,12 @@ ${data.partsReq
   `;
 
 // Append before/after photo pages to the HTML
+const beforeCount = document.querySelectorAll('#beforeThumbs img').length;
+const afterCount = document.querySelectorAll('#afterThumbs img').length;
+
 const photoPages = `
   ${buildSmartPhotoPages('beforeThumbs', 'Before')}
-  ${buildSmartPhotoPages('afterThumbs', 'After')}
+  ${buildSmartPhotoPages('afterThumbs', 'After', beforeCount > 0)}
 `;
 
 clone.innerHTML = html + photoPages;
@@ -1616,7 +1619,7 @@ function buildSmartPhotoPages(listId, label) {
   const imgs = Array.from(list.querySelectorAll("img"));
   if (!imgs.length) return "";
 
-  let html = `<h3 style="page-break-before:always">${label} Photos</h3>`;
+  let html = "";
 
   for (let i = 0; i < imgs.length; i += 2) {
     const img1 = imgs[i];
@@ -1845,54 +1848,50 @@ function buildPdf(existingWindow = null) {
     li { margin:4px 0; line-height:1.4; }
 
 /* --- Smart Auto-Scaling 2-Per-Page Photo Layout --- */
-h3 {
+.photo-heading {
   text-align: center;
   font-size: 18px;
-  margin: 3mm 0 1mm 0; /* Reduced gap above/below */
-  break-after: avoid;
+  font-weight: 700;
+  margin-bottom: 6mm;
   page-break-after: avoid;
 }
 
 .photo-page {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  height: calc(297mm - 28mm); /* A4 height minus margins */
-  padding: 4mm 6mm;
-  gap: 0mm;
+  height: calc(297mm - 28mm);
+  padding: 6mm 6mm 4mm;
+  gap: 4mm;
   page-break-after: always;
-  break-after: always;
   box-sizing: border-box;
 }
 
-.photo-page:last-child,
-.photo-page:last-of-type {
-  break-after: auto;
+.photo-page.last {
   page-break-after: auto;
 }
 
 .photo-slot {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 85%;
-  height: 36%;
-  max-height: 120mm;
+  height: 40%;
+  max-height: 110mm;
   border: none;
-  border-radius: 6px;
   margin: 3mm 0;
   background: #fff;
   page-break-inside: avoid;
   overflow: hidden;
 }
 
-/* Portrait vs Landscape */
 .photo-slot img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .photo-slot img.portrait {
@@ -1905,6 +1904,11 @@ h3 {
   width: 95%;
   height: auto;
   max-width: 95%;
+}
+
+@media print {
+  .footer { display: none; }
+  .photo-page:last-of-type { page-break-after: avoid; }
 }
 
 .footer { 
@@ -1923,11 +1927,6 @@ h3 {
   content:"Page " counter(page); 
 }
 
-*/
-@media print {
-  .footer { display: none; }
-  .photo-page:last-of-type { page-break-after: avoid; }
-}
 @media print {
   body:last-child {
     break-after: avoid;
