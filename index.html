@@ -1616,13 +1616,12 @@ function buildSmartPhotoPages(listId, label) {
   const imgs = Array.from(list.querySelectorAll("img"));
   if (!imgs.length) return "";
 
-  let html = `<div class="page-break"></div><h2 style="text-align:center">${label} Photos</h2>`;
+  let html = `<h3 style="page-break-before:always">${label} Photos</h3>`;
 
   for (let i = 0; i < imgs.length; i += 2) {
     const img1 = imgs[i];
     const img2 = imgs[i + 1];
-    
-    // Detect orientation based on natural size or fallback ratio
+
     const getOrientation = img => {
       if (!img) return "";
       const w = img.naturalWidth || 1;
@@ -1630,21 +1629,16 @@ function buildSmartPhotoPages(listId, label) {
       return h > w ? "portrait" : "landscape";
     };
 
-    const o1 = getOrientation(img1);
-    const o2 = getOrientation(img2);
-
     html += `
-      <div class="photo-page">
+      <div class="photo-page${i + 2 >= imgs.length ? ' last' : ''}">
         <div class="photo-slot">
-          <img src="${img1.src}" alt="${label} ${i + 1}" class="${o1}">
+          <img src="${img1.src}" alt="${label} ${i + 1}" class="${getOrientation(img1)}">
         </div>
-        <div class="photo-slot">
-          ${
-            img2
-              ? `<img src="${img2.src}" alt="${label} ${i + 2}" class="${o2}">`
-              : `<div style="height:100%"></div>`
-          }
-        </div>
+        ${
+          img2
+            ? `<div class="photo-slot"><img src="${img2.src}" alt="${label} ${i + 2}" class="${getOrientation(img2)}"></div>`
+            : ''
+        }
       </div>
     `;
   }
@@ -1652,6 +1646,7 @@ function buildSmartPhotoPages(listId, label) {
   return html;
 }
 
+/*
 // === Safari/PWA-safe 2-up printing via hidden iframe ===
 async function printHtmlViaIframe(beforeImgs, afterImgs) {
   return new Promise((resolve, reject) => {
@@ -1777,6 +1772,7 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
     });
   });
 }
+*/
 </script>
 
 <script>
@@ -1860,9 +1856,9 @@ h3 {
 .photo-page {
   display: flex;
   flex-direction: column;
-  justify-content: centre;
+  justify-content: center;
   align-items: center;
-  height: calc(297mm - 24mm); /* A4 height minus margins */
+  height: calc(297mm - 28mm); /* A4 height minus margins */
   padding: 4mm 6mm;
   gap: 0mm;
   page-break-after: always;
@@ -1870,21 +1866,22 @@ h3 {
   box-sizing: border-box;
 }
 
+.photo-page:last-child,
 .photo-page:last-of-type {
-  break-after: avoid;
-  page-break-after: avoid;
+  break-after: auto;
+  page-break-after: auto;
 }
 
 .photo-slot {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 90%;
-  height: 38%;
+  width: 85%;
+  height: 36%;
   max-height: 120mm;
   border: none;
   border-radius: 6px;
-  margin: 4mm 0;
+  margin: 3mm 0;
   background: #fff;
   page-break-inside: avoid;
   overflow: hidden;
@@ -1924,6 +1921,12 @@ h3 {
 }
 .footer .page:before { 
   content:"Page " counter(page); 
+}
+
+*/
+@media print {
+  .footer { display: none; }
+  .photo-page:last-of-type { page-break-after: avoid; }
 }
 @media print {
   body:last-child {
