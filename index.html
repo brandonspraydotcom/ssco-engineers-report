@@ -1611,7 +1611,7 @@ clone.innerHTML = html + photoPages;
 return clone;
 }
 
-// ✅ Unified auto-scaling photo layout (2 per page, portrait-safe, no blank pages)
+// Build pages with explicit "break before next page" separators
 function buildSmartPhotoPages(listId, label, forceNewPage = false) {
   const list = document.getElementById(listId);
   if (!list) return "";
@@ -1619,34 +1619,37 @@ function buildSmartPhotoPages(listId, label, forceNewPage = false) {
   const imgs = Array.from(list.querySelectorAll("img"));
   if (!imgs.length) return "";
 
+  // helper
+  const orient = img => {
+    const w = img?.naturalWidth || 1, h = img?.naturalHeight || 1;
+    return h > w ? "portrait" : "landscape";
+  };
+
   let html = "";
 
-  // ✅ Add an intentional new page only if requested
-  if (forceNewPage) html += `<div style="page-break-before:always"></div>`;
+  // If we must start this section on a fresh page (e.g., After after Before)
+  if (forceNewPage) html += `<div class="pb"></div>`;
 
   for (let i = 0; i < imgs.length; i += 2) {
+    // insert page break BETWEEN sheets (not after the last one)
+    if (i > 0) html += `<div class="pb"></div>`;
+
     const img1 = imgs[i];
     const img2 = imgs[i + 1];
 
-    const getOrientation = img => {
-      if (!img) return "";
-      const w = img.naturalWidth || 1;
-      const h = img.naturalHeight || 1;
-      return h > w ? "portrait" : "landscape";
-    };
-
     html += `
-      <div class="photo-page${i + 2 >= imgs.length ? ' last' : ''}">
-        ${i === 0 ? `<div class="photo-heading">${label} Photos</div>` : ''}
+      <section class="photo-sheet">
+        ${i === 0 ? `<div class="photo-heading">${label} Photos</div>` : ``}
+
         <div class="photo-slot">
-          <img src="${img1.src}" alt="${label} ${i + 1}" class="${getOrientation(img1)}">
+          <img src="${img1.src}" alt="${label} ${i + 1}" class="${orient(img1)}">
         </div>
-        ${
-          img2
-            ? `<div class="photo-slot"><img src="${img2.src}" alt="${label} ${i + 2}" class="${getOrientation(img2)}"></div>`
-            : ''
-        }
-      </div>
+
+        ${img2 ? `
+        <div class="photo-slot">
+          <img src="${img2.src}" alt="${label} ${i + 2}" class="${orient(img2)}">
+        </div>` : ``}
+      </section>
     `;
   }
 
@@ -1852,44 +1855,54 @@ function buildPdf(existingWindow = null) {
     li { margin:4px 0; line-height:1.4; }
 
 /* --- Smart Auto-Scaling 2-Per-Page Photo Layout --- */
+/* A4 with 20mm margins already set elsewhere */
+@media print {
+  /* the only thing that forces pages */
+  .pb { break-before: page; page-break-before: always; }
+}
+
+/* one sheet = one page (two photos) */
+.photo-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4mm;
+  /* keep a safe content height BELOW the printable height (297-40=257mm).
+     We let the content size itself so engines don't try to split it. */
+  padding: 6mm 6mm 4mm;
+  box-sizing: border-box;
+
+  /* absolutely forbid splitting */
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* heading lives inside the first sheet of its section */
 .photo-heading {
   text-align: center;
   font-size: 18px;
   font-weight: 700;
-  margin-bottom: 6mm;
-  page-break-after: avoid;
+  margin: 0 0 4mm 0;
+  break-inside: avoid;
 }
 
-.photo-page {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  height: calc(297mm - 28mm);
-  padding: 6mm 6mm 4mm;
-  gap: 4mm;
-  box-sizing: border-box;
-  page-break-inside: avoid;
-}
-
-/* Apply page break only if it’s NOT the last photo-page in its section */
-.photo-page:not(:last-of-type) {
-  page-break-after: always;
-}
-
+/* your existing slot rules; keep them non-greedy so they never overflow */
 .photo-slot {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 85%;
   height: 40%;
   max-height: 110mm;
-  border: none;
-  margin: 3mm 0;
   background: #fff;
-  page-break-inside: avoid;
+  border: none;
   overflow: hidden;
+
+  /* do not allow break here either */
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin: 0;       /* avoid margin-collapsing surprises */
+  padding: 0;
 }
 
 .photo-slot img {
@@ -1897,19 +1910,12 @@ function buildPdf(existingWindow = null) {
   max-height: 100%;
   object-fit: contain;
   border-radius: 6px;
+  display: block;      /* avoid inline gaps */
+  break-inside: avoid; /* belt & braces */
 }
 
-.photo-slot img.portrait {
-  width: auto;
-  height: 95%;
-  max-height: 95%;
-}
-
-.photo-slot img.landscape {
-  width: 95%;
-  height: auto;
-  max-width: 95%;
-}
+.photo-slot img.portrait { height: 95%; width: auto; }
+.photo-slot img.landscape { width: 95%; height: auto; }
 
 @media print {
   .footer { display: none; }
