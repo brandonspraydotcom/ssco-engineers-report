@@ -1611,35 +1611,30 @@ clone.innerHTML = html + photoPages;
 return clone;
 }
 
-// ✅ Unified auto-scaling photo layout (2 per page, portrait-safe)
-function buildSmartPhotoPages(listId, label) {
-  const list = document.getElementById(listId);
-  if (!list) return "";
-
-  const imgs = Array.from(list.querySelectorAll("img"));
-  if (!imgs.length) return "";
+// ✅ Self-contained: builds photo pages from localStorage (not DOM)
+function buildSmartPhotoPages(listId, label, forceNewPage = false) {
+  const storedImgs = JSON.parse(localStorage.getItem(listId) || "[]");
+  if (!storedImgs.length) return "";
 
   let html = "";
 
-  for (let i = 0; i < imgs.length; i += 2) {
-    const img1 = imgs[i];
-    const img2 = imgs[i + 1];
+  // Optional forced page break (for "After Photos" only)
+  if (forceNewPage) html += `<div style="page-break-before:always"></div>`;
 
-    const getOrientation = img => {
-      if (!img) return "";
-      const w = img.naturalWidth || 1;
-      const h = img.naturalHeight || 1;
-      return h > w ? "portrait" : "landscape";
-    };
+  for (let i = 0; i < storedImgs.length; i += 2) {
+    const img1 = storedImgs[i];
+    const img2 = storedImgs[i + 1];
 
+    // Heading on first page only
     html += `
-      <div class="photo-page${i + 2 >= imgs.length ? ' last' : ''}">
+      <div class="photo-page${i + 2 >= storedImgs.length ? ' last' : ''}">
+        ${i === 0 ? `<div class="photo-heading">${label} Photos</div>` : ''}
         <div class="photo-slot">
-          <img src="${img1.src}" alt="${label} ${i + 1}" class="${getOrientation(img1)}">
+          <img src="${img1}" alt="${label} ${i + 1}">
         </div>
         ${
           img2
-            ? `<div class="photo-slot"><img src="${img2.src}" alt="${label} ${i + 2}" class="${getOrientation(img2)}"></div>`
+            ? `<div class="photo-slot"><img src="${img2}" alt="${label} ${i + 2}">`
             : ''
         }
       </div>
