@@ -1844,7 +1844,7 @@ function buildPdf(existingWindow = null) {
     body { font-family: Helvetica, Arial, sans-serif; color: #111; padding: 20px; }
     .banner { display:block; width:100%; max-width:720px; height:auto; margin:0 auto 12px; object-fit:contain; }
     .card { page-break-inside: avoid; margin-bottom: 10px; }
-    h3 { margin: 12px 0 6px; font-size: 15px; }
+    h3 { margin: 6px 0 3px; font-size: 15px; }
     ul { margin:6px 0 12px 20px; padding:0; }
     li { margin:4px 0; line-height:1.4; }
 
@@ -1865,7 +1865,7 @@ h3 {
   height: calc(297mm - 24mm); /* A4 height minus margins */
   padding: 4mm 6mm;
   gap: 4mm;
-  page-break-after: avoid;
+  page-break-after: always;
   break-after: always;
   box-sizing: border-box;
 }
