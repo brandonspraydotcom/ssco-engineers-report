@@ -2919,6 +2919,28 @@ if (navigator.share) {
 </script>
 
 <script>
+async function ensureHtml2Canvas() {
+  // 1) already there?
+  if (typeof window.html2canvas === 'function') return;
+
+  // 2) exposed by html2pdf bundle?
+  if (window.html2pdf && window.html2pdf.html2canvas) {
+    window.html2canvas = window.html2pdf.html2canvas;
+    return;
+  }
+
+  // 3) load standalone html2canvas
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load html2canvas'));
+    document.head.appendChild(s);
+  });
+}
+</script>
+
+<script>
 // ===========================
 // 📤 SHARE FLOW (standalone)
 // ===========================
@@ -2986,6 +3008,8 @@ function closeModal() {
       bump?.('info');
       showToast?.('📸 Capturing form…', 'info');
       closeModal();
+
+      await ensureHtml2Canvas();
 
       // --- (A) Screenshot the whole form into a high-res canvas ---
       const src = document.getElementById('formContainer');
