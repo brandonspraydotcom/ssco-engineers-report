@@ -3011,41 +3011,50 @@ function closeModal() {
 
       await ensureHtml2Canvas();
 
-      // --- (A) Screenshot the whole form into a high-res canvas ---
-      const src = document.getElementById('formContainer');
-      if (!src) throw new Error('#formContainer not found');
+// --- (A) Screenshot the whole form into a high-res canvas ---
+const src = document.getElementById('formContainer');
+if (!src) throw new Error('#formContainer not found');
 
-      // Clone the form into an offscreen, light background container to avoid dark UI bleed
-      const offscreen = document.createElement('div');
-      offscreen.style.position = 'fixed';
-      offscreen.style.left = '-10000px';
-      offscreen.style.top = '0';
-      offscreen.style.width = src.offsetWidth + 'px';
-      offscreen.style.background = '#fff';
-      offscreen.style.color = '#000';
-      // Clean clone
-      const clone = src.cloneNode(true);
-      // Remove purely interactive/UI bits from the clone
-      clone.querySelectorAll('.btn, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal').forEach(el => el.remove());
-      offscreen.appendChild(clone);
-      document.body.appendChild(offscreen);
+// Clone into offscreen container
+const offscreen = document.createElement('div');
+offscreen.style.position = 'absolute';
+offscreen.style.left = '-9999px';
+offscreen.style.top = '0';
+offscreen.style.width = src.scrollWidth + 'px';
+offscreen.style.background = '#fff';
+offscreen.style.color = '#000';
+offscreen.style.zIndex = '-1';
+offscreen.style.display = 'block';
 
-      // Make sure html2canvas is available (bundled via html2pdf.bundle)
-      if (typeof html2canvas !== 'function') throw new Error('html2canvas not found');
+// Deep clone
+const clone = src.cloneNode(true);
 
-      console.log('🧩 Capturing form with html2canvas...');
-      const canvas = await html2canvas(clone, {
-        scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        windowWidth: clone.scrollWidth,
-        windowHeight: clone.scrollHeight
-      });
-console.log('✅ Screenshot captured, building PDF...');
+// Remove interactive UI elements from clone
+clone.querySelectorAll('.btn, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal').forEach(el => el.remove());
 
-      // Cleanup offscreen DOM
-      offscreen.remove();
+// Append and force layout
+offscreen.appendChild(clone);
+document.body.appendChild(offscreen);
+
+// Wait for layout to compute true height
+const cloneHeight = clone.scrollHeight;
+offscreen.style.height = cloneHeight + 'px';
+
+await new Promise(r => requestAnimationFrame(r)); // give browser 1 frame
+
+console.log('🧩 Capturing full form with html2canvas...');
+
+const canvas = await html2canvas(clone, {
+  scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
+  backgroundColor: '#ffffff',
+  useCORS: true,
+  logging: false,
+  windowWidth: clone.scrollWidth,
+  windowHeight: cloneHeight, // ✅ use measured height
+  scrollY: 0
+});
+
+offscreen.remove();
 
       bump?.('info');
       showToast?.('🧱 Laying out PDF…', 'info');
