@@ -710,14 +710,14 @@ document.addEventListener("DOMContentLoaded", () => {
       <label>Photos — Before</label>
       <input id="beforeInput" type="file" accept="image/*" multiple style="display:none">
       <div class="controls">
-        <label class="uploadBtn" for="beforeInput">Upload / Camera</label>
+        <label class="uploadBtn" for="beforeInput"><span style="font-size: 30px;">📸</span></label>
         <div id="beforeThumbs" class="photos"></div>
       </div>
 
       <label style="margin-top:10px">Photos — After</label>
       <input id="afterInput" type="file" accept="image/*" multiple style="display:none">
       <div class="controls">
-        <label class="uploadBtn" for="afterInput">Upload / Camera</label>
+        <label class="uploadBtn" for="afterInput"><span style="font-size: 30px;">📸</span></label>
         <div id="afterThumbs" class="photos"></div>
       </div>
     </div>
@@ -730,7 +730,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="small">Engineer Signature</div>
         <canvas id="sig1" class="signature"></canvas>
         <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn remove" data-clear="sig1">CLEAR</button>
+          <button class="btn remove" data-clear="sig1"><span style="font-size: 30px;">🗑️</span></button>
           <input id="sig1Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
         </div>
       </div>
@@ -739,7 +739,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="small">Site Contact Signature</div>
         <canvas id="sig2" class="signature"></canvas>
         <div style="display:flex;gap:8px;margin-top:6px">
-          <button class="btn remove" data-clear="sig2">CLEAR</button>
+          <button class="btn remove" data-clear="sig2"><span style="font-size: 30px;">🗑️</span></button>
           <input id="sig2Name" placeholder="Print name" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:#101010;color:#eee">
         </div>
       </div>
@@ -747,8 +747,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     <footer class="appFooter">
-      <button id="savePdf" class="btn" type="button" style="flex:1">💾 PDF</button> <button id="clearForm" class="btn remove" style="flex:1;margin-left:6px;">🧹 Clear Form</button>
-      <button id="sendEmail" class="btn green" type="button" style="flex:1">📧 Email</button>
+      <button id="savePdf" class="btn" type="button" style="flex:1"><span style="font-size: 30px;">💾📄</span></button> <button id="clearForm" class="btn remove" style="flex:1"><span style="font-size: 30px;">🗑️</span></button>
+      <button id="sendEmail" class="btn green" type="button" style="flex:1"><span style="font-size: 30px;">📧</span></button>
       <!-- Version Badge -->
 <span id="versionBadge"
   style="position:fixed;right:14px;bottom:12px;
