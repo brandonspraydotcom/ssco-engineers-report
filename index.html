@@ -747,7 +747,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     <footer class="appFooter">
-      <button id="savePdf" class="btn" type="button" style="flex:1">💾 PDF</button> <button id="clearForm" class="btn remove" style="margin-left:6px;">🧹 Clear Form</button>
+      <button id="savePdf" class="btn" type="button" style="flex:1">💾 PDF</button> <button id="clearForm" class="btn remove" style="flex:1;margin-left:6px;">🧹 Clear Form</button>
       <button id="sendEmail" class="btn green" type="button" style="flex:1">📧 Email</button>
       <!-- Version Badge -->
 <span id="versionBadge"
@@ -2900,18 +2900,42 @@ document.addEventListener("DOMContentLoaded", () => {
 if (navigator.share) {
   if (!window.shareButtonInjected) {
     window.shareButtonInjected = true;
+
     window.addEventListener('load', () => {
       const sendEmailBtn = document.getElementById('sendEmail');
-      if (!sendEmailBtn) return;
+      const pdfBtn = document.getElementById('savePdf');
+      if (!sendEmailBtn || !pdfBtn) return;
 
-      // ✅ Create and insert the Share button (same styling)
+      // ✅ Create and insert the Share button (matches Save PDF exactly)
       const shareBtn = document.createElement('button');
       shareBtn.id = 'shareReport';
-      shareBtn.className =
-        'btn btn-primary h-[42px] w-[42px] flex items-center justify-center ml-2 rounded-full shadow-sm hover:scale-[1.05] transition-transform';
-      shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
+      shareBtn.type = 'button';
+      shareBtn.className = 'btn flex items-center justify-center gap-1';
+      shareBtn.style.flex = '1';
+
+      // Copy computed styles from Save PDF
+      const pdfStyles = window.getComputedStyle(pdfBtn);
+      shareBtn.style.fontSize = pdfStyles.fontSize;
+      shareBtn.style.padding = pdfStyles.padding;
+      shareBtn.style.lineHeight = pdfStyles.lineHeight;
+      shareBtn.style.boxSizing = 'border-box';
+
+      // Icon only (you can add text if you want)
+      shareBtn.innerHTML = `<i data-lucide="share-2" class="w-5 h-5"></i>`;
+
+      // 🔸 Dynamically sync height to the Save PDF button
+      const syncHeight = () => {
+        shareBtn.style.height = window.getComputedStyle(pdfBtn).height;
+      };
+      syncHeight();
+
+      // Resync on resize / rotation
+      window.addEventListener('resize', syncHeight);
+
+      // Insert the button after "Send Email"
       sendEmailBtn.insertAdjacentElement('afterend', shareBtn);
 
+      // Refresh Lucide icons
       if (window.lucide?.createIcons) lucide.createIcons();
     });
   }
