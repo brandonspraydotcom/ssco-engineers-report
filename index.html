@@ -2268,6 +2268,33 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+<!-- ✅ Confirm Share Modal (standalone, minimal) -->
+<div id="shareConfirmModal"
+     style="display:none;position:fixed;inset:0;z-index:5200;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;opacity:0;
+            transition:opacity .3s ease;">
+  <div id="shareConfirmBox"
+       style="background:rgba(30,30,31,0.95);border-radius:16px;
+              padding:24px 22px;max-width:340px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;transition:all .25s ease;">
+    <div style="font-size:20px;margin-bottom:10px;">📤 Share Report</div>
+    <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 16px;">
+      Generate a PDF from a full screenshot of the completed form and open the share sheet?
+    </p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button id="shareConfirmOk" class="btn green" style="flex:1;">✅ Yes, Share</button>
+      <button id="shareConfirmCancel" class="btn ghost" style="flex:1;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  #shareConfirmModal.show { display:flex !important; opacity:1; }
+  #shareConfirmModal.show #shareConfirmBox { transform:scale(1); opacity:1; }
+</style>
+
 <!-- Exit-Save Modal -->
 <div id="exitModal" class="modal" style="display:none;">
   <div class="modal-box">
@@ -2863,7 +2890,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
-// === Native Share API (iPad / Android / Desktop Chrome) ===
+// === Native Share Button Injection (for iPad / Android / Desktop Chrome) ===
 if (navigator.share) {
   if (!window.shareButtonInjected) {
     window.shareButtonInjected = true;
@@ -2871,60 +2898,171 @@ if (navigator.share) {
       const sendEmailBtn = document.getElementById('sendEmail');
       if (!sendEmailBtn) return;
 
+      // ✅ Create and insert the Share button (same styling)
       const shareBtn = document.createElement('button');
       shareBtn.id = 'shareReport';
-      shareBtn.className = 'btn btn-primary h-[42px] w-[42px] flex items-center justify-center ml-2 rounded-full shadow-sm hover:scale-[1.05] transition-transform';
+      shareBtn.className =
+        'btn btn-primary h-[42px] w-[42px] flex items-center justify-center ml-2 rounded-full shadow-sm hover:scale-[1.05] transition-transform';
       shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
       sendEmailBtn.insertAdjacentElement('afterend', shareBtn);
-
-      shareBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-
-        // 🔸 Require that PDF has been saved
-        if (!localStorage.getItem("pdfSaved") || !lastPdfBlob) {
-          bump('warning');
-          showToast('⚠️ Please save the PDF before sharing.', 'warning');
-          const saveBtn = document.getElementById('savePdf');
-          saveBtn.style.animation = 'pulse 1s ease-in-out 2';
-          setTimeout(() => (saveBtn.style.animation = ''), 2000);
-          return;
-        }
-
-        try {
-          bump("info");
-          showToast("Preparing PDF for sharing…", "info");
-
-          const projectNo = document.getElementById('project')?.value || 'Report';
-          const pdfName = `Engineer_Report_${projectNo}.pdf`;
-
-          // 🧩 Create a file from the stored blob
-          const file = new File([lastPdfBlob], pdfName, { type: 'application/pdf' });
-
-          if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              title: 'Engineer Report',
-              text: 'Shared from the SSCo Engineer App',
-              files: [file],
-            });
-            bump('success');
-            showToast('✅ Shared successfully!', 'success');
-          } else {
-            // fallback — open preview
-            const url = URL.createObjectURL(lastPdfBlob);
-            window.open(url, '_blank');
-            showToast('⚠️ Sharing not supported, preview opened', 'warning');
-          }
-        } catch (err) {
-          console.error('Share failed:', err);
-          bump('error');
-          showToast('❌ Sharing failed or canceled', 'error');
-        }
-      });
 
       if (window.lucide?.createIcons) lucide.createIcons();
     });
   }
 }
+</script>
+
+<script>
+// ===========================
+// 📤 SHARE FLOW (standalone)
+// ===========================
+(() => {
+  // Guard: need the share button that your app injects when navigator.share exists
+  const shareBtn = document.getElementById('shareReport');
+  if (!shareBtn || !navigator.share) return;
+
+  // Modal refs
+  const modal  = document.getElementById('shareConfirmModal');
+  const box    = document.getElementById('shareConfirmBox');
+  const ok     = document.getElementById('shareConfirmOk');
+  const cancel = document.getElementById('shareConfirmCancel');
+
+  // Helpers (reuse your global toasts & haptics)
+  function openModal() {
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+      if (box) { box.style.transform = 'scale(1)'; box.style.opacity = '1'; }
+    });
+  }
+  function closeModal() {
+    modal.classList.remove('show');
+    if (box) { box.style.transform = 'scale(0.85)'; box.style.opacity = '0'; }
+    setTimeout(() => { modal.style.display = 'none'; }, 250);
+  }
+
+  // 1) Button → validate → confirm modal
+  shareBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+
+    // Validate important fields (your function highlights & scrolls first missing)
+    const okFields = typeof validateImportantFields === 'function'
+      ? validateImportantFields()
+      : true;
+
+    if (!okFields) {
+      bump?.('warning');
+      showToast?.('⚠️ Please complete the highlighted fields.', 'warning');
+      return;
+    }
+
+    bump?.('info');
+    showToast?.('Ready to share — confirm?', 'info');
+    openModal();
+  });
+
+  // 2) Confirm → build screenshot PDF → open native share
+  ok?.addEventListener('click', async () => {
+    try {
+      bump?.('info');
+      showToast?.('📸 Capturing form…', 'info');
+      closeModal();
+
+      // --- (A) Screenshot the whole form into a high-res canvas ---
+      const src = document.getElementById('formContainer');
+      if (!src) throw new Error('#formContainer not found');
+
+      // Clone the form into an offscreen, light background container to avoid dark UI bleed
+      const offscreen = document.createElement('div');
+      offscreen.style.position = 'fixed';
+      offscreen.style.left = '-10000px';
+      offscreen.style.top = '0';
+      offscreen.style.width = src.offsetWidth + 'px';
+      offscreen.style.background = '#fff';
+      offscreen.style.color = '#000';
+      // Clean clone
+      const clone = src.cloneNode(true);
+      // Remove purely interactive/UI bits from the clone
+      clone.querySelectorAll('.btn, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal').forEach(el => el.remove());
+      offscreen.appendChild(clone);
+      document.body.appendChild(offscreen);
+
+      // Make sure html2canvas is available (bundled via html2pdf.bundle)
+      if (typeof html2canvas !== 'function') throw new Error('html2canvas not found');
+
+      const canvas = await html2canvas(clone, {
+        scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        windowWidth: clone.scrollWidth,
+        windowHeight: clone.scrollHeight
+      });
+
+      // Cleanup offscreen DOM
+      offscreen.remove();
+
+      bump?.('info');
+      showToast?.('🧱 Laying out PDF…', 'info');
+
+      // --- (B) Lay the full screenshot into a multi-page A4 PDF (elegant scaling) ---
+      const { jsPDF } = window.jspdf || window.jspdf || {};
+      if (!jsPDF) throw new Error('jsPDF not found');
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth  = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgPxWidth  = canvas.width;
+      const imgPxHeight = canvas.height;
+
+      // Scale image to full page width, keep aspect
+      const imgMmWidth  = pageWidth;
+      const imgMmHeight = (imgPxHeight * imgMmWidth) / imgPxWidth;
+
+      // Add first page
+      let y = 0;
+      pdf.addImage(imgData, 'PNG', 0, y, imgMmWidth, imgMmHeight, undefined, 'FAST');
+
+      // If the image is taller than one page, “slide” it up and add pages
+      while (imgMmHeight - y > pageHeight) {
+        y -= pageHeight;               // move up by one page
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, y, imgMmWidth, imgMmHeight, undefined, 'FAST');
+      }
+
+      // --- (C) Share the PDF file via native sheet ---
+      const projectNo = (document.getElementById('project')?.value || 'Report').trim();
+      const pdfName = `Engineer_Report_Share_${projectNo}.pdf`;
+
+      const pdfBlob = pdf.output('blob');     // independent of your existing lastPdfBlob
+      const file = new File([pdfBlob], pdfName, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: 'Engineer Report',
+          text: 'Shared from the SSCo Engineer App',
+          files: [file],
+        });
+        bump?.('success');
+        showToast?.('✅ Shared successfully!', 'success');
+      } else {
+        // Fallback: open preview if sharing is unsupported
+        const url = URL.createObjectURL(pdfBlob);
+        window.open(url, '_blank');
+        showToast?.('⚠️ Sharing not supported, preview opened', 'warning');
+      }
+    } catch (err) {
+      console.error('Share failed:', err);
+      bump?.('error');
+      showToast?.('❌ Share failed', 'error');
+    }
+  });
+
+  // 3) Cancel
+  cancel?.addEventListener('click', closeModal);
+})();
 </script>
 
 
