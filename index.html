@@ -3015,42 +3015,35 @@ function closeModal() {
 const src = document.getElementById('formContainer');
 if (!src) throw new Error('#formContainer not found');
 
-// Clone into offscreen container
+// Create offscreen wrapper (visible to layout engine)
 const offscreen = document.createElement('div');
 offscreen.style.position = 'absolute';
-offscreen.style.left = '-9999px';
 offscreen.style.top = '0';
+offscreen.style.left = '0';
+offscreen.style.visibility = 'hidden'; // invisible but fully laid out
+offscreen.style.overflow = 'visible';
+offscreen.style.width = src.scrollWidth + 'px';
 offscreen.style.background = '#fff';
-offscreen.style.color = '#000';
-offscreen.style.overflow = 'visible'; // ✅ prevent clipping
-offscreen.style.zIndex = '-1';
 document.body.appendChild(offscreen);
 
-// Deep clone
+// Deep clone the form
 const clone = src.cloneNode(true);
-clone.style.overflow = 'visible'; // ✅ prevent clipping
+clone.style.width = '100%';
+clone.style.height = src.scrollHeight + 'px'; // ✅ lock to full live form height
+clone.style.overflow = 'visible';
 clone.style.display = 'block';
-clone.style.width = src.scrollWidth + 'px';
 
-// Remove interactive UI elements
+// Remove purely UI buttons & overlays
 clone.querySelectorAll('.btn, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal')
   .forEach(el => el.remove());
 
+// Append clone and force reflow
 offscreen.appendChild(clone);
-
-// Force browser to compute full layout
 await new Promise(r => requestAnimationFrame(r));
 
-const cloneHeight = clone.scrollHeight;
-clone.style.height = cloneHeight + 'px';   // ✅ explicit physical height
-offscreen.style.height = cloneHeight + 'px';
+console.log('src.scrollHeight', src.scrollHeight, 'clone.scrollHeight', clone.scrollHeight);
 
-console.log('🧩 Capturing full form with html2canvas (height:', cloneHeight, ')...');
-
-// Force scroll position = 0
-window.scrollTo(0, 0);
-
-// Capture the *clone* only
+// Force html2canvas to paint large virtual viewport
 const canvas = await html2canvas(clone, {
   scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
   backgroundColor: '#ffffff',
@@ -3058,8 +3051,8 @@ const canvas = await html2canvas(clone, {
   logging: false,
   scrollY: 0,
   scrollX: 0,
-  windowWidth: clone.scrollWidth,
-  windowHeight: cloneHeight
+  windowWidth: src.scrollWidth,
+  windowHeight: src.scrollHeight, // ✅ use real form height, not clone
 });
 
 offscreen.remove();
