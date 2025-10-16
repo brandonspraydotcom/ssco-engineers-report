@@ -2887,6 +2887,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
 <script>
 // === Native Share Button Injection (for iPad / Android / Desktop Chrome) ===
 if (navigator.share) {
@@ -3001,6 +3003,7 @@ function closeModal() {
       // Make sure html2canvas is available (bundled via html2pdf.bundle)
       if (typeof html2canvas !== 'function') throw new Error('html2canvas not found');
 
+      console.log('🧩 Capturing form with html2canvas...');
       const canvas = await html2canvas(clone, {
         scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
         backgroundColor: '#ffffff',
@@ -3009,6 +3012,7 @@ function closeModal() {
         windowWidth: clone.scrollWidth,
         windowHeight: clone.scrollHeight
       });
+console.log('✅ Screenshot captured, building PDF...');
 
       // Cleanup offscreen DOM
       offscreen.remove();
@@ -3017,10 +3021,16 @@ function closeModal() {
       showToast?.('🧱 Laying out PDF…', 'info');
 
       // --- (B) Lay the full screenshot into a multi-page A4 PDF (elegant scaling) ---
-      const { jsPDF } = window.jspdf || window.jspdf || {};
-      if (!jsPDF) throw new Error('jsPDF not found');
+      const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
+if (!jsPDF) {
+  console.error('❌ jsPDF not found. Make sure html2pdf.bundle.min.js is loaded before this script.');
+  bump?.('error');
+  showToast?.('❌ Share failed: jsPDF not loaded', 'error');
+  return;
+}
 
       const pdf = new jsPDF('p', 'mm', 'a4');
+      console.log('✅ jsPDF initialized');
       const pageWidth  = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
@@ -3051,6 +3061,7 @@ function closeModal() {
       const file = new File([pdfBlob], pdfName, { type: 'application/pdf' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        console.log('📤 Attempting to share via native share sheet...');
         await navigator.share({
           title: 'Engineer Report',
           text: 'Shared from the SSCo Engineer App',
@@ -3911,7 +3922,6 @@ window.addEventListener("load", initAutocomplete);
 
 <!-- PDF generation libraries (must be loaded BEFORE buildPdf runs) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
 <!-- Zoom indicator (global, visible for annotator zoom) -->
 <div id="zoomIndicator">100%</div>
