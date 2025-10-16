@@ -3015,35 +3015,47 @@ function closeModal() {
 const src = document.getElementById('formContainer');
 if (!src) throw new Error('#formContainer not found');
 
-// Create offscreen wrapper (visible to layout engine)
-const offscreen = document.createElement('div');
-offscreen.style.position = 'absolute';
-offscreen.style.top = '0';
-offscreen.style.left = '0';
-offscreen.style.visibility = 'hidden'; // invisible but fully laid out
-offscreen.style.overflow = 'visible';
-offscreen.style.width = src.scrollWidth + 'px';
-offscreen.style.background = '#fff';
-document.body.appendChild(offscreen);
+// Create a full-page invisible sandbox that is still in flow
+const sandbox = document.createElement('div');
+sandbox.id = 'screenshotSandbox';
+sandbox.style.cssText = `
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: visible;
+  background: #fff;
+  z-index: -1;
+  width: 100%;
+`;
+document.body.appendChild(sandbox);
 
-// Deep clone the form
-const clone = src.cloneNode(true);
-clone.style.width = '100%';
-clone.style.height = src.scrollHeight + 'px'; // ✅ lock to full live form height
+// Copy live HTML instead of cloning nodes
+sandbox.innerHTML = src.outerHTML;
+
+// Reference to the new live copy
+const clone = sandbox.firstElementChild;
+
+// Force full layout expansion
+clone.style.height = 'auto';
 clone.style.overflow = 'visible';
-clone.style.display = 'block';
+sandbox.style.height = 'auto';
 
-// Remove purely UI buttons & overlays
-clone.querySelectorAll('.btn, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal')
-  .forEach(el => el.remove());
-
-// Append clone and force reflow
-offscreen.appendChild(clone);
+// Allow one frame for browser to compute layout
 await new Promise(r => requestAnimationFrame(r));
 
-console.log('src.scrollHeight', src.scrollHeight, 'clone.scrollHeight', clone.scrollHeight);
+// ✅ Now measure both real and sandbox heights
+const realH = src.scrollHeight;
+const cloneH = clone.scrollHeight;
+console.log('src.scrollHeight', realH, 'clone.scrollHeight', cloneH);
 
-// Force html2canvas to paint large virtual viewport
+// Fallback: if clone still too short, manually enforce the real height
+if (cloneH < realH) {
+  clone.style.minHeight = realH + 'px';
+  sandbox.style.minHeight = realH + 'px';
+}
+
+// Now capture full visible layout
 const canvas = await html2canvas(clone, {
   scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
   backgroundColor: '#ffffff',
@@ -3051,11 +3063,11 @@ const canvas = await html2canvas(clone, {
   logging: false,
   scrollY: 0,
   scrollX: 0,
-  windowWidth: src.scrollWidth,
-  windowHeight: src.scrollHeight, // ✅ use real form height, not clone
+  windowWidth: sandbox.scrollWidth,
+  windowHeight: Math.max(realH, clone.scrollHeight, window.innerHeight),
 });
 
-offscreen.remove();
+sandbox.remove();
 
       bump?.('info');
       showToast?.('🧱 Laying out PDF…', 'info');
