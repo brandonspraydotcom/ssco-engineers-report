@@ -3003,145 +3003,126 @@ function closeModal() {
   });
 
   // 2) Confirm → build screenshot PDF → open native share
-  ok?.addEventListener('click', async () => {
-    try {
-      bump?.('info');
-      showToast?.('📸 Capturing form…', 'info');
-      closeModal();
+ok?.addEventListener('click', async () => {
+  try {
+    bump?.('info');
+    showToast?.('📸 Capturing form…', 'info');
+    closeModal();
 
-      await ensureHtml2Canvas();
+    await ensureHtml2Canvas();
 
-// --- (A) Screenshot the whole form into a high-res canvas ---
-const src = document.getElementById('formContainer');
-if (!src) throw new Error('#formContainer not found');
+    // ---- (A) CAPTURE WHOLE PAGE ----
+    // Jump to top so we render from y=0
+    const prevScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
 
-// Create a full-page invisible sandbox that is still in flow
-const sandbox = document.createElement('div');
-sandbox.id = 'screenshotSandbox';
-sandbox.style.cssText = `
-  position: absolute;
-  inset: 0;
-  visibility: hidden;
-  pointer-events: none;
-  overflow: visible;
-  background: #fff;
-  z-index: -1;
-  width: 100%;
-`;
-document.body.appendChild(sandbox);
+    // Full document dimensions
+    const fullWidth  = Math.max(
+      document.documentElement.scrollWidth,
+      document.body.scrollWidth,
+      document.documentElement.clientWidth
+    );
+    const fullHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body.scrollHeight,
+      document.documentElement.clientHeight
+    );
 
-// Copy live HTML instead of cloning nodes
-sandbox.innerHTML = src.outerHTML;
+    // Optional: temporarily add a white background so dark UI doesn’t bleed
+    const prevBg = document.body.style.background;
+    document.body.style.background = '#ffffff';
 
-// Reference to the new live copy
-const clone = sandbox.firstElementChild;
+    // Tell html2canvas to ignore overlays/controls
+    const ignore = (el) =>
+      el.closest?.('#splashScreen') ||
+      el.id === 'shareConfirmModal' ||
+      el.id === 'emailModal' ||
+      el.id === 'quickBar' ||
+      el.id === 'zoomIndicator' ||
+      el.id === 'annotatorModal' ||
+      el.classList?.contains('btn');
 
-// Force full layout expansion
-clone.style.height = 'auto';
-clone.style.overflow = 'visible';
-sandbox.style.height = 'auto';
+    const canvas = await html2canvas(document.body, {
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+      // Render the full page, not just viewport
+      windowWidth:  fullWidth,
+      windowHeight: fullHeight,
+      scrollX: 0,
+      scrollY: 0,
+      scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
+      ignoreElements: ignore,
+    });
 
-// Allow one frame for browser to compute layout
-await new Promise(r => requestAnimationFrame(r));
+    // restore styles
+    document.body.style.background = prevBg;
+    document.documentElement.style.scrollBehavior = prevScrollBehavior;
 
-// ✅ Now measure both real and sandbox heights
-const realH = src.scrollHeight;
-const cloneH = clone.scrollHeight;
-console.log('src.scrollHeight', realH, 'clone.scrollHeight', cloneH);
+    bump?.('info');
+    showToast?.('🧱 Laying out PDF…', 'info');
 
-// Fallback: if clone still too short, manually enforce the real height
-if (cloneH < realH) {
-  clone.style.minHeight = realH + 'px';
-  sandbox.style.minHeight = realH + 'px';
-}
+    // ---- (B) MULTI-PAGE PDF FROM CANVAS ----
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) throw new Error('jsPDF not found');
 
-// Now capture full visible layout
-const canvas = await html2canvas(clone, {
-  scale: Math.min(2, (window.devicePixelRatio || 1) * 1.5),
-  backgroundColor: '#ffffff',
-  useCORS: true,
-  logging: false,
-  scrollY: 0,
-  scrollX: 0,
-  windowWidth: sandbox.scrollWidth,
-  windowHeight: Math.max(realH, clone.scrollHeight, window.innerHeight),
-});
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
 
-sandbox.remove();
+    const imgPxW = canvas.width;
+    const imgPxH = canvas.height;
+    const ratio  = pageW / imgPxW;        // fit width
+    const imgMmH = imgPxH * ratio;
 
-      bump?.('info');
-      showToast?.('🧱 Laying out PDF…', 'info');
+    let remaining = imgMmH;
+    let page = 0;
 
-// --- (B) Lay the full screenshot into a multi-page A4 PDF (elegant scaling) ---
-const { jsPDF } = window.jspdf || {};
-if (!jsPDF) throw new Error('jsPDF not found');
+    while (remaining > 0) {
+      const sourceY = (page * pageH) / ratio; // px to start cropping
+      const sliceHpx = Math.min(imgPxH - sourceY, pageH / ratio);
 
-const pdf = new jsPDF('p', 'mm', 'a4');
-const pageWidth  = pdf.internal.pageSize.getWidth();
-const pageHeight = pdf.internal.pageSize.getHeight();
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = imgPxW;
+      pageCanvas.height = sliceHpx;
+      const ctx = pageCanvas.getContext('2d');
 
-const imgData = canvas.toDataURL('image/png');
-const imgPxWidth  = canvas.width;
-const imgPxHeight = canvas.height;
+      ctx.drawImage(
+        canvas,
+        0, sourceY, imgPxW, sliceHpx,   // src
+        0, 0, imgPxW, sliceHpx          // dst
+      );
 
-// scale image width to page width
-const ratio = pageWidth / imgPxWidth;
-const imgMmHeight = imgPxHeight * ratio;
+      const pageData = pageCanvas.toDataURL('image/png');
+      if (page > 0) pdf.addPage();
+      pdf.addImage(pageData, 'PNG', 0, 0, pageW, sliceHpx * ratio, undefined, 'FAST');
 
-// total pages required
-let remainingHeight = imgMmHeight;
-let position = 0;
-let page = 0;
-
-while (remainingHeight > 0) {
-  const sourceY = (page * pageHeight) / ratio; // where to start cropping on canvas
-  const canvasPage = document.createElement('canvas');
-  canvasPage.width = imgPxWidth;
-  canvasPage.height = Math.min(imgPxHeight - sourceY, pageHeight / ratio);
-
-  const ctx = canvasPage.getContext('2d');
-  ctx.drawImage(
-    canvas,
-    0, sourceY, imgPxWidth, canvasPage.height,
-    0, 0, imgPxWidth, canvasPage.height
-  );
-
-  const pageData = canvasPage.toDataURL('image/png');
-  if (page > 0) pdf.addPage();
-  pdf.addImage(pageData, 'PNG', 0, 0, pageWidth, canvasPage.height * ratio, undefined, 'FAST');
-
-  remainingHeight -= pageHeight;
-  page++;
-}
-
-      // --- (C) Share the PDF file via native sheet ---
-      const projectNo = (document.getElementById('project')?.value || 'Report').trim();
-      const pdfName = `Engineer_Report_Share_${projectNo}.pdf`;
-
-      const pdfBlob = pdf.output('blob');     // independent of your existing lastPdfBlob
-      const file = new File([pdfBlob], pdfName, { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        console.log('📤 Attempting to share via native share sheet...');
-        await navigator.share({
-          title: 'Engineer Report',
-          text: 'Shared from the SSCo Engineer App',
-          files: [file],
-        });
-        bump?.('success');
-        showToast?.('✅ Shared successfully!', 'success');
-      } else {
-        // Fallback: open preview if sharing is unsupported
-        const url = URL.createObjectURL(pdfBlob);
-        window.open(url, '_blank');
-        showToast?.('⚠️ Sharing not supported, preview opened', 'warning');
-      }
-    } catch (err) {
-      console.error('Share failed:', err);
-      bump?.('error');
-      showToast?.('❌ Share failed', 'error');
+      remaining -= pageH;
+      page++;
     }
-  });
+
+    // ---- (C) SHARE ----
+    const projectNo = (document.getElementById('project')?.value || 'Report').trim();
+    const pdfName = `Engineer_Report_Share_${projectNo}.pdf`;
+
+    const pdfBlob = pdf.output('blob');
+    const file = new File([pdfBlob], pdfName, { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ title: 'Engineer Report', text: 'Shared from the SSCo Engineer App', files: [file] });
+      bump?.('success'); showToast?.('✅ Shared successfully!', 'success');
+    } else {
+      const url = URL.createObjectURL(pdfBlob);
+      window.open(url, '_blank');
+      showToast?.('⚠️ Sharing not supported, preview opened', 'warning');
+    }
+  } catch (err) {
+    console.error('Share failed:', err);
+    bump?.('error');
+    showToast?.('❌ Share failed', 'error');
+  }
+});
 
   // 3) Cancel
   cancel?.addEventListener('click', closeModal);
