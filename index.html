@@ -2913,10 +2913,10 @@ if (navigator.share) {
 </script>
 
 <script>
+window.addEventListener('load', () => {
 // ===========================
 // 📤 SHARE FLOW (standalone)
 // ===========================
-(() => {
   // Guard: need the share button that your app injects when navigator.share exists
   const shareBtn = document.getElementById('shareReport');
   if (!shareBtn || !navigator.share) return;
