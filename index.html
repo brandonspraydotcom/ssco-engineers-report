@@ -8,6 +8,8 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f0f10">
 
+  <link rel="preload" as="audio" href="water-splash-46402.mp3">
+
   <!-- =======================
        🧩 Service Worker
   ======================== -->
@@ -45,10 +47,10 @@
 <!-- =======================
        📄 html2pdf
   ======================== -->
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<!-- PDF generation libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <script>
-  // ✅ Ensure html2canvas and jsPDF are exposed globally
   if (window.html2pdf && !window.html2canvas && window.html2pdf.html2canvas) {
     window.html2canvas = window.html2pdf.html2canvas;
   }
@@ -398,12 +400,10 @@ textarea:-ms-input-placeholder { /* IE 10+ */
               position:relative;z-index:3;animation:pulseLogo 2s ease-in-out infinite;">
 
   <!-- Audio (plays silently if blocked) -->
-  <audio id="dropletSound" preload="auto">
-    <source src="https://cdn.pixabay.com/download/audio/2021/08/09/audio_droplet.mp3?filename=water-drop-1.mp3" type="audio/mpeg">
-  </audio>
-  <audio id="ambientRain" preload="auto" loop>
-    <source src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_2a7b67f53e.mp3?filename=soft-rain-ambient.mp3" type="audio/mpeg">
-  </audio>
+  <!-- Single splash audio -->
+<audio id="splashAudio" preload="auto">
+  <source src="water-splash-46402.mp3" type="audio/mpeg">
+</audio>
 </div>
 
 <style>
@@ -497,8 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const splash = document.getElementById("splashScreen");
   const rainFront = document.getElementById("splashRainFront");
   const rainBack  = document.getElementById("splashRainBack");
-  const droplet   = document.getElementById("dropletSound");
-  const ambient   = document.getElementById("ambientRain");
+  const splashAudio = document.getElementById("splashAudio");
 
   // Seed rain immediately so drops exist at first paint
   seedDrops(rainFront, 60, 0.7, 0.7);
@@ -508,24 +507,18 @@ document.addEventListener("DOMContentLoaded", () => {
   requestAnimationFrame(() => {
     splash.classList.add("run"); // heartbeat + rain + halo all start here
 
-    // Try playing audio quietly (no overlay)
-    try {
-      droplet.volume = 0.9; droplet.currentTime = 0; droplet.play().catch(()=>{});
-      ambient.volume = 0; ambient.currentTime = 0;
-      ambient.play().then(()=>{
-        const fade = setInterval(()=>{
-          if(ambient.volume<0.25) ambient.volume+=0.02; else clearInterval(fade);
-        },80);
-      }).catch(()=>{});
-    } catch {}
+    // Try playing single splash sound
+try {
+  splashAudio.volume = 1.0;
+  splashAudio.currentTime = 0;
+  splashAudio.play().catch(()=>{});
+} catch {}
 
     // Fade everything out after 1.8–2.0 s total
     setTimeout(()=>{
       splash.style.opacity="0";
-      const fadeOut=setInterval(()=>{
-        if(ambient.volume>0.02) ambient.volume-=0.02;
-        else {clearInterval(fadeOut); ambient.pause?.();}
-      },100);
+      // optional short delay before removal
+setTimeout(()=>splashAudio.pause?.(), 1500);
       setTimeout(()=>splash.remove(),600);
     },1900);
   });
