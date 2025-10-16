@@ -42,6 +42,21 @@
   ======================== -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
 
+<!-- =======================
+       📄 html2pdf
+  ======================== -->
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script>
+  // ✅ Ensure html2canvas and jsPDF are exposed globally
+  if (window.html2pdf && !window.html2canvas && window.html2pdf.html2canvas) {
+    window.html2canvas = window.html2pdf.html2canvas;
+  }
+  if (window.html2pdf && !window.jspdf && window.html2pdf.jsPDF) {
+    window.jspdf = window.html2pdf.jsPDF;
+  }
+</script>
+
   <!-- =======================
        🍏 iOS PWA Meta
   ======================== -->
@@ -2886,8 +2901,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 
 <script>
 // === Native Share Button Injection (for iPad / Android / Desktop Chrome) ===
