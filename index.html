@@ -3050,38 +3050,47 @@ console.log('✅ Screenshot captured, building PDF...');
       bump?.('info');
       showToast?.('🧱 Laying out PDF…', 'info');
 
-      // --- (B) Lay the full screenshot into a multi-page A4 PDF (elegant scaling) ---
-      const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
-if (!jsPDF) {
-  console.error('❌ jsPDF not found. Make sure html2pdf.bundle.min.js is loaded before this script.');
-  bump?.('error');
-  showToast?.('❌ Share failed: jsPDF not loaded', 'error');
-  return;
+// --- (B) Lay the full screenshot into a multi-page A4 PDF (elegant scaling) ---
+const { jsPDF } = window.jspdf || {};
+if (!jsPDF) throw new Error('jsPDF not found');
+
+const pdf = new jsPDF('p', 'mm', 'a4');
+const pageWidth  = pdf.internal.pageSize.getWidth();
+const pageHeight = pdf.internal.pageSize.getHeight();
+
+const imgData = canvas.toDataURL('image/png');
+const imgPxWidth  = canvas.width;
+const imgPxHeight = canvas.height;
+
+// scale image width to page width
+const ratio = pageWidth / imgPxWidth;
+const imgMmHeight = imgPxHeight * ratio;
+
+// total pages required
+let remainingHeight = imgMmHeight;
+let position = 0;
+let page = 0;
+
+while (remainingHeight > 0) {
+  const sourceY = (page * pageHeight) / ratio; // where to start cropping on canvas
+  const canvasPage = document.createElement('canvas');
+  canvasPage.width = imgPxWidth;
+  canvasPage.height = Math.min(imgPxHeight - sourceY, pageHeight / ratio);
+
+  const ctx = canvasPage.getContext('2d');
+  ctx.drawImage(
+    canvas,
+    0, sourceY, imgPxWidth, canvasPage.height,
+    0, 0, imgPxWidth, canvasPage.height
+  );
+
+  const pageData = canvasPage.toDataURL('image/png');
+  if (page > 0) pdf.addPage();
+  pdf.addImage(pageData, 'PNG', 0, 0, pageWidth, canvasPage.height * ratio, undefined, 'FAST');
+
+  remainingHeight -= pageHeight;
+  page++;
 }
-
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      console.log('✅ jsPDF initialized');
-      const pageWidth  = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-
-      const imgData = canvas.toDataURL('image/png');
-      const imgPxWidth  = canvas.width;
-      const imgPxHeight = canvas.height;
-
-      // Scale image to full page width, keep aspect
-      const imgMmWidth  = pageWidth;
-      const imgMmHeight = (imgPxHeight * imgMmWidth) / imgPxWidth;
-
-      // Add first page
-      let y = 0;
-      pdf.addImage(imgData, 'PNG', 0, y, imgMmWidth, imgMmHeight, undefined, 'FAST');
-
-      // If the image is taller than one page, “slide” it up and add pages
-      while (imgMmHeight - y > pageHeight) {
-        y -= pageHeight;               // move up by one page
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, y, imgMmWidth, imgMmHeight, undefined, 'FAST');
-      }
 
       // --- (C) Share the PDF file via native sheet ---
       const projectNo = (document.getElementById('project')?.value || 'Report').trim();
