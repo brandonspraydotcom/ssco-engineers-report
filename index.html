@@ -2913,11 +2913,11 @@ if (navigator.share) {
 </script>
 
 <script>
-window.addEventListener('load', () => {
 // ===========================
 // 📤 SHARE FLOW (standalone)
 // ===========================
   // Guard: need the share button that your app injects when navigator.share exists
+  window.addEventListener('load', () => {
   const shareBtn = document.getElementById('shareReport');
   if (!shareBtn || !navigator.share) return;
 
@@ -3434,9 +3434,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const step2 = document.getElementById("saveConfirmStep2");
   const printNow = document.getElementById("printNow");
   const closeModal = document.getElementById("closeModal");
-
-  function markPdfSaved() { localStorage.setItem("pdfSaved", "true"); }
-  function hasSavedPdf() { return localStorage.getItem("pdfSaved") === "true"; }
 
   // --- Step 1: click Save PDF button ---
   saveBtn.addEventListener("click", (e) => {
