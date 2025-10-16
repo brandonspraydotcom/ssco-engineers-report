@@ -6,6 +6,7 @@ const APP_SHELL = [
   './manifest.json',
   './bottle2.png',
   './img-worker.js',
+  './water-splash-46402.mp3',
   // add any css/js you reference by path
 ];
 
@@ -45,6 +46,23 @@ self.addEventListener('fetch', e => {
     })());
     return;
   }
+
+  // Audio (handle splash sound efficiently)
+  if (request.destination === 'audio') {
+    e.respondWith((async () => {
+      const cache = await caches.open('ssc-audio-' + VERSION);
+      const cached = await cache.match(request);
+      const prom = fetch(request)
+        .then(r => {
+          cache.put(request, r.clone());
+          return r;
+        })
+        .catch(() => null);
+      return cached || prom || fetch(request);
+    })());
+    return;
+  }
+
 
   // everything in shell: cache-first
   e.respondWith(caches.match(request).then(r => r || fetch(request)));
