@@ -465,6 +465,66 @@ textarea:-ms-input-placeholder { /* IE 10+ */
   touch-action: none !important;
   outline: none !important;
 }
+
+/* === Google Places Autocomplete (SSCo Dark Theme) === */
+.pac-container {
+  background-color: var(--card, #1e1e1f) !important;
+  color: #eee !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  z-index: 99999 !important;
+  overflow: hidden !important;
+  animation: pacFadeIn 0.22s ease-out;
+}
+
+@keyframes pacFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Suggestion rows */
+.pac-item {
+  background-color: transparent !important;
+  color: #eee !important;
+  padding: 11px 16px !important;
+  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+  cursor: pointer;
+  font-size: 15px !important;
+  transition: all 0.15s ease;
+}
+
+/* Hover + selected item */
+.pac-item:hover,
+.pac-item-selected {
+  background-color: rgba(43,108,255,0.1) !important; /* blue tint */
+  color: #fff !important;
+  border-left: 3px solid #2b6cff !important; /* your primary accent */
+  padding-left: 13px !important; /* compensate for border */
+}
+
+/* Primary query (bold white) */
+.pac-item-query {
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+
+/* Secondary text (city, region, country) */
+.pac-item span {
+  color: #bdbdbd !important;
+  font-size: 14px !important;
+}
+
+/* Divider cleanup */
+.pac-item:last-child {
+  border-bottom: none !important;
+}
+
+/* Hide "Powered by Google" branding */
+.pac-logo:after {
+  display: none !important;
+}
 </style>
 </head>
 
