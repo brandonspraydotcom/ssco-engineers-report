@@ -315,7 +315,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* Main report date */
 #date {
   flex: 0 0 auto;        /* stop flexbox from stretching */
-  width: 110px !important;   /* narrower, fits neatly beside engineer name */
+  width: auto !important;   /* narrower, fits neatly beside engineer name */
 }
 
 /* Time Records date inside time slots */
@@ -381,7 +381,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* --- Mobile Overrides (iPhone / iPad) --- */
 @media (max-width: 800px) {
   #date {
-    width: 100px !important;
+    width: auto !important;
   }
   .daySlot input[type="date"] {
     width: 180px !important;
@@ -1032,7 +1032,7 @@ document.addEventListener("DOMContentLoaded", () => {
          font-size:13px;color:#aaa;opacity:0.8;
          z-index:9999;backdrop-filter:blur(3px);
          transition:opacity 0.3s;">
-  v1.0.0 • Offline
+  v1.0.1 • Offline
 </span>
     </footer>
   
