@@ -37,10 +37,18 @@
   }
   </script>
 
+<!-- Google Maps JS (Places) -->
+<script
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete"
+  async defer>
+</script>
+
+<!-- Extended Component Library: enables <gmpx-*> web components --<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@0.6"></script>
+
   <!-- =======================
        🌍 Google Maps Places API
   ======================== -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
+ <!--  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=initAutocomplete"></script> -->
 
 <!-- =======================
        📄 html2pdf
@@ -61,6 +69,7 @@
        🍏 iOS PWA Meta
   ======================== -->
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SSCo Engineers Report">
   <link rel="apple-touch-icon" href="bottle2.png">
@@ -88,6 +97,39 @@
   letter-spacing: 0.5px;
   z-index: 9980;
   pointer-events: none; /* ✅ allows clicks to pass through */
+}
+
+/* Make component look like your inputs */
+gmpx-place-autocomplete {
+  width: 100%;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: #161616;
+  color: #eee;
+  box-sizing: border-box;
+  /* keep heights consistent with your inputs */
+  min-height: 44px; 
+}
+
+/* Style the actual input inside the shadow DOM */
+gmpx-place-autocomplete::part(input) {
+  color: #eee;
+  background: transparent;
+  font-size: 16px;
+  padding: 12px;         /* matches your inputs */
+  height: 44px;          /* matches your inputs */
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+}
+
+/* Dropdown menu styling (optional, looks good in dark UI) */
+gmpx-place-autocomplete::part(panel) {
+  background: #1f1f20;
+  color: #eee;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
 }
 
   #shareConfirmModal.show { display:flex !important; opacity:1; }
@@ -627,6 +669,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+function clearPdfSaved() {
+  localStorage.removeItem('pdfSaved');
+  showToast?.("🧹 PDF saved flag cleared", "info");
+}
+
 window.clearPdfSaved = clearPdfSaved;
 </script>
 
@@ -756,25 +803,36 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
 
     <div class="card">
-      <label>Customer</label>
-      <input id="custName" type="text" placeholder="Site Contact Name">
-      <div style="height:8px"></div>
-      <input id="custEmail" type="text" placeholder="Site Contact Email Address">
-      <div style="height:8px"></div>
-      <input id="custCompany" type="text" placeholder="Company">
-      <div class="row" style="margin-top:10px">
-        <input id="addr1" type="text" placeholder="Address Line 1" autocomplete="off">
-        <input id="addr2" type="text" placeholder="Address Line 2">
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input id="city" type="text" placeholder="City / Town">
-        <input id="region" type="text" placeholder="Region">
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input id="postal" type="text" placeholder="Postal Code">
-        <input id="country" type="text" placeholder="Country">
-      </div>
-    </div>
+  <label>Customer</label>
+  <input id="custName" type="text" placeholder="Site Contact Name">
+  <div style="height:8px"></div>
+  <input id="custEmail" type="text" placeholder="Site Contact Email Address">
+  <div style="height:8px"></div>
+
+  <!-- ✅ Company autocomplete UI -->
+
+  <!-- Mirror value here so your app keeps using #custCompany -->
+  <input id="custCompany" type="text" placeholder="Company">
+
+  <div class="row" style="margin-top:10px">
+    <!-- ✅ Address Line 1 autocomplete UI -->
+    
+    <!-- Mirror value here so your app keeps using #addr1 -->
+    <input id="addr1" type="text" placeholder="Address Line 1">
+
+    <input id="addr2" type="text" placeholder="Address Line 2">
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <input id="city" type="text" placeholder="City / Town">
+    <input id="region" type="text" placeholder="Region">
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <input id="postal" type="text" placeholder="Postal Code">
+    <input id="country" type="text" placeholder="Country">
+  </div>
+</div>
 
     <div class="card">
       <label>Report details</label>
@@ -2231,12 +2289,10 @@ return w;
 
 /* ---------- Auto-Save + Restore Form Data ---------- */
 
-// Save simple fields
 function saveField(el) {
   localStorage.setItem(el.id, el.value);
 }
-	
-// Restore simple fields
+
 function restoreFields() {
   document.querySelectorAll("input, textarea, select").forEach(el => {
     if (el.id && localStorage.getItem(el.id)) {
@@ -2245,7 +2301,6 @@ function restoreFields() {
   });
 }
 
-// Save signatures
 function saveSignature(id) {
   const c = document.getElementById(id);
   localStorage.setItem("sig_" + id, c.toDataURL());
@@ -2260,14 +2315,13 @@ function restoreSignatures() {
         const c = document.getElementById(id);
         const ctx = c.getContext("2d");
         ctx.clearRect(0, 0, c.width, c.height);
-		ctx.drawImage(img, 0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
       };
       img.src = data;
     }
   });
 }
 
-// Save photos
 function savePhotos() {
   ["beforeThumbs", "afterThumbs"].forEach(listId => {
     const imgs = Array.from(document.querySelectorAll(`#${listId} img`))
@@ -2307,45 +2361,45 @@ function resizeSignatureCanvases() {
   });
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  resizeSignatureCanvases();   // ✅ ensure buffer = CSS size
+/* ---------- Run once DOM is ready ---------- */
+document.addEventListener("DOMContentLoaded", () => {
+  // Restore / resize
+  resizeSignatureCanvases();
   restoreFields();
   restoreSignatures();
   restorePhotos();
-});
 
-// Save on every input change
-document.querySelectorAll("input, textarea, select").forEach(el => {
-  if (el.type !== "file") {
-    el.addEventListener("input", () => saveField(el));
-    el.addEventListener("change", () => saveField(el)); // <-- catches programmatic & dropdown changes
-  }
-});
+  // Auto-save listeners
+  document.querySelectorAll("input, textarea, select").forEach(el => {
+    if (el.type !== "file") {
+      el.addEventListener("input", () => saveField(el));
+      el.addEventListener("change", () => saveField(el));
+    }
+  });
 
-// Save signatures when changed
-["sig1", "sig2"].forEach(id => {
-  const c = document.getElementById(id);
-  c.addEventListener("mouseup", () => saveSignature(id));
-  c.addEventListener("touchend", () => saveSignature(id));
-});
+  ["sig1", "sig2"].forEach(id => {
+    const c = document.getElementById(id);
+    c.addEventListener("mouseup", () => saveSignature(id));
+    c.addEventListener("touchend", () => saveSignature(id));
+  });
 
-// Save photos whenever list changes
-document.getElementById("beforeInput").addEventListener("change", savePhotos);
-document.getElementById("afterInput").addEventListener("change", savePhotos);
+  document.getElementById("beforeInput")?.addEventListener("change", savePhotos);
+  document.getElementById("afterInput")?.addEventListener("change", savePhotos);
 
-// Restore everything on load
-window.addEventListener("DOMContentLoaded", () => {
-  restoreFields();
-  restoreSignatures();
-  restorePhotos();
-});
-
-// Exit reminder
-(function(){
-  let allowExit = false;
+  /* ---------- Exit reminder ---------- */
   const modal = document.getElementById('exitModal');
+  const exitSave = document.getElementById('exitSave');
+  const exitClose = document.getElementById('exitClose');
+  const exitCancel = document.getElementById('exitCancel');
 
-  window.addEventListener('beforeunload', (e) => {
+  if (!modal || !exitSave || !exitClose || !exitCancel) {
+    console.warn("Exit reminder modal not found — skipping setup.");
+    return;
+  }
+
+  let allowExit = false;
+
+  window.addEventListener('beforeunload', e => {
     if (allowExit) return;
     e.preventDefault();
     e.returnValue = '';
@@ -2353,21 +2407,21 @@ window.addEventListener("DOMContentLoaded", () => {
     return '';
   });
 
-  document.getElementById('exitSave').addEventListener('click', () => {
+  exitSave.addEventListener('click', () => {
     allowExit = true;
     document.getElementById('savePdf')?.click();
     modal.style.display = 'none';
   });
 
-  document.getElementById('exitClose').addEventListener('click', () => {
+  exitClose.addEventListener('click', () => {
     allowExit = true;
     window.close();
   });
 
-  document.getElementById('exitCancel').addEventListener('click', () => {
+  exitCancel.addEventListener('click', () => {
     modal.style.display = 'none';
   });
-})();
+});
 
 </script>
 
@@ -3328,7 +3382,7 @@ ok?.addEventListener('click', async () => {
 
   // 3) Cancel
   cancel?.addEventListener('click', closeModal);
-})();
+});
 </script>
 
 
@@ -4073,9 +4127,6 @@ clearModal.querySelector("#confirmClear").addEventListener("click", () => {
   });
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places"></script>
-
-
 <script>
 function fillAddress(place) {
   const addr1Field = document.getElementById("addr1");
@@ -4085,80 +4136,66 @@ function fillAddress(place) {
   const postalField = document.getElementById("postal");
   const countryField = document.getElementById("country");
 
-  // Reset fields first
-  addr1Field.value = "";
-  addr2Field.value = "";
-  cityField.value = "";
-  regionField.value = "";
-  postalField.value = "";
-  countryField.value = "";
+  // reset
+  addr1Field.value = addr2Field.value = cityField.value =
+  regionField.value = postalField.value = countryField.value = "";
 
-  if (!place.address_components) return;
+  if (!place || !place.address_components) return;
 
-  place.address_components.forEach(component => {
-    const types = component.types;
-    if (types.includes("street_number")) {
-      addr1Field.value = component.long_name + " " + addr1Field.value;
-    }
-    if (types.includes("route")) {
-      addr1Field.value = (addr1Field.value.trim() + " " + component.long_name).trim();
-    }
-    if (types.includes("subpremise")) {
-      addr2Field.value = component.long_name;
-    }
-    if (types.includes("locality")) {
-      cityField.value = component.long_name;
-    }
-    if (types.includes("administrative_area_level_1")) {
-      regionField.value = component.long_name;
-    }
-    if (types.includes("postal_code")) {
-      postalField.value = component.long_name;
-    }
-    if (types.includes("country")) {
-      countryField.value = component.long_name;
-    }
+  place.address_components.forEach(c => {
+    const t = c.types;
+    if (t.includes("street_number")) addr1Field.value = c.long_name + " " + addr1Field.value;
+    if (t.includes("route"))         addr1Field.value = (addr1Field.value.trim() + " " + c.long_name).trim();
+    if (t.includes("subpremise"))    addr2Field.value = c.long_name;
+    if (t.includes("locality"))      cityField.value = c.long_name;
+    if (t.includes("administrative_area_level_1")) regionField.value = c.long_name;
+    if (t.includes("postal_code"))   postalField.value = c.long_name;
+    if (t.includes("country"))       countryField.value = c.long_name;
   });
 }
 
 function initAutocomplete() {
-  const addr1Field = document.getElementById("addr1");
-  const companyField = document.getElementById("custCompany");
+  const addr1Field    = document.getElementById("addr1");
+  const companyField  = document.getElementById("custCompany");
 
-  // Autocomplete for addresses (addr1)
+  // guard: inputs must exist and be enabled
+  [addr1Field, companyField].forEach(el => {
+    if (el) {
+      el.removeAttribute("disabled");
+      el.style.pointerEvents = "auto";
+      el.autocomplete = "off";
+    }
+  });
+
+  // Address autocomplete
   const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
     fields: ["address_components", "geometry", "name"],
     types: ["geocode"]
   });
   addressAutocomplete.addListener("place_changed", () => {
-    const place = addressAutocomplete.getPlace();
+    fillAddress(addressAutocomplete.getPlace());
+  });
+
+  // Company autocomplete (businesses)
+  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
+    fields: ["address_components", "geometry", "name"],
+    types: ["establishment"]
+  });
+  companyAutocomplete.addListener("place_changed", () => {
+    const place = companyAutocomplete.getPlace();
+    if (!place) return;
+
+    // keep only the business name
+    const cleanName = (place.name || "")
+      .replace(/,.*/g, "")
+      .replace(/\s+\d+.*/, "")
+      .trim();
+    companyField.value = cleanName;
+
+    // still fill the address fields
     fillAddress(place);
   });
-
-  // --- Autocomplete for companies (custCompany) ---
-  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
-  fields: ["address_components", "geometry", "name"],
-  types: ["establishment"]
-});
-
-companyAutocomplete.addListener("place_changed", () => {
-  const place = companyAutocomplete.getPlace();
-  if (!place) return;
-
-  // ✅ Use only the business name (no address junk)
-  const cleanName = place.name
-    .replace(/,.*/g, "")     // remove anything after a comma
-    .replace(/\s+\d+.*/, "") // remove trailing numbers / street parts
-    .trim();
-
-  companyField.value = cleanName;
-
-  // ✅ Still fill the address fields as before
-  fillAddress(place);
-  });
 }
-
-window.addEventListener("load", initAutocomplete);
 </script>
 
 <!-- PDF generation libraries (must be loaded BEFORE buildPdf runs) -->
@@ -4178,7 +4215,7 @@ window.addEventListener("load", initAutocomplete);
   </div>
 </div>
 
-<style>
+<style> 
 /* === Simple reusable modal styles === */
 .modal-overlay {
   position: fixed;
