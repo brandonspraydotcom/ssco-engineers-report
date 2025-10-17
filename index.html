@@ -75,7 +75,7 @@
   position: relative;
   z-index: 9999;
 }
-#testModeContainer { display: show; }
+#testModeContainer { display: block; }
 #testModeBanner {
   position: fixed;
   top: 0;
@@ -195,6 +195,7 @@ select {
 }
 
   .btn{display:inline-block;padding:12px 16px;border-radius:10px;background:var(--primary);color:white;text-align:center;font-weight:700;cursor:pointer;border:none;font-size:16px}
+  .btn.silver{background:#C0C0C0;border:1px solid rgba(255,255,255,.12)} /* Silver */
   .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.12)}
   .btn.green{background:var(--accent)}
   .btn.remove{background:#CC0102;border:1px solid rgba(255,255,255,.12)} /* Clear buttons */
@@ -289,6 +290,54 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .daySlot input[type="time"] {
   flex: 0 0 auto;        /* stop flexbox from stretching */
   width: 130px !important;   /* compact but tappable on iPhone */
+}
+
+/* Progress: animated stripe + highlight sweep */
+#downloadProgressContainer {
+  position: relative;
+  overflow: hidden;
+}
+#downloadProgressBar {
+  position: relative;
+  height: 100%;
+  background: linear-gradient(90deg,#1ea64a,#2b6cff);
+  background-size: 200% 100%;
+  animation: barFlow 2s linear infinite;
+}
+#downloadProgressBar::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -40%;
+  width: 40%; height: 100%;
+  background: linear-gradient( to right, transparent, rgba(255,255,255,.25), transparent );
+  filter: blur(1px);
+  animation: barShine 1.8s ease-in-out infinite;
+}
+@keyframes barFlow {
+  0% { background-position: 0% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes barShine {
+  0% { left: -40%; }
+  100% { left: 120%; }
+}
+
+/* Success ring + tick */
+.success-ring {
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  background: radial-gradient( circle at center, rgba(124,252,0,.25), rgba(124,252,0,0) 65% );
+  box-shadow: 0 0 28px rgba(124,252,0,.65);
+  display: grid; place-items: center;
+  animation: ringPulse 1.2s ease-in-out infinite;
+}
+.success-tick {
+  font-size: 64px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.45));
+}
+@keyframes ringPulse {
+  0%,100% { transform: scale(1); box-shadow: 0 0 28px rgba(124,252,0,.65); }
+  50%     { transform: scale(1.06); box-shadow: 0 0 44px rgba(124,252,0,.9); }
 }
 
 /* --- Mobile Overrides (iPhone / iPad) --- */
@@ -706,21 +755,85 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     </div>
 
-    <div class="card">
-      <label>Photos — Before</label>
-      <input id="beforeInput" type="file" accept="image/*" multiple style="display:none">
-      <div class="controls">
-        <label class="uploadBtn" for="beforeInput"><span style="font-size: 30px;">📸</span></label>
-        <div id="beforeThumbs" class="photos"></div>
-      </div>
+<div class="card">
+  <label>Photos — Before</label>
+  <input id="beforeInput" type="file" accept="image/*" multiple style="display:none">
+  <div class="controls">
+    <label class="uploadBtn" for="beforeInput"><span style="font-size: 30px;">📸</span></label>
+    <div id="beforeThumbs" class="photos"></div>
+  </div>
 
-      <label style="margin-top:10px">Photos — After</label>
-      <input id="afterInput" type="file" accept="image/*" multiple style="display:none">
-      <div class="controls">
-        <label class="uploadBtn" for="afterInput"><span style="font-size: 30px;">📸</span></label>
-        <div id="afterThumbs" class="photos"></div>
+  <label style="margin-top:10px">Photos — After</label>
+  <input id="afterInput" type="file" accept="image/*" multiple style="display:none">
+  <div class="controls">
+    <label class="uploadBtn" for="afterInput"><span style="font-size: 30px;">📸</span></label>
+    <div id="afterThumbs" class="photos"></div>
+  </div>
+
+  <!-- 📦 Download Photos Trigger -->
+  <div style="margin-top:14px;text-align:center;">
+    <button id="downloadPhotosBtn" class="btn" type="button">
+      <span style="font-size: 24px;">⬇️📸</span>
+    </button>
+  </div>
+</div>
+
+<!-- 🌑 Enhanced Download Modal -->
+<div id="downloadPhotosModal"
+     style="display:none;position:fixed;inset:0;z-index:5200;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;opacity:0;
+            transition:opacity .3s ease;">
+  <div id="downloadPhotosBox"
+       style="position: relative; background: rgba(30,30,31,0.95);border-radius:16px;
+              padding:24px 22px;max-width:360px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;transition:all .25s ease;">
+
+    <div style="font-size:20px;margin-bottom:10px;">⬇️ Download Photos ⬇️</div>
+    <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 10px;">
+      Choose which photos to download.
+    </p>
+
+    <div id="photoSizeInfo"
+         style="font-size:14px;color:#19a84a;margin-bottom:12px;display:none;">
+      Calculating size…
+    </div>
+
+    <!-- Progress indicator -->
+    <div id="downloadProgressContainer"
+         style="display:none;width:100%;height:8px;background:rgba(255,255,255,0.1);
+                border-radius:6px;overflow:hidden;margin-bottom:14px;">
+      <div id="downloadProgressBar"
+           style="width:0%;height:100%;background:linear-gradient(90deg,#1ea64a,#2b6cff);
+                  transition:width 0.3s ease;"></div>
+    </div>
+
+    <div id="downloadProgressText"
+         style="font-size:13px;color:#ccc;margin-bottom:12px;display:none;">Zipping...</div>
+
+    <!-- Download buttons -->
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button id="dlBefore" class="btn silver">Before Photos</button>
+      <button id="dlAfter" class="btn green">After Photos</button>
+      <button id="dlAll" class="btn blue">All Photos</button>
+      <button id="closeDlModal" class="btn remove">Cancel</button>
+    </div>
+
+    <!-- ✅ Success overlay -->
+    <div id="downloadSuccess"
+         style="display:none;position:absolute;inset:0;z-index:5;
+                background:rgba(0,0,0,0.55);backdrop-filter:blur(3px);
+                align-items:center;justify-content:center;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+        <div class="success-ring">
+          <div class="success-tick">✅</div>
+        </div>
+        <div style="color:#7CFC00;font-weight:700;">Photos Ready</div>
       </div>
     </div>
+  </div>
+</div>
 
     <div class="card">
       <label>Signatures</label>
@@ -747,7 +860,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     <footer class="appFooter">
-      <button id="savePdf" class="btn" type="button" style="flex:1"><span style="font-size: 30px;">💾📄</span></button> <button id="clearForm" class="btn remove" style="flex:1"><span style="font-size: 30px;">🗑️</span></button>
+      <button id="savePdf" class="btn" type="button" style="flex:1"><span style="font-size: 30px;">💾</span></button> <button id="clearForm" class="btn remove" style="flex:1"><span style="font-size: 30px;">🗑️</span></button>
       <button id="sendEmail" class="btn green" type="button" style="flex:1"><span style="font-size: 30px;">📧</span></button>
       <!-- Version Badge -->
 <span id="versionBadge"
@@ -4044,6 +4157,141 @@ window.addEventListener("load", initAutocomplete);
 .btn-primary:hover { background: #1d4ed8; }
 .btn-secondary:hover { background: #d1d5db; }
 </style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const modal   = document.getElementById('downloadPhotosModal');
+  const box     = document.getElementById('downloadPhotosBox');
+  const btn     = document.getElementById('downloadPhotosBtn');
+  const close   = document.getElementById('closeDlModal');
+  const sizeInfo= document.getElementById('photoSizeInfo');
+  const bar     = document.getElementById('downloadProgressBar');
+  const barWrap = document.getElementById('downloadProgressContainer');
+  const barText = document.getElementById('downloadProgressText');
+  const successUI = document.getElementById('downloadSuccess');
+
+  // --- Modal open / close ---
+  const openModal = async () => {
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => {
+      modal.style.opacity = '1';
+      box.style.opacity = '1';
+      box.style.transform = 'scale(1)';
+    });
+
+    // Reset UI
+    barWrap.style.display = 'none';
+    barText.style.display = 'none';
+    sizeInfo.style.display = 'none';
+    successUI.style.display = 'none';
+
+    // Estimate file size
+    try {
+      const imgs = [...document.querySelectorAll('#beforeThumbs img, #afterThumbs img')];
+      if (imgs.length === 0) {
+        sizeInfo.textContent = 'No photos uploaded';
+        sizeInfo.style.color = '#ff4747';
+        sizeInfo.style.display = 'block';
+        return;
+      }
+
+      sizeInfo.textContent = 'Calculating size…';
+      sizeInfo.style.color = '#19a84a';
+      sizeInfo.style.display = 'block';
+
+      let totalBytes = 0;
+      for (const img of imgs) {
+        const res = await fetch(img.src);
+        const blob = await res.blob();
+        totalBytes += blob.size;
+      }
+
+      const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+      sizeInfo.textContent = `Approx. ${mb} MB total`;
+    } catch {
+      sizeInfo.textContent = 'Could not estimate size';
+      sizeInfo.style.color = '#ffb347';
+      sizeInfo.style.display = 'block';
+    }
+  };
+
+  const closeModal = () => {
+    modal.style.opacity = '0';
+    box.style.opacity = '0';
+    box.style.transform = 'scale(0.85)';
+    setTimeout(() => (modal.style.display = 'none'), 250);
+  };
+
+  btn.addEventListener('click', openModal);
+  close.addEventListener('click', closeModal);
+
+  // --- Download flow ---
+  async function downloadPhotos(which) {
+    try {
+      showToast?.('Preparing photos...', 'info');
+      const zip = new JSZip();
+      const beforeImgs = document.querySelectorAll('#beforeThumbs img');
+      const afterImgs  = document.querySelectorAll('#afterThumbs img');
+
+      const selectedImgs = [];
+      if (which === 'before' || which === 'all') selectedImgs.push(...beforeImgs);
+      if (which === 'after'  || which === 'all') selectedImgs.push(...afterImgs);
+
+      if (selectedImgs.length === 0) {
+        showToast?.('⚠️ No photos to download', 'warning');
+        return;
+      }
+
+      // Reset/progress on
+      sizeInfo.style.display = 'none';
+      barWrap.style.display  = 'block';
+      barText.style.display  = 'block';
+      bar.style.width        = '0%';
+      barText.textContent    = `Starting…`;
+      successUI.style.display= 'none';
+
+      const folder = zip.folder('Photos');
+      const total = selectedImgs.length;
+      for (let i = 0; i < total; i++) {
+        const img = selectedImgs[i];
+        const res = await fetch(img.src);
+        const blob = await res.blob();
+        const prefix = img.closest('#beforeThumbs') ? 'before' : 'after';
+        folder.file(`${prefix}_${String(i+1).padStart(2,'0')}.jpg`, blob);
+        const pct = Math.round(((i + 1) / total) * 100);
+        bar.style.width = pct + '%';
+        barText.textContent = `Zipping ${i + 1} / ${total} photos (${pct}%)`;
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      barText.textContent = 'Finalizing ZIP...';
+      const blob = await zip.generateAsync({ type: 'blob' });
+
+      const date = new Date().toISOString().split('T')[0];
+      const projectNo = document.getElementById('project')?.value || 'Report';
+      const zipName = `Engineer_Photos_${projectNo}_${date}.zip`;
+      saveAs(blob, zipName);
+
+      successUI.style.display = 'flex';
+      showToast?.('✅ Photos downloaded!', 'success');
+      navigator.vibrate?.(60);
+
+      await new Promise(r => setTimeout(r, 1000));
+      closeModal();
+    } catch (err) {
+      console.error('Download photos failed:', err);
+      showToast?.('❌ Failed to prepare photos', 'error');
+    }
+  }
+
+  document.getElementById('dlBefore').onclick = () => downloadPhotos('before');
+  document.getElementById('dlAfter').onclick  = () => downloadPhotos('after');
+  document.getElementById('dlAll').onclick    = () => downloadPhotos('all');
+});
+</script>
 
 </body>
 </html>
