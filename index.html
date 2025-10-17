@@ -37,11 +37,10 @@
   }
   </script>
 
-<!-- Google Maps JS (Places) -->
-<script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete"
-  async defer>
+<script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
 </script>
+<!-- Google Maps JS (Places) -->
 
 <!-- Extended Component Library: enables <gmpx-*> web components --<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@0.6"></script>
 
@@ -524,6 +523,24 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 /* Hide "Powered by Google" branding */
 .pac-logo:after {
   display: none !important;
+}
+
+/* === Ensure Google dropdown appears above all UI layers === */
+.pac-container {
+  position: absolute !important;
+  z-index: 999999 !important;  /* higher than modals / splash / quickBar */
+  pointer-events: auto !important;
+  overflow: visible !important;
+}
+
+.pac-item {
+  position: relative !important;
+  z-index: 999999 !important;
+}
+
+.card,
+.container {
+  overflow: visible !important;
 }
 </style>
 </head>
