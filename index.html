@@ -8,8 +8,6 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f0f10">
 
-  <link rel="preload" as="audio" href="water-splash-46402.mp3">
-
   <!-- =======================
        🧩 Service Worker
   ======================== -->
@@ -540,49 +538,89 @@ function processImageInWorker(file, { maxDim = 2000, quality = 0.72 } = {}) {
     fr.readAsArrayBuffer(file);
   });
 }
+</script>
 
-
+<script>
 document.addEventListener("DOMContentLoaded", () => {
   const splash = document.getElementById("splashScreen");
   const rainFront = document.getElementById("splashRainFront");
   const rainBack  = document.getElementById("splashRainBack");
   const splashAudio = document.getElementById("splashAudio");
 
-  // Seed rain immediately so drops exist at first paint
+  // Pre-seed rain visuals
   seedDrops(rainFront, 60, 0.7, 0.7);
   seedDrops(rainBack,  30, 1.2, 0.3);
 
-  // Start everything on the next frame to sync all animations
+  // --- 🧠 AUDIO FIX: unlock once and remember ---
+  let audioUnlocked = false;
+
+  if (localStorage.getItem("soundUnlocked")) {
+    // already unlocked from previous session
+    audioUnlocked = true;
+    try {
+      splashAudio.currentTime = 0;
+      splashAudio.volume = 1;
+      splashAudio.play().catch(() => {});
+    } catch {}
+  } else {
+    // wait for first user gesture to unlock
+    const unlockAudio = () => {
+      try {
+        splashAudio.currentTime = 0;
+        splashAudio.volume = 1;
+        splashAudio.play().catch(() => {});
+        localStorage.setItem("soundUnlocked", "1");
+        audioUnlocked = true;
+      } catch (err) {
+        console.warn("Audio unlock error:", err);
+      }
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+    };
+    window.addEventListener("click", unlockAudio, { once: true });
+    window.addEventListener("touchstart", unlockAudio, { once: true });
+  }
+
+  // --- Start splash visuals ---
   requestAnimationFrame(() => {
-    splash.classList.add("run"); // heartbeat + rain + halo all start here
+    splash.classList.add("run"); // start rain, pulse, etc.
 
-    // Try playing single splash sound
-try {
-  splashAudio.volume = 1.0;
-  splashAudio.currentTime = 0;
-  splashAudio.play().catch(()=>{});
-} catch {}
+    // Play if already unlocked (desktop or repeat visit)
+    if (audioUnlocked) {
+      try {
+        splashAudio.currentTime = 0;
+        splashAudio.play().catch(() => {});
+      } catch {}
+    }
 
-    // Fade everything out after 1.8–2.0 s total
-    setTimeout(()=>{
-      splash.style.opacity="0";
-      // optional short delay before removal
-setTimeout(()=>splashAudio.pause?.(), 1500);
-      setTimeout(()=>splash.remove(),600);
-    },1900);
+    // Fade everything out after ~2s total
+    setTimeout(() => {
+      // Smooth audio fade-out before removing splash
+      const fadeOut = setInterval(() => {
+        if (splashAudio.volume > 0.05) {
+          splashAudio.volume -= 0.05;
+        } else {
+          splashAudio.pause?.();
+          clearInterval(fadeOut);
+        }
+      }, 80);
+
+      splash.style.opacity = "0";
+      setTimeout(() => splash.remove(), 600);
+    }, 1900);
   });
 
-  // Helper to pre-seed drops already mid-animation
-  function seedDrops(container,count,speed,opacity){
-    const frag=document.createDocumentFragment();
-    for(let i=0;i<count;i++){
-      const d=document.createElement("div");
-      d.className="drop";
-      const dur=speed+Math.random()*speed;
-      d.style.left=Math.random()*100+"vw";
-      d.style.animationDuration=dur+"s";
-      d.style.animationDelay=(-Math.random()*dur)+"s"; // start mid-fall
-      d.style.background=`rgba(0,95,175,${opacity})`;
+  // --- Helper: pre-seed falling drops ---
+  function seedDrops(container, count, speed, opacity) {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < count; i++) {
+      const d = document.createElement("div");
+      d.className = "drop";
+      const dur = speed + Math.random() * speed;
+      d.style.left = Math.random() * 100 + "vw";
+      d.style.animationDuration = dur + "s";
+      d.style.animationDelay = (-Math.random() * dur) + "s";
+      d.style.background = `rgba(0,95,175,${opacity})`;
       frag.appendChild(d);
     }
     container.appendChild(frag);
