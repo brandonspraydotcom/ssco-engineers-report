@@ -15,7 +15,7 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then(reg => {
       function promptUpdate(worker) {
-        showToast('New version availabl — tap to update', 'info');
+        showToast('New version available — tap to update', 'info');
         document.getElementById('toast')?.addEventListener('click', () => {
           worker.postMessage({ type: 'SKIP_WAITING' });
         }, { once: true });
@@ -95,39 +95,6 @@
   letter-spacing: 0.5px;
   z-index: 9980;
   pointer-events: none; /* ✅ allows clicks to pass through */
-}
-
-/* Make component look like your inputs */
-gmpx-place-autocomplete {
-  width: 100%;
-  display: block;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: #161616;
-  color: #eee;
-  box-sizing: border-box;
-  /* keep heights consistent with your inputs */
-  min-height: 44px; 
-}
-
-/* Style the actual input inside the shadow DOM */
-gmpx-place-autocomplete::part(input) {
-  color: #eee;
-  background: transparent;
-  font-size: 16px;
-  padding: 12px;         /* matches your inputs */
-  height: 44px;          /* matches your inputs */
-  box-sizing: border-box;
-  border: none;
-  outline: none;
-}
-
-/* Dropdown menu styling (optional, looks good in dark UI) */
-gmpx-place-autocomplete::part(panel) {
-  background: #1f1f20;
-  color: #eee;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
 }
 
   #shareConfirmModal.show { display:flex !important; opacity:1; }
@@ -213,7 +180,7 @@ select {
 }
 
 /* Desktop defaults */
-#date { flex:1;max-width:345px }
+#date { flex:1;max-width:auto }
 .daySlot input[type="date"] { flex:1;max-width:600px }
 .daySlot input[type="time"] { flex:1;max-width:140px }
 
@@ -223,7 +190,7 @@ select {
   .daySlot input[type="date"],
   .daySlot input[type="time"] {
     flex: 0 0 auto !important;
-    width: 180px !important;  /* main date & time record date */
+    width: auto !important;  /* main date & time record date */
   }
 
   .daySlot input[type="time"] {
@@ -530,6 +497,36 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 .card,
 .container {
   overflow: visible !important;
+}
+
+/* === Force Google Places dropdown to appear above all modals === */
+.pac-container {
+  position: fixed !important;          /* instead of absolute */
+  top: auto !important;
+  left: auto !important;
+  z-index: 2147483647 !important;      /* MAX safe z-index */
+  background-color: #0f0f10 !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.75) !important;
+  color: #fff !important;
+  font-family: system-ui, sans-serif !important;
+  overflow: visible !important;
+  padding: 4px 0 !important;
+}
+
+/* keep rows stylish */
+.pac-item {
+  background: transparent !important;
+  color: #f1f1f1 !important;
+  font-size: 15px !important;
+  padding: 10px 14px !important;
+  transition: background 0.15s ease;
+}
+.pac-item:hover,
+.pac-item-selected {
+  background: rgba(0, 122, 255, 0.15) !important;
+  color: #fff !important;
 }
 </style>
 </head>
