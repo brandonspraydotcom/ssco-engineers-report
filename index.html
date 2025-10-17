@@ -281,8 +281,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 /* Main report date */
 #date {
-  flex: 0 0 auto;        /* stop flexbox from stretching */
-  width: auto !important;   /* narrower, fits neatly beside engineer name */
+  flex: 1 1 auto !important;    /* allow it to grow and shrink */
+  width: 100% !important;       /* full width inside its flex slot */
+  min-width: 140px;             /* same minimum as other fields */
 }
 
 /* Time Records date inside time slots */
@@ -433,18 +434,6 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 
 /* === Google Places Autocomplete (SSCo Dark Theme) === */
 /* === 🌌 Sleek Dark Theme for Google Places Autocomplete === */
-.pac-container {
-  background-color: #0f0f10 !important;      /* deep black background */
-  border: 1px solid rgba(255,255,255,0.08) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.75) !important;
-  color: #f9f9f9 !important;
-  font-family: "Inter", system-ui, sans-serif !important;
-  padding: 4px 0 !important;
-  z-index: 999999 !important;
-  backdrop-filter: blur(8px) !important;
-  overflow: hidden !important;
-}
 
 /* individual suggestion rows */
 .pac-item {
@@ -527,6 +516,41 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 .pac-item-selected {
   background: rgba(0, 122, 255, 0.15) !important;
   color: #fff !important;
+}
+
+/* === Engineer & Date field layout fix === */
+#engineer { 
+  flex: 2 !important;   /* wider name field */
+}
+
+#date { 
+  flex: 1 !important;   /* narrower date field */
+  width: 100% !important;
+  min-width: 140px;
+}
+
+/* === Normalize Date Field Height (to match text inputs) === */
+input[type="date"] {
+  padding: 12px !important;              /* match text fields */
+  line-height: normal !important;        /* fix Safari vertical centering */
+  height: 46px !important;               /* unify height */
+  box-sizing: border-box !important;     /* include padding in height */
+}
+
+/* Hide native calendar icon spacing quirks on Safari */
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  padding-left: 2px !important;
+  font-family: inherit;
+  color: #eee;
+}
+
+/* Keep the calendar icon small and aligned */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.8;
+  margin-right: 6px;
+  cursor: pointer;
 }
 </style>
 </head>
