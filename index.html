@@ -39,13 +39,13 @@
 
 <script async
   src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&v=weekly"></script>
-<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@latest"></script>
 
 <!--<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
 </script> -->
 <!-- Google Maps JS (Places) -->
 
-<!-- Extended Component Library: enables <gmpx-*> web components --<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@0.6"></script> -->
+
+
 
   <!-- =======================
        🌍 Google Maps Places API
@@ -556,6 +556,29 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.8;
   margin-right: 6px;
   cursor: pointer;
+}
+
+/* 🧱 Ensure all overlays are truly gone after splash */
+#splashScreen,
+#headerBannerWrap {
+  pointer-events: none !important;
+  opacity: 0 !important;
+  display: none !important;
+}
+
+/* 🧩 Make sure the autocomplete field itself is clickable */
+gmpx-place-autocomplete {
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 100 !important;
+}
+
+/* 🪄 Ensure dropdown appears above all UI layers */
+.gmpx-dropdown,
+.pac-container {
+  z-index: 2147483647 !important;
+  position: fixed !important;
+  overflow: visible !important;
 }
 </style>
 </head>
@@ -4300,6 +4323,17 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+setTimeout(() => {
+  const el = document.querySelector('#custCompany');
+  if (el) {
+    const rect = el.getBoundingClientRect();
+    console.log('📏 Company field visible:', rect.top >= 0 && rect.bottom <= window.innerHeight);
+    console.log('🖱️ Pointer events:', getComputedStyle(el).pointerEvents);
+  }
+}, 1000);
+</script>
+
+<script>
 
   // Address autocomplete
   const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
@@ -4582,6 +4616,108 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('dlBefore').onclick = () => downloadPhotos('before');
   document.getElementById('dlAfter').onclick  = () => downloadPhotos('after');
   document.getElementById('dlAll').onclick    = () => downloadPhotos('all');
+});
+</script>
+
+<script type="module">
+(async () => {
+  try {
+    // Wait for Google Maps API to fully load first
+    await new Promise((resolve) => {
+      if (window.google?.maps?.places) return resolve();
+      const check = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 100);
+    });
+
+    console.log("✅ Google Maps API ready");
+
+    // Import the Extended Component Library
+    await import('https://unpkg.com/@googlemaps/extended-component-library@latest');
+    await customElements.whenDefined('gmpx-place-autocomplete');
+
+    console.log("✅ gmpx-place-autocomplete registered");
+
+    const companyEl = document.querySelector('#custCompany');
+    if (!companyEl) {
+      console.warn("⚠️ #custCompany not found");
+      return;
+    }
+
+    // Ensure it is interactable
+    companyEl.removeAttribute('disabled');
+    companyEl.style.pointerEvents = 'auto';
+    companyEl.setAttribute('autocomplete', 'off');
+
+    // Listen for changes
+    companyEl.addEventListener('gmpx-placechange', (event) => {
+      const place = event.target.value;
+      console.log('📍 Selected place:', place);
+      if (place) fillAddress(place);
+    });
+  } catch (err) {
+    console.error("❌ Failed to initialize Places:", err);
+  }
+})();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const companyEl = document.querySelector("#custCompany");
+
+  if (!companyEl) return;
+
+  // ⏳ Wait a bit to let Google hydrate its shadow root
+  setTimeout(() => {
+    const shadow = companyEl.shadowRoot;
+
+    // If the component failed to create an internal <input>, inject one manually
+    if (!shadow || !shadow.querySelector("input")) {
+      console.warn("⚠️ Google Autocomplete shadow input missing — applying Safari fallback");
+
+      // Make a real visible input for Safari PWAs
+      const fallback = document.createElement("input");
+      fallback.type = "text";
+      fallback.placeholder = companyEl.getAttribute("placeholder") || "Company";
+      fallback.style.cssText = `
+        width: 100%;
+        height: 46px;
+        border-radius: 10px;
+        background: #161616;
+        color: #eee;
+        font-size: 16px;
+        padding: 12px;
+        border: 1px solid rgba(255,255,255,0.06);
+        box-sizing: border-box;
+      `;
+
+      // Put the fallback input *inside* the custom element visually
+      // Align visually with your existing input layout
+		companyEl.style.display = "block";
+		companyEl.style.width = "100%";
+		companyEl.style.marginTop = "0"; // no offset from label
+		companyEl.style.position = "static"; // stay in normal flow
+
+// Insert fallback right *after* the custom element in DOM flow
+companyEl.insertAdjacentElement("afterend", fallback);
+companyEl.style.display = "none"; // hide the broken custom element
+
+      // Hook up manual Google Autocomplete (old API) to the fallback input
+      const autocomplete = new google.maps.places.Autocomplete(fallback, {
+        fields: ["address_components", "geometry", "name"],
+        types: ["establishment"],
+      });
+
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        console.log("📍 Safari fallback selected:", place);
+        if (place) fillAddress(place);
+      });
+    }
+  }, 1200); // wait ~1s after DOM + API load
 });
 </script>
 
