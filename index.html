@@ -4304,429 +4304,83 @@ function fillAddress(place) {
   });
 </script>
 
-<script type="module">
-document.addEventListener("DOMContentLoaded", () => {
-  const companyEl = document.querySelector("#custCompany");
-
-  // Wait until the custom element is upgraded
-  if (customElements.whenDefined) {
-    customElements.whenDefined("gmpx-place-autocomplete").then(() => {
-      console.log("Google PlaceAutocomplete ready ✅");
-      companyEl.addEventListener("gmpx-placechange", (event) => {
-        const place = event.target.value;
-        console.log("Selected place:", place);
-        fillAddress(place);
-      });
-    });
-  }
-});
-</script>
-
-<script>
-setTimeout(() => {
-  const el = document.querySelector('#custCompany');
-  if (el) {
-    const rect = el.getBoundingClientRect();
-    console.log('📏 Company field visible:', rect.top >= 0 && rect.bottom <= window.innerHeight);
-    console.log('🖱️ Pointer events:', getComputedStyle(el).pointerEvents);
-  }
-}, 1000);
-</script>
-
-<script>
-
-  // Address autocomplete
-  const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
-    fields: ["address_components", "geometry", "name"],
-    types: ["geocode"]
-  });
-  addressAutocomplete.addListener("place_changed", () => {
-    fillAddress(addressAutocomplete.getPlace());
-  });
-
-  // Company autocomplete (businesses)
-  const companyAutocomplete = new google.maps.places.Autocomplete(companyField, {
-    fields: ["address_components", "geometry", "name"],
-    types: ["establishment"]
-  });
-  companyAutocomplete.addListener("place_changed", () => {
-    const place = companyAutocomplete.getPlace();
-    if (!place) return;
-
-    // keep only the business name
-    const cleanName = (place.name || "")
-      .replace(/,.*/g, "")
-      .replace(/\s+\d+.*/, "")
-      .trim();
-    companyField.value = cleanName;
-
-    // still fill the address fields
-    fillAddress(place);
-  });
-}
-</script>
-
-<script>
-(function () {
-  // Expose as global for the Google script callback
-  window.initAutocomplete = function () {
-    try {
-      const addr1Field   = document.getElementById("addr1");
-      const companyField = document.getElementById("custCompany");
-
-      if (!addr1Field || !companyField) {
-        console.warn("Autocomplete: inputs not found");
-        return;
-      }
-
-      // Make sure browser’s own autocomplete doesn’t cover Google’s
-      addr1Field.setAttribute('autocomplete', 'off');
-      companyField.setAttribute('autocomplete', 'off');
-
-      // Create the classic Autocomplete instances
-      const addressAC = new google.maps.places.Autocomplete(addr1Field, {
-        fields: ["address_components", "geometry", "name"],
-        types: ["geocode"]
-      });
-
-      const companyAC = new google.maps.places.Autocomplete(companyField, {
-        fields: ["address_components", "geometry", "name"],
-        types: ["establishment"]
-      });
-
-      addressAC.addListener("place_changed", () => {
-        const place = addressAC.getPlace();
-        fillAddress(place);   // your existing function
-      });
-
-      companyAC.addListener("place_changed", () => {
-        const place = companyAC.getPlace();
-        if (!place) return;
-
-        // Keep clean company name only
-        const clean = (place.name || "")
-          .replace(/,.*/g, "")
-          .replace(/\s+\d+.*/, "")
-          .trim();
-        companyField.value = clean;
-
-        // Still fill the address fields as before
-        fillAddress(place);
-      });
-
-      console.log("Places ready:", !!google?.maps?.places, "AC bound to #addr1 and #custCompany");
-    } catch (err) {
-      console.error("initAutocomplete failed:", err);
-    }
-  };
-})();
-</script>
-
-<!-- PDF generation libraries (must be loaded BEFORE buildPdf runs) -->
-
-<!-- Zoom indicator (global, visible for annotator zoom) -->
-<div id="zoomIndicator">100%</div>
-
-<!-- 📤 Share Confirmation Modal -->
-<div id="shareConfirmModal" class="modal-overlay" style="display:none;">
-  <div id="shareConfirmBox" class="modal-box">
-    <h3 style="margin-bottom:8px;">Confirm Share</h3>
-    <p style="font-size:14px;color:#444;">Are you sure you want to share this completed report?</p>
-    <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:10px;">
-      <button id="shareConfirmCancel" class="btn btn-secondary">Cancel</button>
-      <button id="shareConfirmOk" class="btn btn-primary">Share</button>
-    </div>
-  </div>
-</div>
-
-<style> 
-/* === Simple reusable modal styles === */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.4);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  transition: opacity 0.25s ease;
-}
-.modal-overlay.show {
-  display: flex !important;
-}
-.modal-box {
-  background: #fff;
-  border-radius: 12px;
-  padding: 18px 22px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-  width: 90%;
-  max-width: 320px;
-  transform: scale(0.85);
-  opacity: 0;
-  transition: all 0.25s ease;
-}
-.modal-overlay.show .modal-box {
-  transform: scale(1);
-  opacity: 1;
-}
-.btn {
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background 0.2s;
-}
-.btn-primary { background: #2563eb; color: #fff; }
-.btn-secondary { background: #e5e7eb; color: #111; }
-.btn-primary:hover { background: #1d4ed8; }
-.btn-secondary:hover { background: #d1d5db; }
-</style>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const modal   = document.getElementById('downloadPhotosModal');
-  const box     = document.getElementById('downloadPhotosBox');
-  const btn     = document.getElementById('downloadPhotosBtn');
-  const close   = document.getElementById('closeDlModal');
-  const sizeInfo= document.getElementById('photoSizeInfo');
-  const bar     = document.getElementById('downloadProgressBar');
-  const barWrap = document.getElementById('downloadProgressContainer');
-  const barText = document.getElementById('downloadProgressText');
-  const successUI = document.getElementById('downloadSuccess');
-
-  // --- Modal open / close ---
-  const openModal = async () => {
-    modal.style.display = 'flex';
-    requestAnimationFrame(() => {
-      modal.style.opacity = '1';
-      box.style.opacity = '1';
-      box.style.transform = 'scale(1)';
-    });
-
-    // Reset UI
-    barWrap.style.display = 'none';
-    barText.style.display = 'none';
-    sizeInfo.style.display = 'none';
-    successUI.style.display = 'none';
-
-    // Estimate file size
-    try {
-      const imgs = [...document.querySelectorAll('#beforeThumbs img, #afterThumbs img')];
-      if (imgs.length === 0) {
-        sizeInfo.textContent = 'No photos uploaded';
-        sizeInfo.style.color = '#ff4747';
-        sizeInfo.style.display = 'block';
-        return;
-      }
-
-      sizeInfo.textContent = 'Calculating size…';
-      sizeInfo.style.color = '#19a84a';
-      sizeInfo.style.display = 'block';
-
-      let totalBytes = 0;
-      for (const img of imgs) {
-        const res = await fetch(img.src);
-        const blob = await res.blob();
-        totalBytes += blob.size;
-      }
-
-      const mb = (totalBytes / (1024 * 1024)).toFixed(2);
-      sizeInfo.textContent = `Approx. ${mb} MB total`;
-    } catch {
-      sizeInfo.textContent = 'Could not estimate size';
-      sizeInfo.style.color = '#ffb347';
-      sizeInfo.style.display = 'block';
-    }
-  };
-
-  const closeModal = () => {
-    modal.style.opacity = '0';
-    box.style.opacity = '0';
-    box.style.transform = 'scale(0.85)';
-    setTimeout(() => (modal.style.display = 'none'), 250);
-  };
-
-  btn.addEventListener('click', openModal);
-  close.addEventListener('click', closeModal);
-
-  // --- Download flow ---
-  async function downloadPhotos(which) {
-    try {
-      showToast?.('Preparing photos...', 'info');
-      const zip = new JSZip();
-      const beforeImgs = document.querySelectorAll('#beforeThumbs img');
-      const afterImgs  = document.querySelectorAll('#afterThumbs img');
-
-      const selectedImgs = [];
-      if (which === 'before' || which === 'all') selectedImgs.push(...beforeImgs);
-      if (which === 'after'  || which === 'all') selectedImgs.push(...afterImgs);
-
-      if (selectedImgs.length === 0) {
-        showToast?.('⚠️ No photos to download', 'warning');
-        return;
-      }
-
-      // Reset/progress on
-      sizeInfo.style.display = 'none';
-      barWrap.style.display  = 'block';
-      barText.style.display  = 'block';
-      bar.style.width        = '0%';
-      barText.textContent    = `Starting…`;
-      successUI.style.display= 'none';
-
-      const folder = zip.folder('Photos');
-      const total = selectedImgs.length;
-      for (let i = 0; i < total; i++) {
-        const img = selectedImgs[i];
-        const res = await fetch(img.src);
-        const blob = await res.blob();
-        const prefix = img.closest('#beforeThumbs') ? 'before' : 'after';
-        folder.file(`${prefix}_${String(i+1).padStart(2,'0')}.jpg`, blob);
-        const pct = Math.round(((i + 1) / total) * 100);
-        bar.style.width = pct + '%';
-        barText.textContent = `Zipping ${i + 1} / ${total} photos (${pct}%)`;
-        await new Promise(r => setTimeout(r, 50));
-      }
-
-      barText.textContent = 'Finalizing ZIP...';
-      const blob = await zip.generateAsync({ type: 'blob' });
-
-      const date = new Date().toISOString().split('T')[0];
-      const projectNo = document.getElementById('project')?.value || 'Report';
-      const zipName = `Engineer_Photos_${projectNo}_${date}.zip`;
-      saveAs(blob, zipName);
-
-      successUI.style.display = 'flex';
-      showToast?.('✅ Photos downloaded!', 'success');
-      navigator.vibrate?.(60);
-
-      await new Promise(r => setTimeout(r, 1000));
-      closeModal();
-    } catch (err) {
-      console.error('Download photos failed:', err);
-      showToast?.('❌ Failed to prepare photos', 'error');
-    }
-  }
-
-  document.getElementById('dlBefore').onclick = () => downloadPhotos('before');
-  document.getElementById('dlAfter').onclick  = () => downloadPhotos('after');
-  document.getElementById('dlAll').onclick    = () => downloadPhotos('all');
-});
-</script>
-
-<script type="module">
-(async () => {
-  try {
-    // Wait for Google Maps API to fully load first
-    await new Promise((resolve) => {
-      if (window.google?.maps?.places) return resolve();
-      const check = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(check);
-          resolve();
-        }
-      }, 100);
-    });
-
-    console.log("✅ Google Maps API ready");
-
-    // Import the Extended Component Library
-    await import('https://unpkg.com/@googlemaps/extended-component-library@latest');
-    await customElements.whenDefined('gmpx-place-autocomplete');
-
-    console.log("✅ gmpx-place-autocomplete registered");
-
-    const companyEl = document.querySelector('#custCompany');
-    if (!companyEl) {
-      console.warn("⚠️ #custCompany not found");
-      return;
-    }
-
-    // Ensure it is interactable
-    companyEl.removeAttribute('disabled');
-    companyEl.style.pointerEvents = 'auto';
-    companyEl.setAttribute('autocomplete', 'off');
-
-    // Listen for changes
-    companyEl.addEventListener('gmpx-placechange', (event) => {
-      const place = event.target.value;
-      console.log('📍 Selected place:', place);
-      if (place) fillAddress(place);
-    });
-  } catch (err) {
-    console.error("❌ Failed to initialize Places:", err);
-  }
-})();
-</script>
-
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const companyEl = document.querySelector("#custCompany");
+  const fields = [
+    { id: "custCompany", type: "establishment", placeholder: "Company" },
+    { id: "addr1", type: "geocode", placeholder: "Address Line 1" }
+  ];
 
-  if (!companyEl) return;
+  fields.forEach(({ id, type, placeholder }) => {
+    const el = document.querySelector(`#${id}`);
+    if (!el) return;
 
-  setTimeout(() => {
-    const shadow = companyEl.shadowRoot;
+    setTimeout(() => {
+      const shadow = el.shadowRoot;
+      if (!shadow || !shadow.querySelector("input")) {
+        console.warn(`⚠️ ${id}: shadow input missing — applying Safari fallback`);
 
-    // 🧩 If component didn't render its internal input, apply Safari fallback
-    if (!shadow || !shadow.querySelector("input")) {
-      console.warn("⚠️ Google Autocomplete shadow input missing — applying Safari fallback");
+        // ✅ Create fallback input styled like the others
+        const fallback = document.createElement("input");
+        fallback.type = "text";
+        fallback.id = `${id}Fallback`;
+        fallback.placeholder = placeholder;
+        fallback.style.cssText = `
+          width: 100%;
+          height: 46px;
+          border-radius: 10px;
+          background: #161616;
+          color: #eee;
+          font-size: 16px;
+          padding: 12px;
+          border: 1px solid rgba(255,255,255,0.06);
+          box-sizing: border-box;
+        `;
 
-      // ✅ Create normal input styled to match SSCo
-      const fallback = document.createElement("input");
-      fallback.type = "text";
-      fallback.id = "custCompanyFallback";
-      fallback.placeholder = companyEl.getAttribute("placeholder") || "Company";
-      fallback.style.cssText = `
-        width: 100%;
-        height: 46px;
-        border-radius: 10px;
-        background: #161616;
-        color: #eee;
-        font-size: 16px;
-        padding: 12px;
-        border: 1px solid rgba(255,255,255,0.06);
-        box-sizing: border-box;
-      `;
+        // Insert after broken component, hide broken element
+        el.insertAdjacentElement("afterend", fallback);
+        el.style.display = "none";
 
-      // Insert it in normal document flow and hide the broken component
-      companyEl.insertAdjacentElement("afterend", fallback);
-      companyEl.style.display = "none";
+        // ✅ Attach classic Google Autocomplete
+        const autocomplete = new google.maps.places.Autocomplete(fallback, {
+          fields: ["address_components", "geometry", "name"],
+          types: [type]
+        });
 
-      // ✅ Attach legacy Google Autocomplete
-      const autocomplete = new google.maps.places.Autocomplete(fallback, {
-        fields: ["address_components", "geometry", "name"],
-        types: ["establishment"]
-      });
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          if (!place) return;
 
-      // ✅ Handle selection
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        if (!place) return;
+          if (id === "custCompany") {
+            // 🧼 Only show business name
+            const cleanName = (place.name || "")
+              .replace(/,.*/g, "")
+              .replace(/\s+\d+.*/, "")
+              .trim();
+            fallback.value = cleanName;
+          } else {
+            // 🧼 For addr1, show street address
+            const addressParts = [];
+            if (place.address_components) {
+              place.address_components.forEach(c => {
+                if (c.types.includes("street_number")) addressParts.unshift(c.long_name);
+                if (c.types.includes("route")) addressParts.push(c.long_name);
+              });
+            }
+            fallback.value = addressParts.join(" ").trim();
+          }
 
-        // 🧼 Keep only the clean company name
-        const cleanName = (place.name || "")
-          .replace(/,.*/g, "")
-          .replace(/\s+\d+.*/, "")
-          .trim();
-        fallback.value = cleanName;
-
-        // Fill address fields normally
-        fillAddress(place);
-      });
-    }
-  }, 1200);
+          // ✅ Fill the rest of the address fields
+          fillAddress(place);
+        });
+      }
+    }, 1200);
+  });
 });
 </script>
 
-<!-- 🎨 Dark theme styling for the fallback dropdown -->
+<!-- 🎨 Unified Dark Dropdown Theme -->
 <style>
-/* === 🌌 SSCo Dark Autocomplete Dropdown === */
 .pac-container {
   background-color: #0f0f10 !important;
   border: 1px solid rgba(255,255,255,0.08) !important;
@@ -4737,7 +4391,6 @@ document.addEventListener("DOMContentLoaded", () => {
   z-index: 2147483647 !important;
   padding: 4px 0 !important;
 }
-
 .pac-item {
   background: transparent !important;
   color: #f1f1f1 !important;
@@ -4745,33 +4398,27 @@ document.addEventListener("DOMContentLoaded", () => {
   padding: 10px 14px !important;
   transition: background 0.15s ease;
 }
-
 .pac-item:hover,
 .pac-item-selected {
   background: rgba(0, 122, 255, 0.15) !important;
   color: #fff !important;
   border-radius: 6px !important;
 }
-
 .pac-item-query {
   color: #fff !important;
   font-weight: 500 !important;
 }
-
 .pac-matched {
-  color: #1ea64a !important; /* SSCo accent green */
+  color: #1ea64a !important;
 }
-
 .pac-item span:last-child {
   color: rgba(255,255,255,0.6) !important;
   font-size: 13px !important;
 }
-
 .pac-icon {
   filter: invert(1) brightness(1.3);
   margin-right: 6px !important;
 }
-
 .pac-container:after {
   background: #0f0f10 !important;
   color: rgba(255,255,255,0.5) !important;
