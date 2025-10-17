@@ -2454,13 +2454,25 @@ window.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
-<!-- Email Reminder Modal -->
-<div id="emailModal" style="display:none;position:fixed;inset:0;z-index:4000;
-  background:rgba(0,0,0,0.6);align-items:center;justify-content:center">
-  <div style="background:#1e1e1f;padding:20px;border-radius:14px;
-    max-width:320px;text-align:center;box-shadow:0 12px 30px rgba(0,0,0,.5)">
-    <p>📎 Remember to attach the PDF to the email manually.</p>
-    <button id="emailOk" class="btn green">OK</button>
+<!-- 📧 Email Reminder Modal -->
+<div id="emailModal"
+     style="display:none;position:fixed;inset:0;z-index:4000;
+            background:rgba(0,0,0,0.6);align-items:center;justify-content:center;
+            transition:opacity 0.25s ease;opacity:0;">
+  <div id="emailBox"
+       style="background:#1e1e1f;padding:20px;border-radius:14px;
+              max-width:320px;text-align:center;box-shadow:0 12px 30px rgba(0,0,0,.5);
+              transform:scale(0.85);transition:all 0.25s ease;opacity:0;">
+    <p style="font-size:18px;line-height:1.5;color:#ddd;margin-bottom:16px;">
+      📎 Remember to attach the PDF to the email manually.
+    </p>
+    <p style="font-size:14px;color:#ffb347;margin-bottom:18px;">
+      ⚠️ Pressing <strong>OK</strong> will clear the form.
+    </p>
+    <div style="display:flex;justify-content:center;gap:10px;">
+      <button id="emailCancel" class="btn ghost">Cancel</button>
+      <button id="emailOk" class="btn green">OK</button>
+    </div>
   </div>
 </div>
 
@@ -2599,7 +2611,6 @@ function validateBeforeEmail() {
 
 <script>
 // === Quick Fill / TEST MODE ===
-// === Quick Fill / Test Mode ===
 const testToggle = document.getElementById('testModeToggle');
 
 // --- Create a visible banner ---
@@ -2899,15 +2910,33 @@ function highlightField(el, isFirst = false) {
 document.addEventListener("DOMContentLoaded", () => {
   const btn    = document.getElementById("sendEmail");
   const modal  = document.getElementById("emailModal");
+  const box    = document.getElementById("emailBox");
   const ok     = document.getElementById("emailOk");
+  const cancel = document.getElementById("emailCancel");
 
-  if (!btn || !modal || !ok) {
+  if (!btn || !modal || !ok || !cancel) {
     console.warn("Email reminder setup skipped: missing element(s).");
     return;
   }
 
   modal.style.display = "none";
   let reminderShown = false;
+
+  function openModal() {
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.opacity = "1";
+      box.style.transform = "scale(1)";
+    });
+  }
+
+  function closeModal() {
+    modal.style.opacity = "0";
+    box.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    setTimeout(() => (modal.style.display = "none"), 250);
+  }
 
   // --- Click "Send Email" ---
   btn.addEventListener("click", async (e) => {
@@ -2929,38 +2958,39 @@ document.addEventListener("DOMContentLoaded", () => {
       bump("warning");
       showToast("⚠️ Please complete the highlighted fields.", "warning");
 
-      // Scroll smoothly to the first missing field
       const firstMissing = document.querySelector(".highlight-missing, [style*='box-shadow']");
-      if (firstMissing) {
-        firstMissing.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      if (firstMissing) firstMissing.scrollIntoView({ behavior: "smooth", block: "center" });
 
-      // Give time for scroll and highlight animations to complete
       await new Promise(r => setTimeout(r, 1200));
       return;
     }
 
-    // Step 3: All good → Show validation success
+    // Step 3: All good → Show success + open modal
     if (!reminderShown) {
       showValidationSuccess();
-      setTimeout(() => {
-        modal.style.display = "flex";
-      }, 1400);
+      setTimeout(openModal, 1400);
     } else {
       sendEmailNow();
     }
   });
 
-  // --- Confirm modal OK ---
+  // --- OK: Proceed with sending and clearing ---
   ok.addEventListener("click", () => {
-    modal.style.display = "none";
+    closeModal();
     reminderShown = true;
     bump("info");
     showToast("📧 Opening mail app…", "info");
     sendEmailNow();
   });
 
-  // --- Actual mailto builder ---
+  // --- Cancel: simply close, no clearing ---
+  cancel.addEventListener("click", () => {
+    bump("info");
+    showToast("Email cancelled", "info");
+    closeModal();
+  });
+
+  // --- Actual mailto builder (unchanged) ---
   function sendEmailNow() {
     const to = document.getElementById("custEmail").value || "";
     const cc = document.getElementById("salesEmail").value || "";
@@ -2991,19 +3021,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (cc) mailtoLink += `&cc=${encodeURIComponent(cc)}`;
     if (bcc) mailtoLink += `&bcc=${encodeURIComponent(bcc)}`;
 
-    // ✅ Open email app
     window.location.href = mailtoLink;
 
-    // ✅ Clear form + localStorage after sending
+    // ✅ Auto-clear form after sending
     setTimeout(() => {
-  localStorage.clear();
-  document.querySelectorAll("input, textarea").forEach(el => {
-    if (el.type !== "button" && el.type !== "submit" && el.type !== "file") {
-      el.value = "";
-    }
-  });
-  showToast("🧹 Form cleared for next report", "info");
-}, 3000);
+      localStorage.clear();
+      document.querySelectorAll("input, textarea").forEach(el => {
+        if (!["button", "submit", "file"].includes(el.type)) el.value = "";
+      });
+      showToast("🧹 Form cleared for next report", "info");
+    }, 3000);
   }
 });
 </script>
