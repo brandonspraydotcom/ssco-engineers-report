@@ -37,8 +37,12 @@
   }
   </script>
 
-<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
-</script>
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&v=weekly"></script>
+<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@latest"></script>
+
+<!--<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
+</script> -->
 <!-- Google Maps JS (Places) -->
 
 <!-- Extended Component Library: enables <gmpx-*> web components --<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@0.6"></script> -->
@@ -900,7 +904,28 @@ document.addEventListener("DOMContentLoaded", () => {
   <!-- ✅ Company autocomplete UI -->
 
   <!-- Mirror value here so your app keeps using #custCompany -->
-  <input id="custCompany" type="text" placeholder="Company">
+  <!--<input id="custCompany" type="text" placeholder="Company"> -->
+
+	<gmpx-place-autocomplete
+  		id="custCompany"
+  		placeholder="Company"
+  		style="
+    		display:block;
+    		width:100%;
+			height:46px;
+    		border-radius:10px;
+    		background:#161616;
+    		color:#eee;
+    		font-size:16px;
+    		padding:12px;
+    		border:1px solid rgba(255,255,255,0.06);
+    		--gmpx-color-surface: #161616;
+    		--gmpx-color-on-surface: #fff;
+    		--gmpx-color-outline: rgba(255,255,255,0.08);
+    		--gmpx-color-primary: #1ea64a;
+    		--gmpx-border-radius: 10px;
+  		">
+	</gmpx-place-autocomplete>
 
   <div class="row" style="margin-top:10px">
     <!-- ✅ Address Line 1 autocomplete UI -->
@@ -4242,7 +4267,7 @@ function fillAddress(place) {
   });
 }
 
-function initAutocomplete() {
+// function initAutocomplete() {
   const addr1Field    = document.getElementById("addr1");
   const companyField  = document.getElementById("custCompany");
 
@@ -4254,6 +4279,27 @@ function initAutocomplete() {
       el.autocomplete = "off";
     }
   });
+</script>
+
+<script type="module">
+document.addEventListener("DOMContentLoaded", () => {
+  const companyEl = document.querySelector("#custCompany");
+
+  // Wait until the custom element is upgraded
+  if (customElements.whenDefined) {
+    customElements.whenDefined("gmpx-place-autocomplete").then(() => {
+      console.log("Google PlaceAutocomplete ready ✅");
+      companyEl.addEventListener("gmpx-placechange", (event) => {
+        const place = event.target.value;
+        console.log("Selected place:", place);
+        fillAddress(place);
+      });
+    });
+  }
+});
+</script>
+
+<script>
 
   // Address autocomplete
   const addressAutocomplete = new google.maps.places.Autocomplete(addr1Field, {
