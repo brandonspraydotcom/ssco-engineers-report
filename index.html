@@ -37,12 +37,11 @@
   }
   </script>
 
-<script async defer
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
 </script>
 <!-- Google Maps JS (Places) -->
 
-<!-- Extended Component Library: enables <gmpx-*> web components --<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@0.6"></script>
+<!-- Extended Component Library: enables <gmpx-*> web components --<script type="module" src="https://unpkg.com/@googlemaps/extended-component-library@0.6"></script> -->
 
   <!-- =======================
        🌍 Google Maps Places API
@@ -4273,6 +4272,62 @@ function initAutocomplete() {
     fillAddress(place);
   });
 }
+</script>
+
+<script>
+(function () {
+  // Expose as global for the Google script callback
+  window.initAutocomplete = function () {
+    try {
+      const addr1Field   = document.getElementById("addr1");
+      const companyField = document.getElementById("custCompany");
+
+      if (!addr1Field || !companyField) {
+        console.warn("Autocomplete: inputs not found");
+        return;
+      }
+
+      // Make sure browser’s own autocomplete doesn’t cover Google’s
+      addr1Field.setAttribute('autocomplete', 'off');
+      companyField.setAttribute('autocomplete', 'off');
+
+      // Create the classic Autocomplete instances
+      const addressAC = new google.maps.places.Autocomplete(addr1Field, {
+        fields: ["address_components", "geometry", "name"],
+        types: ["geocode"]
+      });
+
+      const companyAC = new google.maps.places.Autocomplete(companyField, {
+        fields: ["address_components", "geometry", "name"],
+        types: ["establishment"]
+      });
+
+      addressAC.addListener("place_changed", () => {
+        const place = addressAC.getPlace();
+        fillAddress(place);   // your existing function
+      });
+
+      companyAC.addListener("place_changed", () => {
+        const place = companyAC.getPlace();
+        if (!place) return;
+
+        // Keep clean company name only
+        const clean = (place.name || "")
+          .replace(/,.*/g, "")
+          .replace(/\s+\d+.*/, "")
+          .trim();
+        companyField.value = clean;
+
+        // Still fill the address fields as before
+        fillAddress(place);
+      });
+
+      console.log("Places ready:", !!google?.maps?.places, "AC bound to #addr1 and #custCompany");
+    } catch (err) {
+      console.error("initAutocomplete failed:", err);
+    }
+  };
+})();
 </script>
 
 <!-- PDF generation libraries (must be loaded BEFORE buildPdf runs) -->
