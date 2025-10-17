@@ -465,76 +465,66 @@ textarea:-ms-input-placeholder { /* IE 10+ */
 }
 
 /* === Google Places Autocomplete (SSCo Dark Theme) === */
+/* === 🌌 Sleek Dark Theme for Google Places Autocomplete === */
 .pac-container {
-  background-color: var(--card, #1e1e1f) !important;
-  color: #eee !important;
-  border-radius: 10px !important;
+  background-color: #0f0f10 !important;      /* deep black background */
   border: 1px solid rgba(255,255,255,0.08) !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-  z-index: 99999 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.75) !important;
+  color: #f9f9f9 !important;
+  font-family: "Inter", system-ui, sans-serif !important;
+  padding: 4px 0 !important;
+  z-index: 999999 !important;
+  backdrop-filter: blur(8px) !important;
   overflow: hidden !important;
-  animation: pacFadeIn 0.22s ease-out;
 }
 
-@keyframes pacFadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Suggestion rows */
+/* individual suggestion rows */
 .pac-item {
   background-color: transparent !important;
-  color: #eee !important;
-  padding: 11px 16px !important;
-  border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-  cursor: pointer;
+  color: #f1f1f1 !important;
+  padding: 10px 14px !important;
+  border: none !important;
   font-size: 15px !important;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
 }
 
-/* Hover + selected item */
+/* icon + text alignment fix */
+.pac-icon {
+  filter: invert(1) brightness(1.3);
+  margin-right: 6px !important;
+}
+
+/* hover/active item */
 .pac-item:hover,
 .pac-item-selected {
-  background-color: rgba(43,108,255,0.1) !important; /* blue tint */
+  background-color: rgba(0, 122, 255, 0.15) !important;
   color: #fff !important;
-  border-left: 3px solid #2b6cff !important; /* your primary accent */
-  padding-left: 13px !important; /* compensate for border */
+  border-radius: 6px !important;
 }
 
-/* Primary query (bold white) */
+/* main text and secondary text (e.g., city) */
 .pac-item-query {
   color: #fff !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
+}
+.pac-matched {
+  color: #61dafb !important; /* soft accent for matched text */
 }
 
-/* Secondary text (city, region, country) */
-.pac-item span {
-  color: #bdbdbd !important;
-  font-size: 14px !important;
+/* address subtext (the greyish secondary line) */
+.pac-item span:last-child {
+  color: rgba(255,255,255,0.6) !important;
+  font-size: 13px !important;
 }
 
-/* Divider cleanup */
-.pac-item:last-child {
-  border-bottom: none !important;
-}
-
-/* Hide "Powered by Google" branding */
-.pac-logo:after {
-  display: none !important;
-}
-
-/* === Ensure Google dropdown appears above all UI layers === */
-.pac-container {
-  position: absolute !important;
-  z-index: 999999 !important;  /* higher than modals / splash / quickBar */
-  pointer-events: auto !important;
-  overflow: visible !important;
-}
-
-.pac-item {
-  position: relative !important;
-  z-index: 999999 !important;
+/* attribution (the tiny “Powered by Google” footer) */
+.pac-container:after {
+  background: #0f0f10 !important;
+  color: rgba(255,255,255,0.5) !important;
+  border-top: 1px solid rgba(255,255,255,0.08) !important;
+  padding: 6px 10px !important;
+  border-radius: 0 0 12px 12px !important;
 }
 
 .card,
