@@ -353,6 +353,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   50%     { transform: scale(1.06); box-shadow: 0 0 44px rgba(124,252,0,.9); }
 }
 
+#formatSelectModal.show { display:flex !important; opacity:1; }
+#formatSelectModal.show #formatSelectBox { transform:scale(1); opacity:1; }
+
 /* --- Mobile Overrides (iPhone / iPad) --- */
 @media (max-width: 800px) {
   #date {
@@ -1034,6 +1037,29 @@ document.addEventListener("DOMContentLoaded", () => {
          style="font-size:14px;color:#19a84a;margin-bottom:12px;display:none;">
       Calculating size…
     </div>
+
+<!-- 📦 Format Selection Modal -->
+<div id="formatSelectModal"
+     style="display:none;position:fixed;inset:0;z-index:5300;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;opacity:0;
+            transition:opacity .3s ease;">
+  <div id="formatSelectBox"
+       style="background:rgba(30,30,31,0.95);border-radius:16px;
+              padding:24px 22px;max-width:360px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;transition:all .25s ease;">
+    <div style="font-size:20px;margin-bottom:10px;">📁 Choose Download Format</div>
+    <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 10px;">
+      How would you like to download the selected photos?
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button id="chooseZip" class="btn silver">ZIP Archive</button>
+      <button id="choosePdf" class="btn green">PDF Document</button>
+      <button id="cancelFormat" class="btn ghost">Cancel</button>
+    </div>
+  </div>
+</div>
 
     <!-- Progress indicator -->
     <div id="downloadProgressContainer"
@@ -4370,11 +4396,170 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 500);
     }, 1800);
   }
+</script>
 
-  // --- Button bindings ---
-  document.getElementById("dlBefore")?.addEventListener("click", () => zipAndDownload("before"));
-  document.getElementById("dlAfter") ?.addEventListener("click", () => zipAndDownload("after"));
-  document.getElementById("dlAll")   ?.addEventListener("click", () => zipAndDownload("all"));
+<!-- 📁 Choose Format Modal -->
+<div id="formatSelectModal"
+     style="display:none;position:fixed;inset:0;z-index:5300;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;opacity:0;
+            transition:opacity .3s ease;">
+  <div id="formatSelectBox"
+       style="background:rgba(30,30,31,0.95);border-radius:16px;
+              padding:24px 22px;max-width:360px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;transition:all .25s ease;">
+    <div style="font-size:20px;margin-bottom:10px;">📁 Choose Download Format</div>
+    <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 10px;">
+      How would you like to download the selected photos?
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button id="chooseZip" class="btn silver">ZIP Archive</button>
+      <button id="choosePdf" class="btn green">PDF Document</button>
+      <button id="cancelFormat" class="btn ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showFormatSelect(which) {
+  const modal = document.getElementById("formatSelectModal");
+  const box   = document.getElementById("formatSelectBox");
+  modal.style.display = "flex";
+  requestAnimationFrame(() => {
+    modal.style.opacity = "1";
+    box.style.transform = "scale(1)";
+    box.style.opacity = "1";
+  });
+
+  const closeModal = () => {
+    modal.style.opacity = "0";
+    box.style.opacity = "0";
+    box.style.transform = "scale(0.9)";
+    setTimeout(() => modal.style.display = "none", 250);
+  };
+
+  document.getElementById("cancelFormat").onclick = closeModal;
+
+  // ZIP option
+  document.getElementById("chooseZip").onclick = () => {
+    closeModal();
+    startDownload(which, "zip");
+  };
+
+  // PDF option
+  document.getElementById("choosePdf").onclick = () => {
+    closeModal();
+    startDownload(which, "pdf");
+  };
+}
+
+// Core download dispatcher
+async function startDownload(which, format) {
+  console.log(`📸 Preparing ${which} photos as ${format.toUpperCase()}`);
+
+  // Close the photo selection modal (if open)
+  document.getElementById("downloadPhotosModal").style.display = "none";
+
+  if (format === "zip") {
+    // 🔥 Use your real ZIP builder
+    await zipAndDownload(which);
+  } else if (format === "pdf") {
+    // 🔥 Build PDF version
+    let photos = [];
+    const beforeThumbs = document.getElementById("beforeThumbs");
+    const afterThumbs = document.getElementById("afterThumbs");
+
+    if (which === "before") photos = [...beforeThumbs.querySelectorAll("img")].map(img => img.src);
+    if (which === "after")  photos = [...afterThumbs.querySelectorAll("img")].map(img => img.src);
+    if (which === "all")    photos = [
+      ...beforeThumbs.querySelectorAll("img"),
+      ...afterThumbs.querySelectorAll("img")
+    ].map(img => img.src);
+
+    if (!photos.length) {
+      alert("No photos found for that category.");
+      return;
+    }
+
+    await downloadAsPdf(photos);
+  }
+
+  showDownloadSuccess(); // your ✅ animation
+}
+
+/* --- existing helpers assumed ---
+getBeforePhotos() / getAfterPhotos()
+showDownloadProgress(text)
+showDownloadSuccess()
+downloadAsZip(photos)
+-----------------------------------*/
+
+// New PDF generator
+async function downloadAsPdf(photos) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
+  let first = true;
+
+  for (const [i, src] of photos.entries()) {
+    showDownloadProgress(`Adding photo ${i + 1} of ${photos.length}...`);
+    const img = await loadImage(src);
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const ratio = Math.min(pageWidth / img.width, pageHeight / img.height);
+    const w = img.width * ratio;
+    const h = img.height * ratio;
+    const x = (pageWidth - w) / 2;
+    const y = (pageHeight - h) / 2;
+    if (!first) pdf.addPage();
+    first = false;
+    pdf.addImage(img, "JPEG", x, y, w, h);
+  }
+
+  pdf.save(`Photos_${new Date().toISOString().split("T")[0]}.pdf`);
+}
+
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const dlBtn = document.getElementById("downloadPhotosBtn");
+  const dlModal = document.getElementById("downloadPhotosModal");
+  const dlBox = document.getElementById("downloadPhotosBox");
+  const closeBtn = document.getElementById("closeDlModal");
+
+  if (dlBtn && dlModal && dlBox) {
+    dlBtn.addEventListener("click", () => {
+      dlModal.style.display = "flex";
+      requestAnimationFrame(() => {
+        dlModal.style.opacity = "1";
+        dlBox.style.transform = "scale(1)";
+        dlBox.style.opacity = "1";
+      });
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      dlModal.style.opacity = "0";
+      dlBox.style.opacity = "0";
+      dlBox.style.transform = "scale(0.9)";
+      setTimeout(() => (dlModal.style.display = "none"), 250);
+    });
+  }
+
+  // 🔗 Make "Before", "After", "All" buttons trigger format selector
+  document.getElementById("dlBefore")?.addEventListener("click", () => showFormatSelect("before"));
+  document.getElementById("dlAfter") ?.addEventListener("click", () => showFormatSelect("after"));
+  document.getElementById("dlAll")   ?.addEventListener("click", () => showFormatSelect("all"));
 });
 </script>
 
