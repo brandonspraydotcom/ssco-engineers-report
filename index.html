@@ -1054,28 +1054,7 @@ document.addEventListener("DOMContentLoaded", () => {
       Calculating size…
     </div>
 
-<!-- 📦 Format Selection Modal -->
-<div id="formatSelectModal"
-     style="display:none;position:fixed;inset:0;z-index:5300;
-            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
-            align-items:center;justify-content:center;opacity:0;
-            transition:opacity .3s ease;">
-  <div id="formatSelectBox"
-       style="background:rgba(30,30,31,0.95);border-radius:16px;
-              padding:24px 22px;max-width:360px;width:88%;text-align:center;
-              box-shadow:0 12px 40px rgba(0,0,0,.6);
-              transform:scale(0.85);opacity:0;transition:all .25s ease;">
-    <div style="font-size:20px;margin-bottom:10px;">📁 Choose Download Format</div>
-    <p style="font-size:15px;line-height:1.5;color:#ccc;margin:0 0 10px;">
-      How would you like to download the selected photos?
-    </p>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <button id="chooseZip" class="btn silver">ZIP Archive</button>
-      <button id="choosePdf" class="btn green">PDF Document</button>
-      <button id="cancelFormat" class="btn ghost">Cancel</button>
-    </div>
-  </div>
-</div>
+
 
     <!-- Progress indicator -->
     <div id="downloadProgressContainer"
@@ -1091,9 +1070,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <!-- Download buttons -->
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <button id="dlBefore" class="btn silver">Before Photos</button>
-      <button id="dlAfter" class="btn green">After Photos</button>
-      <button id="dlAll" class="btn blue">All Photos</button>
+      <button id="dlBefore" type="button" class="btn silver">Before Photos</button>
+      <button id="dlAfter" type="button" class="btn green">After Photos</button>
+      <button id="dlAll" type="button" class="btn blue">All Photos</button>
       <button id="closeDlModal" class="btn remove">Cancel</button>
     </div>
 
@@ -4373,22 +4352,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
   closeBtn.addEventListener("click", () => closeModal("downloadPhotosModal"));
 
+function swapModal(hideId, showId) {
+  const from = document.getElementById(hideId);
+  const to   = document.getElementById(showId);
+  if (!from || !to) return;
+
+  // Fade out the first modal
+  from.style.opacity = "0";
+  const fromBox = from.querySelector("div[id$='Box']");
+  if (fromBox) {
+    fromBox.style.opacity = "0";
+    fromBox.style.transform = "scale(0.85)";
+  }
+
+  // Wait for fade-out animation to complete, THEN hide it
+  setTimeout(() => {
+    from.style.display = "none";
+
+    // Force browser reflow before showing the next modal (critical for Safari)
+    void document.body.offsetHeight;
+
+    // Now display the next modal cleanly
+    to.style.display = "flex";
+    to.style.opacity = "0";
+    const toBox = to.querySelector("div[id$='Box']");
+    if (toBox) {
+      toBox.style.opacity = "0";
+      toBox.style.transform = "scale(0.85)";
+    }
+
+    // Let Safari register this new frame, then animate it in
+    setTimeout(() => {
+      to.style.opacity = "1";
+      if (toBox) {
+        toBox.style.opacity = "1";
+        toBox.style.transform = "scale(1)";
+      }
+    }, 50); // small 50ms delay ensures visible transition
+  }, 300); // matches your fade-out timing
+}
+
 // ---- Pick which photos (Before / After / All) ----
 let downloadChoice = null;
 ["dlBefore", "dlAfter", "dlAll"].forEach(id => {
   const btn = document.getElementById(id);
   if (!btn) return;
-  btn.addEventListener("click", () => {
-    downloadChoice = id === "dlBefore" ? "before" : id === "dlAfter" ? "after" : "all";
-    closeModal("downloadPhotosModal");
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();           // extra safety if inside a form
+    e.stopPropagation();          // avoid backdrop handlers etc.
 
-    // 🪄 Wait for close animation, then force reflow + open format modal
-    setTimeout(() => {
-      const fmt = document.getElementById("formatSelectModal");
-      fmt.style.display = "flex";
-      void fmt.offsetHeight; // force reflow
-      openModal("formatSelectModal");
-    }, 280);
+    downloadChoice =
+      id === "dlBefore" ? "before" :
+      id === "dlAfter"  ? "after"  : "all";
+
+    swapModal("downloadPhotosModal", "formatSelectModal");
   });
 });
 
@@ -4525,7 +4542,7 @@ let downloadChoice = null;
             background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
             align-items:center;justify-content:center;opacity:0;
             transition:opacity .3s ease;">
-  <div id="formatSelectBox"
+   <div id="formatSelectBox"
        style="background:rgba(30,30,31,0.95);border-radius:16px;
               padding:24px 22px;max-width:360px;width:88%;text-align:center;
               box-shadow:0 12px 40px rgba(0,0,0,.6);
