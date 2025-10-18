@@ -4338,7 +4338,7 @@ document.addEventListener("DOMContentLoaded", () => {
   modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
 
   // --- Helper: build and download zip ---
-  async function zipAndDownload(type) {
+  window.zipAndDownload = async function zipAndDownload(type) {
     const zip = new JSZip();
     const folder = zip.folder("photos");
 
@@ -4396,6 +4396,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 500);
     }, 1800);
   }
+
+window.zipAndDownload = zipAndDownload;
 </script>
 
 <!-- 📁 Choose Format Modal -->
@@ -4496,7 +4498,7 @@ downloadAsZip(photos)
 -----------------------------------*/
 
 // New PDF generator
-async function downloadAsPdf(photos) {
+window.downloadAsPdf = async function downloadAsPdf(photos) {
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
   let first = true;
@@ -4527,6 +4529,8 @@ function loadImage(url) {
     img.src = url;
   });
 }
+
+window.downloadAsPdf = downloadAsPdf;
 </script>
 
 <script>
@@ -4560,6 +4564,70 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("dlBefore")?.addEventListener("click", () => showFormatSelect("before"));
   document.getElementById("dlAfter") ?.addEventListener("click", () => showFormatSelect("after"));
   document.getElementById("dlAll")   ?.addEventListener("click", () => showFormatSelect("all"));
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const chooseZipBtn = document.getElementById("chooseZip");
+  const choosePdfBtn = document.getElementById("choosePdf");
+  const cancelFormatBtn = document.getElementById("cancelFormat");
+
+  // remember what user chose earlier (before/after/all)
+  let downloadChoice = null;
+
+  // Intercept clicks on Before / After / All buttons
+  ["dlBefore", "dlAfter", "dlAll"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      downloadChoice =
+        id === "dlBefore" ? "before" :
+        id === "dlAfter"  ? "after"  : "all";
+
+      // close first modal and open format selector
+      document.getElementById("downloadPhotosModal").style.display = "none";
+      const formatModal = document.getElementById("formatSelectModal");
+      formatModal.style.display = "flex";
+      setTimeout(() => formatModal.classList.add("show"), 10);
+    });
+  });
+
+  // ZIP selected
+  chooseZipBtn.addEventListener("click", async () => {
+    closeAllModals();
+    if (downloadChoice && window.zipAndDownload) {
+      await window.zipAndDownload(downloadChoice);
+    }
+  });
+
+  // PDF selected
+  choosePdfBtn.addEventListener("click", async () => {
+    closeAllModals();
+    if (window.downloadAsPdf) {
+      const photos = gatherPhotos(downloadChoice);
+      await window.downloadAsPdf(photos);
+    }
+  });
+
+  // Cancel
+  cancelFormatBtn.addEventListener("click", () => closeAllModals());
+
+  function closeAllModals() {
+    document.getElementById("formatSelectModal").classList.remove("show");
+    document.getElementById("formatSelectModal").style.display = "none";
+    document.getElementById("downloadPhotosModal").classList.remove("show");
+    document.getElementById("downloadPhotosModal").style.display = "none";
+  }
+
+  // helper to collect correct images
+  function gatherPhotos(type) {
+    const beforeImgs = [...document.querySelectorAll("#beforeThumbs img")];
+    const afterImgs  = [...document.querySelectorAll("#afterThumbs img")];
+    if (type === "before") return beforeImgs;
+    if (type === "after")  return afterImgs;
+    return [...beforeImgs, ...afterImgs];
+  }
 });
 </script>
 
