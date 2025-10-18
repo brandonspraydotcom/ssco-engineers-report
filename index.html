@@ -37,6 +37,9 @@
   }
   </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
 <script async
   src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&v=weekly"></script>
 
@@ -4253,6 +4256,125 @@ clearModal.querySelector("#confirmClear").addEventListener("click", () => {
       }
     }
   }, 200); // clear after modal starts closing
+});
+</script>
+
+<script>
+// === 📸 Full Download Photos Flow (with real ZIP + elegant UI) ===
+document.addEventListener("DOMContentLoaded", () => {
+  const btnOpen = document.getElementById("downloadPhotosBtn");
+  const modal   = document.getElementById("downloadPhotosModal");
+  const box     = document.getElementById("downloadPhotosBox");
+  const close   = document.getElementById("closeDlModal");
+  const progressContainer = document.getElementById("downloadProgressContainer");
+  const progressBar = document.getElementById("downloadProgressBar");
+  const progressText = document.getElementById("downloadProgressText");
+  const sizeInfo = document.getElementById("photoSizeInfo");
+  const successOverlay = document.getElementById("downloadSuccess");
+
+  const beforeThumbs = document.getElementById("beforeThumbs");
+  const afterThumbs  = document.getElementById("afterThumbs");
+
+  // --- Open Modal ---
+  btnOpen.addEventListener("click", async () => {
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.opacity = "1";
+      box.style.transform = "scale(1)";
+    });
+
+    // Approx total size calc
+    const allImgs = [...beforeThumbs.querySelectorAll("img"), ...afterThumbs.querySelectorAll("img")];
+    if (allImgs.length) {
+      let totalBytes = 0;
+      for (const img of allImgs) {
+        try {
+          const res = await fetch(img.src);
+          const blob = await res.blob();
+          totalBytes += blob.size;
+        } catch {}
+      }
+      const mb = (totalBytes / (1024 * 1024)).toFixed(2);
+      sizeInfo.textContent = `Approx. total size: ${mb} MB`;
+      sizeInfo.style.display = "block";
+    }
+  });
+
+  // --- Close Modal ---
+  const closeModal = () => {
+    modal.style.opacity = "0";
+    box.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    setTimeout(() => (modal.style.display = "none"), 250);
+  };
+  close.addEventListener("click", closeModal);
+  modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+
+  // --- Helper: build and download zip ---
+  async function zipAndDownload(type) {
+    const zip = new JSZip();
+    const folder = zip.folder("photos");
+
+    let imgs = [];
+    if (type === "before") imgs = beforeThumbs.querySelectorAll("img");
+    if (type === "after")  imgs = afterThumbs.querySelectorAll("img");
+    if (type === "all")    imgs = [...beforeThumbs.querySelectorAll("img"), ...afterThumbs.querySelectorAll("img")];
+
+    if (!imgs.length) {
+      alert("No photos found for that category.");
+      return;
+    }
+
+    progressContainer.style.display = "block";
+    progressText.style.display = "block";
+    progressText.textContent = "Zipping photos...";
+    progressBar.style.width = "0%";
+
+    let done = 0;
+    for (const [i, img] of [...imgs].entries()) {
+      try {
+        const res = await fetch(img.src);
+        const blob = await res.blob();
+        const name = `${type}_${i + 1}.jpg`;
+        folder.file(name, blob);
+      } catch (err) {
+        console.warn("Failed to add image:", err);
+      }
+      done++;
+      progressBar.style.width = `${(done / imgs.length) * 100}%`;
+      await new Promise(r => setTimeout(r, 60)); // smooth update
+    }
+
+    progressText.textContent = "Preparing download...";
+
+    const blob = await zip.generateAsync({ type: "blob" }, (meta) => {
+      progressBar.style.width = `${Math.min(meta.percent, 100)}%`;
+    });
+
+    saveAs(blob, `SSCo_Photos_${type}_${new Date().toISOString().slice(0,10)}.zip`);
+    showSuccess();
+  }
+
+  function showSuccess() {
+    progressContainer.style.display = "none";
+    progressText.style.display = "none";
+    sizeInfo.style.display = "none";
+    successOverlay.style.display = "flex";
+    successOverlay.style.opacity = "1";
+    setTimeout(() => {
+      successOverlay.style.opacity = "0";
+      setTimeout(() => {
+        successOverlay.style.display = "none";
+        closeModal();
+      }, 500);
+    }, 1800);
+  }
+
+  // --- Button bindings ---
+  document.getElementById("dlBefore")?.addEventListener("click", () => zipAndDownload("before"));
+  document.getElementById("dlAfter") ?.addEventListener("click", () => zipAndDownload("after"));
+  document.getElementById("dlAll")   ?.addEventListener("click", () => zipAndDownload("all"));
 });
 </script>
 
