@@ -4289,28 +4289,56 @@ clearModal.querySelector("#confirmClear").addEventListener("click", () => {
 // === 📸 Full Download Photos Flow (with real ZIP + elegant UI) ===
 document.addEventListener("DOMContentLoaded", () => {
   const btnOpen = document.getElementById("downloadPhotosBtn");
-  const modal   = document.getElementById("downloadPhotosModal");
-  const box     = document.getElementById("downloadPhotosBox");
-  const close   = document.getElementById("closeDlModal");
+  const mainModal = document.getElementById("downloadPhotosModal");
+  const mainBox = document.getElementById("downloadPhotosBox");
+  const closeBtn = document.getElementById("closeDlModal");
   const progressContainer = document.getElementById("downloadProgressContainer");
   const progressBar = document.getElementById("downloadProgressBar");
   const progressText = document.getElementById("downloadProgressText");
   const sizeInfo = document.getElementById("photoSizeInfo");
   const successOverlay = document.getElementById("downloadSuccess");
-
   const beforeThumbs = document.getElementById("beforeThumbs");
   const afterThumbs  = document.getElementById("afterThumbs");
 
-  // --- Open Modal ---
-  btnOpen.addEventListener("click", async () => {
+  // ---- Modal helpers ----
+  function openModal(id) {
+    const modal = document.getElementById(id);
+    const box = modal.querySelector("div[id$='Box']");
+    
+    // Reset visibility and transform first
     modal.style.display = "flex";
-    requestAnimationFrame(() => {
-      modal.style.opacity = "1";
-      box.style.opacity = "1";
-      box.style.transform = "scale(1)";
-    });
+    modal.style.opacity = "0";
+    if (box) {
+      box.style.opacity = "0";
+      box.style.transform = "scale(0.85)";
+    }
 
-    // Approx total size calc
+    // Slight delay to allow reflow before animating
+    setTimeout(() => {
+      modal.style.opacity = "1";
+      if (box) {
+        box.style.opacity = "1";
+        box.style.transform = "scale(1)";
+      }
+    }, 20); // 20ms delay ensures smooth animation
+  }
+
+  function closeModal(id) {
+    const modal = document.getElementById(id);
+    modal.style.opacity = "0";
+    const box = modal.querySelector("div[id$='Box']");
+    if (box) {
+      box.style.opacity = "0";
+      box.style.transform = "scale(0.85)";
+    }
+    setTimeout(() => (modal.style.display = "none"), 250);
+  }
+
+  // ---- Open main download modal ----
+  btnOpen.addEventListener("click", async () => {
+    openModal("downloadPhotosModal");
+
+    // estimate total photo size
     const allImgs = [...beforeThumbs.querySelectorAll("img"), ...afterThumbs.querySelectorAll("img")];
     if (allImgs.length) {
       let totalBytes = 0;
@@ -4327,30 +4355,56 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Close Modal ---
-  const closeModal = () => {
-    modal.style.opacity = "0";
-    box.style.opacity = "0";
-    box.style.transform = "scale(0.85)";
-    setTimeout(() => (modal.style.display = "none"), 250);
-  };
-  close.addEventListener("click", closeModal);
-  modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+  closeBtn.addEventListener("click", () => closeModal("downloadPhotosModal"));
 
-  // --- Helper: build and download zip ---
+  // ---- Pick which photos (Before / After / All) ----
+  let downloadChoice = null;
+  ["dlBefore", "dlAfter", "dlAll"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      downloadChoice = id === "dlBefore" ? "before" : id === "dlAfter" ? "after" : "all";
+      closeModal("downloadPhotosModal");
+      setTimeout(() => openModal("formatSelectModal"), 350); // perfect delay for fade transition
+    });
+  });
+
+  // ---- ZIP + PDF selection ----
+  const chooseZip = document.getElementById("chooseZip");
+  const choosePdf = document.getElementById("choosePdf");
+  const cancelFormat = document.getElementById("cancelFormat");
+
+  chooseZip.addEventListener("click", async () => {
+    closeModal("formatSelectModal");
+    if (downloadChoice) await window.zipAndDownload(downloadChoice);
+  });
+
+  choosePdf.addEventListener("click", async () => {
+    closeModal("formatSelectModal");
+    const photos = gatherPhotos(downloadChoice);
+    if (photos.length) await window.downloadAsPdf(photos);
+  });
+
+  cancelFormat.addEventListener("click", () => closeModal("formatSelectModal"));
+
+  // ---- Helpers ----
+  function gatherPhotos(type) {
+    const beforeImgs = [...beforeThumbs.querySelectorAll("img")].map(i => i.src);
+    const afterImgs  = [...afterThumbs.querySelectorAll("img")].map(i => i.src);
+    if (type === "before") return beforeImgs;
+    if (type === "after") return afterImgs;
+    return [...beforeImgs, ...afterImgs];
+  }
+
+  // ---- ZIP builder ----
   window.zipAndDownload = async function zipAndDownload(type) {
     const zip = new JSZip();
     const folder = zip.folder("photos");
-
     let imgs = [];
     if (type === "before") imgs = beforeThumbs.querySelectorAll("img");
     if (type === "after")  imgs = afterThumbs.querySelectorAll("img");
     if (type === "all")    imgs = [...beforeThumbs.querySelectorAll("img"), ...afterThumbs.querySelectorAll("img")];
-
-    if (!imgs.length) {
-      alert("No photos found for that category.");
-      return;
-    }
+    if (!imgs.length) return alert("No photos found.");
 
     progressContainer.style.display = "block";
     progressText.style.display = "block";
@@ -4362,24 +4416,48 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const res = await fetch(img.src);
         const blob = await res.blob();
-        const name = `${type}_${i + 1}.jpg`;
-        folder.file(name, blob);
-      } catch (err) {
-        console.warn("Failed to add image:", err);
-      }
+        folder.file(`${type}_${i + 1}.jpg`, blob);
+      } catch {}
       done++;
       progressBar.style.width = `${(done / imgs.length) * 100}%`;
-      await new Promise(r => setTimeout(r, 60)); // smooth update
+      await new Promise(r => setTimeout(r, 50));
     }
 
-    progressText.textContent = "Preparing download...";
-
-    const blob = await zip.generateAsync({ type: "blob" }, (meta) => {
+    const blob = await zip.generateAsync({ type: "blob" }, meta => {
       progressBar.style.width = `${Math.min(meta.percent, 100)}%`;
     });
-
     saveAs(blob, `SSCo_Photos_${type}_${new Date().toISOString().slice(0,10)}.zip`);
     showSuccess();
+  };
+
+  // ---- PDF builder ----
+  window.downloadAsPdf = async function downloadAsPdf(photos) {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
+    let first = true;
+    for (const [i, src] of photos.entries()) {
+      progressText.textContent = `Adding photo ${i + 1} of ${photos.length}...`;
+      const img = await loadImage(src);
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const r = Math.min(pageW / img.width, pageH / img.height);
+      const w = img.width * r, h = img.height * r;
+      const x = (pageW - w) / 2, y = (pageH - h) / 2;
+      if (!first) pdf.addPage();
+      first = false;
+      pdf.addImage(img, "JPEG", x, y, w, h);
+    }
+    pdf.save(`Photos_${new Date().toISOString().split("T")[0]}.pdf`);
+    showSuccess();
+  };
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
   }
 
   function showSuccess() {
@@ -4392,12 +4470,10 @@ document.addEventListener("DOMContentLoaded", () => {
       successOverlay.style.opacity = "0";
       setTimeout(() => {
         successOverlay.style.display = "none";
-        closeModal();
       }, 500);
     }, 1800);
   }
-
-window.zipAndDownload = zipAndDownload;
+});
 </script>
 
 <!-- 📁 Choose Format Modal -->
@@ -4422,214 +4498,6 @@ window.zipAndDownload = zipAndDownload;
     </div>
   </div>
 </div>
-
-<script>
-function showFormatSelect(which) {
-  const modal = document.getElementById("formatSelectModal");
-  const box   = document.getElementById("formatSelectBox");
-  modal.style.display = "flex";
-  requestAnimationFrame(() => {
-    modal.style.opacity = "1";
-    box.style.transform = "scale(1)";
-    box.style.opacity = "1";
-  });
-
-  const closeModal = () => {
-    modal.style.opacity = "0";
-    box.style.opacity = "0";
-    box.style.transform = "scale(0.9)";
-    setTimeout(() => modal.style.display = "none", 250);
-  };
-
-  document.getElementById("cancelFormat").onclick = closeModal;
-
-  // ZIP option
-  document.getElementById("chooseZip").onclick = () => {
-    closeModal();
-    startDownload(which, "zip");
-  };
-
-  // PDF option
-  document.getElementById("choosePdf").onclick = () => {
-    closeModal();
-    startDownload(which, "pdf");
-  };
-}
-
-// Core download dispatcher
-async function startDownload(which, format) {
-  console.log(`📸 Preparing ${which} photos as ${format.toUpperCase()}`);
-
-  // Close the photo selection modal (if open)
-  document.getElementById("downloadPhotosModal").style.display = "none";
-
-  if (format === "zip") {
-    // 🔥 Use your real ZIP builder
-    await zipAndDownload(which);
-  } else if (format === "pdf") {
-    // 🔥 Build PDF version
-    let photos = [];
-    const beforeThumbs = document.getElementById("beforeThumbs");
-    const afterThumbs = document.getElementById("afterThumbs");
-
-    if (which === "before") photos = [...beforeThumbs.querySelectorAll("img")].map(img => img.src);
-    if (which === "after")  photos = [...afterThumbs.querySelectorAll("img")].map(img => img.src);
-    if (which === "all")    photos = [
-      ...beforeThumbs.querySelectorAll("img"),
-      ...afterThumbs.querySelectorAll("img")
-    ].map(img => img.src);
-
-    if (!photos.length) {
-      alert("No photos found for that category.");
-      return;
-    }
-
-    await downloadAsPdf(photos);
-  }
-
-  showDownloadSuccess(); // your ✅ animation
-}
-
-/* --- existing helpers assumed ---
-getBeforePhotos() / getAfterPhotos()
-showDownloadProgress(text)
-showDownloadSuccess()
-downloadAsZip(photos)
------------------------------------*/
-
-// New PDF generator
-window.downloadAsPdf = async function downloadAsPdf(photos) {
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
-  let first = true;
-
-  for (const [i, src] of photos.entries()) {
-    showDownloadProgress(`Adding photo ${i + 1} of ${photos.length}...`);
-    const img = await loadImage(src);
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const ratio = Math.min(pageWidth / img.width, pageHeight / img.height);
-    const w = img.width * ratio;
-    const h = img.height * ratio;
-    const x = (pageWidth - w) / 2;
-    const y = (pageHeight - h) / 2;
-    if (!first) pdf.addPage();
-    first = false;
-    pdf.addImage(img, "JPEG", x, y, w, h);
-  }
-
-  pdf.save(`Photos_${new Date().toISOString().split("T")[0]}.pdf`);
-}
-
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
-  });
-}
-
-window.downloadAsPdf = downloadAsPdf;
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const dlBtn = document.getElementById("downloadPhotosBtn");
-  const dlModal = document.getElementById("downloadPhotosModal");
-  const dlBox = document.getElementById("downloadPhotosBox");
-  const closeBtn = document.getElementById("closeDlModal");
-
-  if (dlBtn && dlModal && dlBox) {
-    dlBtn.addEventListener("click", () => {
-      dlModal.style.display = "flex";
-      requestAnimationFrame(() => {
-        dlModal.style.opacity = "1";
-        dlBox.style.transform = "scale(1)";
-        dlBox.style.opacity = "1";
-      });
-    });
-  }
-
-  if (closeBtn) {
-    closeBtn.addEventListener("click", () => {
-      dlModal.style.opacity = "0";
-      dlBox.style.opacity = "0";
-      dlBox.style.transform = "scale(0.9)";
-      setTimeout(() => (dlModal.style.display = "none"), 250);
-    });
-  }
-
-  // 🔗 Make "Before", "After", "All" buttons trigger format selector
-  document.getElementById("dlBefore")?.addEventListener("click", () => showFormatSelect("before"));
-  document.getElementById("dlAfter") ?.addEventListener("click", () => showFormatSelect("after"));
-  document.getElementById("dlAll")   ?.addEventListener("click", () => showFormatSelect("all"));
-});
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const chooseZipBtn = document.getElementById("chooseZip");
-  const choosePdfBtn = document.getElementById("choosePdf");
-  const cancelFormatBtn = document.getElementById("cancelFormat");
-
-  // remember what user chose earlier (before/after/all)
-  let downloadChoice = null;
-
-  // Intercept clicks on Before / After / All buttons
-  ["dlBefore", "dlAfter", "dlAll"].forEach(id => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      downloadChoice =
-        id === "dlBefore" ? "before" :
-        id === "dlAfter"  ? "after"  : "all";
-
-      // close first modal and open format selector
-      document.getElementById("downloadPhotosModal").style.display = "none";
-      const formatModal = document.getElementById("formatSelectModal");
-      formatModal.style.display = "flex";
-      setTimeout(() => formatModal.classList.add("show"), 10);
-    });
-  });
-
-  // ZIP selected
-  chooseZipBtn.addEventListener("click", async () => {
-    closeAllModals();
-    if (downloadChoice && window.zipAndDownload) {
-      await window.zipAndDownload(downloadChoice);
-    }
-  });
-
-  // PDF selected
-  choosePdfBtn.addEventListener("click", async () => {
-    closeAllModals();
-    if (window.downloadAsPdf) {
-      const photos = gatherPhotos(downloadChoice);
-      await window.downloadAsPdf(photos);
-    }
-  });
-
-  // Cancel
-  cancelFormatBtn.addEventListener("click", () => closeAllModals());
-
-  function closeAllModals() {
-    document.getElementById("formatSelectModal").classList.remove("show");
-    document.getElementById("formatSelectModal").style.display = "none";
-    document.getElementById("downloadPhotosModal").classList.remove("show");
-    document.getElementById("downloadPhotosModal").style.display = "none";
-  }
-
-  // helper to collect correct images
-  function gatherPhotos(type) {
-    const beforeImgs = [...document.querySelectorAll("#beforeThumbs img")];
-    const afterImgs  = [...document.querySelectorAll("#afterThumbs img")];
-    if (type === "before") return beforeImgs;
-    if (type === "after")  return afterImgs;
-    return [...beforeImgs, ...afterImgs];
-  }
-});
-</script>
 
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
