@@ -107,6 +107,11 @@
   pointer-events: none; /* ✅ allows clicks to pass through */
 }
 
+#loginModal.show #loginBox {
+  transform: scale(1);
+  opacity: 1;
+}
+
   #shareConfirmModal.show { display:flex !important; opacity:1; }
   #shareConfirmModal.show #shareConfirmBox { transform:scale(1); opacity:1; }
 
@@ -863,7 +868,39 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 
+<!-- 🔐 Login Modal -->
+<div id="loginModal"
+     style="position:fixed;inset:0;z-index:9998;
+            display:flex;align-items:center;justify-content:center;
+            background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);
+            opacity:0;pointer-events:none;transition:opacity .4s ease;">
+  <div id="loginBox"
+       style="background:rgba(30,30,31,0.95);border-radius:16px;
+              padding:28px 24px;max-width:340px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.65);
+              transform:scale(0.9);opacity:0;
+              transition:all .35s cubic-bezier(.25,.8,.25,1);">
+    <div style="font-size:22px;font-weight:700;margin-bottom:12px;">🔐 Secure Login</div>
+    <p style="font-size:15px;color:#ccc;margin-bottom:16px;">
+      Please sign in to access the Engineers Report.
+    </p>
 
+    <input id="loginUser" type="text" placeholder="Username"
+           style="width:100%;padding:12px;border-radius:8px;
+                  border:1px solid rgba(255,255,255,0.12);
+                  background:#161616;color:#eee;font-size:16px;margin-bottom:10px;">
+    <input id="loginPass" type="password" placeholder="Password"
+           style="width:100%;padding:12px;border-radius:8px;
+                  border:1px solid rgba(255,255,255,0.12);
+                  background:#161616;color:#eee;font-size:16px;margin-bottom:14px;">
+
+    <button id="loginSubmit"
+            class="btn green" style="width:100%;margin-bottom:10px;">Sign In</button>
+    <div id="loginError"
+         style="color:#ff5c5c;font-size:14px;height:18px;opacity:0;transition:opacity .3s ease;">
+    </div>
+  </div>
+</div>
 
 <!-- Company Header Banner (Glassy / Responsive) -->
 <div id="headerBannerWrap"
@@ -1137,6 +1174,44 @@ document.addEventListener("DOMContentLoaded", () => {
   v1.0.1 • Offline
 </span>
     </footer>
+
+<!-- ⋮ Floating Account Menu -->
+<button id="menuBtn"
+        style="display:none;position:fixed;top:14px;right:14px;
+               background:rgba(255,255,255,0.06);
+               color:#eee;font-size:22px;border:none;border-radius:10px;
+               padding:6px 12px;backdrop-filter:blur(6px);
+               -webkit-backdrop-filter:blur(6px);
+               box-shadow:0 0 8px rgba(0,0,0,0.4);
+               opacity:0;transform:translateY(-6px);
+               transition:opacity .4s ease,transform .4s ease;
+               z-index:9999;cursor:pointer;">⋮</button>
+
+<!-- ⚙️ Account Modal -->
+<div id="accountModal"
+     style="display:none;position:fixed;inset:0;
+            background:rgba(0,0,0,0.55);
+            backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;
+            z-index:10000;opacity:0;transition:opacity .3s ease;">
+  <div id="accountBox"
+       style="background:rgba(30,30,31,0.95);
+              border-radius:16px;padding:24px 22px;
+              max-width:320px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;
+              transition:all .25s ease;">
+    <div style="font-size:20px;margin-bottom:12px;">⚙️ Account</div>
+    <p id="loggedInAs"
+       style="font-size:15px;color:#ccc;margin-bottom:16px;">
+       Logged in as: <strong>—</strong>
+    </p>
+    <button id="logoutNow"
+            class="btn remove"
+            style="width:100%;margin-bottom:12px;">Logout</button>
+    <div style="font-size:13px;color:#888;">v1.0.1 • SSCo Engineers Report</div>
+  </div>
+</div>
   
 		<!-- Image Annotator Modal -->
 			<div id="annotatorModal" style="display:none;position:fixed;inset:0;z-index:1200;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">
@@ -4738,6 +4813,142 @@ document.addEventListener("DOMContentLoaded", () => {
   border-radius: 0 0 12px 12px !important;
 }
 </style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  // === 🟢 LOGIN LOGIC ===
+  const loginModal = document.getElementById("loginModal");
+  const loginBox = document.getElementById("loginBox");
+  const loginUser = document.getElementById("loginUser");
+  const loginPass = document.getElementById("loginPass");
+  const loginSubmit = document.getElementById("loginSubmit");
+  const loginError = document.getElementById("loginError");
+
+  const validLogins = [
+    { user: "ssco", pass: "60189" },
+    { user: "Brandon", pass: "282807" }
+  ];
+
+  // === ⚙️ ACCOUNT MENU ELEMENTS ===
+  const menuBtn = document.getElementById("menuBtn");
+  const modal = document.getElementById("accountModal");
+  const box = document.getElementById("accountBox");
+  const logoutNow = document.getElementById("logoutNow");
+  const loggedInAs = document.getElementById("loggedInAs").querySelector("strong");
+
+  // 🔹 Function to show the 3-dot menu
+  function showMenu(username) {
+    if (!menuBtn) return;
+    loggedInAs.textContent = username;
+    menuBtn.style.display = "inline-block";
+    requestAnimationFrame(() => {
+      menuBtn.style.opacity = "1";
+      menuBtn.style.transform = "translateY(0)";
+    });
+  }
+
+  // 🧠 If user already logged in, skip login and show menu
+  const storedUser = localStorage.getItem("username");
+  if (localStorage.getItem("loggedIn") === "true" && storedUser) {
+    loginModal?.remove();
+    document.body.classList.add("logged-in");
+    showMenu(storedUser);
+    return;
+  }
+
+  // 🔐 Show login modal (after splash screen)
+  const showLogin = () => {
+    loginModal.style.display = "flex";
+    loginModal.style.pointerEvents = "auto";
+    requestAnimationFrame(() => {
+      loginModal.style.opacity = "1";
+      loginBox.style.opacity = "1";
+      loginBox.style.transform = "scale(1)";
+    });
+  };
+
+  // 🩵 Wait for splash to finish before showing login
+  const splash = document.getElementById("splashScreen");
+  if (splash) {
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById("splashScreen")) {
+        showLogin();
+        observer.disconnect();
+      }
+    });
+    // 👇 The key fix — observe the whole subtree!
+    observer.observe(document.body, { childList: true, subtree: true });
+  } else {
+    setTimeout(showLogin, 600);
+  }
+
+  // 🧩 Login handler
+  loginSubmit.addEventListener("click", () => {
+    const u = loginUser.value.trim();
+    const p = loginPass.value.trim();
+    const ok = validLogins.some(acc => acc.user === u && acc.pass === p);
+
+    if (ok) {
+      loginError.style.opacity = "0";
+
+      // ✅ Save credentials
+      localStorage.setItem("loggedIn", "true");
+      localStorage.setItem("username", u);
+
+      // Animate out login
+      loginBox.style.transform = "scale(0.95)";
+      loginBox.style.opacity = "0";
+      loginModal.style.opacity = "0";
+      setTimeout(() => loginModal.remove(), 350);
+
+      document.body.classList.add("logged-in");
+      showMenu(u);
+    } else {
+      loginError.textContent = "Invalid username or password";
+      loginError.style.opacity = "1";
+      loginPass.value = "";
+    }
+  });
+
+  // Press Enter to submit
+  [loginUser, loginPass].forEach(input =>
+    input.addEventListener("keypress", e => {
+      if (e.key === "Enter") loginSubmit.click();
+    })
+  );
+
+  // === ACCOUNT MODAL EVENTS ===
+  menuBtn?.addEventListener("click", () => {
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    });
+  });
+
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.style.opacity = "0";
+      box.style.transform = "scale(0.85)";
+      box.style.opacity = "0";
+      setTimeout(() => (modal.style.display = "none"), 300);
+    }
+  });
+
+  logoutNow?.addEventListener("click", () => {
+    localStorage.removeItem("loggedIn");
+    localStorage.removeItem("username");
+    modal.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => {
+      modal.style.display = "none";
+      location.reload(); // triggers login again
+    }, 350);
+  });
+});
+</script>
 
 </body>
 </html>
