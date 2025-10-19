@@ -116,6 +116,10 @@
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
+#adminAddBtn {
+  margin-bottom: 14px !important;
+}
+
 #togglePass:hover,
 #toggleNewPass:hover {
   opacity: 1 !important;
@@ -616,6 +620,29 @@ gmpx-place-autocomplete {
   z-index: 2147483647 !important;
   position: fixed !important;
   overflow: visible !important;
+}
+
+/* === Toast Notification === */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: rgba(30,30,30,0.95);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.4s ease;
+  z-index: 999999;
+  pointer-events: none;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>
 
@@ -1234,15 +1261,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <!-- ⋮ Floating Account Menu -->
 <button id="menuBtn"
-        style="display:none;position:fixed;top:30px;right:14px;
+        style="display:none;position:fixed;top:65px;right:14px;
                background:rgba(255,255,255,0.02);
-               color:#eee;font-size:22px;border:none;border-radius:10px;
+               color:#eee;font-size:30px;border:none;border-radius:10px;
                padding:6px 12px;backdrop-filter:blur(2px);
                -webkit-backdrop-filter:blur(2px);
                box-shadow:0 0 6px rgba(0,0,0,0.4);
                opacity:0;transform:translateY(-6px);
                transition:opacity .4s ease,transform .4s ease;
-               z-index:9999;cursor:pointer;"><span style="font-size: 30px;">⋮</span></button>
+               z-index:9999;cursor:pointer;"><span style="font-size: 40px;">⋮</span></button>
 
 <!-- ⚙️ Account Modal -->
 <div id="accountModal"
@@ -4900,7 +4927,75 @@ document.addEventListener("DOMContentLoaded", () => {
 </style>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+
+  // === 🌐 GLOBAL USER STORAGE (JSONBin.io) ===
+  const JSONBIN_URL = "https://api.jsonbin.io/v3/b/68f5386043b1c97be971a853/latest";
+  const JSONBIN_WRITE_URL = "https://api.jsonbin.io/v3/b/68f5386043b1c97be971a853";
+  const JSONBIN_KEY = "$2a$10$2gZj6smFExW8GSSTuR9iherTpDIOMZ5Z0LPk43JBztbNqcSFaaLD6";
+
+  let validLogins = [];
+  let lastFetch = 0;
+
+  // === 🍞 Toast Notification ===
+  const toast = document.getElementById("toast");
+  function showToast(msg) {
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2500);
+  }
+
+  async function loadUsers(force = false) {
+    const now = Date.now();
+    if (!force && now - lastFetch < 30000) return;
+    lastFetch = now;
+
+    try {
+      const res = await fetch(JSONBIN_URL, {
+        headers: { "X-Master-Key": JSONBIN_KEY }
+      });
+      const data = await res.json();
+      validLogins = data.record.users || [];
+      console.log("✅ Synced users:", validLogins);
+      showToast("🔄 Users synced");
+    } catch (err) {
+      console.error("⚠️ Failed to sync users:", err);
+      showToast("⚠️ Sync failed");
+    }
+  }
+
+  async function saveUserToCloud(u, p) {
+    try {
+      const newUser = { user: u, pass: btoa(p) };
+
+      const res = await fetch(JSONBIN_URL, {
+        headers: { "X-Master-Key": JSONBIN_KEY }
+      });
+      const data = await res.json();
+      const users = [...(data.record.users || []), newUser];
+
+      await fetch(JSONBIN_WRITE_URL, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Master-Key": JSONBIN_KEY
+        },
+        body: JSON.stringify({ users })
+      });
+
+      showToast("✅ User added globally");
+      await loadUsers(true);
+    } catch (err) {
+      console.error("Failed to update global users:", err);
+      showToast("⚠️ Failed to save user");
+    }
+  }
+
+  await loadUsers(true);
+  setInterval(() => loadUsers(true), 60000); // auto-refresh every 60s
+
+
   // === 🟢 LOGIN LOGIC ===
   const loginModal = document.getElementById("loginModal");
   const loginBox = document.getElementById("loginBox");
@@ -4908,8 +5003,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginSubmit = document.getElementById("loginSubmit");
   const loginError = document.getElementById("loginError");
   const loginPass = document.getElementById("loginPass");
-  // 👁️ Show / Hide Password
   const togglePass = document.getElementById("togglePass");
+
   if (togglePass) {
     togglePass.addEventListener("click", () => {
       const isHidden = loginPass.type === "password";
@@ -4920,83 +5015,71 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const validLogins = [
-    { user: "ssco", pass: "NjAxODk=" },
-    { user: "Brandon", pass: "MjgyODA3" }
-  ];
-
-  // === ⚙️ ACCOUNT MENU ELEMENTS ===
   const menuBtn = document.getElementById("menuBtn");
   const modal = document.getElementById("accountModal");
   const box = document.getElementById("accountBox");
   const logoutNow = document.getElementById("logoutNow");
   const loggedInAs = document.getElementById("loggedInAs").querySelector("strong");
 
-  // 🔹 Function to show the 3-dot menu
-function showMenu(username) {
-  if (!menuBtn) return;
-  loggedInAs.textContent = username;
-  menuBtn.style.display = "inline-block";
-  requestAnimationFrame(() => {
-    menuBtn.style.opacity = "1";
-    menuBtn.style.transform = "translateY(0)";
-  });
+  // 🔹 Show menu button + admin controls
+  function showMenu(username) {
+    if (!menuBtn) return;
+    loggedInAs.textContent = username;
+    menuBtn.style.display = "inline-block";
+    requestAnimationFrame(() => {
+      menuBtn.style.opacity = "1";
+      menuBtn.style.transform = "translateY(0)";
+    });
 
-  // 🧑‍💼 If Brandon logs in, show Admin Add User button
-  if (username === "Brandon") {
-    const existing = document.getElementById("adminAddBtn");
-    if (!existing) {
-      const adminOption = document.createElement("button");
-      adminOption.id = "adminAddBtn";
-      adminOption.textContent = "➕ Add New User";
-      adminOption.className = "btn silver";
-      adminOption.style.width = "100%";
-      adminOption.style.marginTop = "10px";
+    if (username === "Brandon") {
+      const existing = document.getElementById("adminAddBtn");
+      if (!existing) {
+        const adminOption = document.createElement("button");
+        adminOption.id = "adminAddBtn";
+        adminOption.textContent = "➕ Add New User";
+        adminOption.className = "btn silver";
+        adminOption.style.width = "100%";
+        adminOption.style.marginTop = "10px";
+        adminOption.style.marginBottom = "18px";
 
-      const logoutParent = logoutNow.parentElement;
-      logoutParent.insertBefore(adminOption, logoutNow);
+        const logoutParent = logoutNow.parentElement;
+        logoutParent.insertBefore(adminOption, logoutNow);
 
-      adminOption.addEventListener("click", () => {
-        modal.style.opacity = "0";
-        setTimeout(() => {
-          modal.style.display = "none";
-          addUserModal.style.display = "flex";
-          requestAnimationFrame(() => {
-            addUserModal.style.opacity = "1";
-            addUserBox.style.transform = "scale(1)";
-            addUserBox.style.opacity = "1";
-          });
-        }, 250);
-      });
+        adminOption.addEventListener("click", () => {
+          modal.style.opacity = "0";
+          setTimeout(() => {
+            modal.style.display = "none";
+            addUserModal.style.display = "flex";
+            requestAnimationFrame(() => {
+              addUserModal.style.opacity = "1";
+              addUserBox.style.transform = "scale(1)";
+              addUserBox.style.opacity = "1";
+            });
+          }, 250);
+        });
+      }
     }
   }
-}
 
-  // 🧠 If user already logged in, skip login and show menu
   const storedUser = localStorage.getItem("username");
   if (localStorage.getItem("loggedIn") === "true" && storedUser) {
     loginModal?.remove();
     document.body.classList.add("logged-in");
     showMenu(storedUser);
   } else {
-    // 🔐 Show login modal after splash
     const showLogin = () => {
-  // 🧹 Double safety: always clear password when showing login modal
-  const loginPass = document.getElementById("loginPass");
-  if (loginPass) {
-    loginPass.value = "";
-    loginPass.type = "password";
-  }
-
-  loginModal.style.display = "flex";
-  loginModal.style.pointerEvents = "auto";
-
-  requestAnimationFrame(() => {
-    loginModal.style.opacity = "1";
-    loginBox.style.opacity = "1";
-    loginBox.style.transform = "scale(1)";
-  });
-};
+      loginModal.style.display = "flex";
+      loginModal.style.pointerEvents = "auto";
+      requestAnimationFrame(() => {
+        loginModal.style.opacity = "1";
+        loginBox.style.opacity = "1";
+        loginBox.style.transform = "scale(1)";
+        if (loginPass) {
+          loginPass.value = "";
+          loginPass.type = "password";
+        }
+      });
+    };
 
     const splash = document.getElementById("splashScreen");
     if (splash) {
@@ -5011,50 +5094,32 @@ function showMenu(username) {
       setTimeout(showLogin, 600);
     }
 
-// 🧩 Login handler
-loginSubmit.addEventListener("click", () => {
-  const u = loginUser.value.trim();
-  const p = loginPass.value.trim();
+    // 🧩 Login handler
+    loginSubmit.addEventListener("click", () => {
+      const u = loginUser.value.trim();
+      const p = loginPass.value.trim();
+      const ok = validLogins.some(acc => acc.user === u && atob(acc.pass) === p);
 
-  // Decode built-in users from Base64
-  const decodedValid = validLogins.map(acc => ({
-    user: acc.user,
-    pass: atob(acc.pass)
-  }));
+      if (ok) {
+        loginError.style.opacity = "0";
+        localStorage.setItem("loggedIn", "true");
+        localStorage.setItem("username", u);
 
-  // Decode any extra stored users
-  const extra = JSON.parse(localStorage.getItem("extraUsers") || "[]").map(acc => ({
-    user: acc.user,
-    pass: acc.pass ? atob(acc.pass) : acc.pass
-  }));
+        loginBox.style.transform = "scale(0.95)";
+        loginBox.style.opacity = "0";
+        loginModal.style.opacity = "0";
+        setTimeout(() => loginModal.remove(), 350);
 
-  // Merge all users
-  const allUsers = [...decodedValid, ...extra];
+        document.body.classList.add("logged-in");
+        showMenu(u);
+        showToast(`👋 Welcome, ${u}`);
+      } else {
+        loginError.textContent = "Invalid username or password";
+        loginError.style.opacity = "1";
+        loginPass.value = "";
+      }
+    });
 
-  // Check credentials
-  const ok = allUsers.some(acc => acc.user === u && acc.pass === p);
-
-  if (ok) {
-    loginError.style.opacity = "0";
-    localStorage.setItem("loggedIn", "true");
-    localStorage.setItem("username", u);
-
-    // Fade out login modal
-    loginBox.style.transform = "scale(0.95)";
-    loginBox.style.opacity = "0";
-    loginModal.style.opacity = "0";
-    setTimeout(() => loginModal.remove(), 350);
-
-    document.body.classList.add("logged-in");
-    showMenu(u);
-  } else {
-    loginError.textContent = "Invalid username or password";
-    loginError.style.opacity = "1";
-    loginPass.value = "";
-  }
-});	
-
-    // Press Enter to submit
     [loginUser, loginPass].forEach(input =>
       input.addEventListener("keypress", e => {
         if (e.key === "Enter") loginSubmit.click();
@@ -5062,10 +5127,10 @@ loginSubmit.addEventListener("click", () => {
     );
   }
 
-  // === 📜 Show Menu Button Only at Top ===
+  // === 📜 Menu visibility ===
   window.addEventListener("scroll", () => {
     if (!menuBtn) return;
-    const atTop = window.scrollY < 150; // adjust threshold
+    const atTop = window.scrollY < 150;
     menuBtn.style.opacity = atTop ? "1" : "0";
     menuBtn.style.pointerEvents = atTop ? "auto" : "none";
   });
@@ -5075,7 +5140,6 @@ loginSubmit.addEventListener("click", () => {
     document.body.style.overflow = "hidden";
     document.body.style.touchAction = "none";
   }
-
   function unlockScroll() {
     document.body.style.overflow = "";
     document.body.style.touchAction = "";
@@ -5104,41 +5168,24 @@ loginSubmit.addEventListener("click", () => {
   });
 
   logoutNow?.addEventListener("click", () => {
-  localStorage.removeItem("loggedIn");
-  localStorage.removeItem("username");
+    localStorage.removeItem("loggedIn");
+    localStorage.removeItem("username");
+    if (loginPass) {
+      loginPass.value = "";
+      loginPass.type = "password";
+    }
+    modal.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => {
+      modal.style.display = "none";
+      unlockScroll();
+      showToast("👋 Logged out");
+      location.reload();
+    }, 350);
+  });
 
-  // 🧹 Clear password field completely and disable caching
-  const loginPass = document.getElementById("loginPass");
-  if (loginPass) {
-    loginPass.value = "";
-    loginPass.type = "password"; // hide it again
-    loginPass.setAttribute("autocomplete", "off"); // prevent browser remembering it
-  }
-
-  // Optional: also clear the show/hide icon just to be sure
-  const togglePass = document.getElementById("togglePass");
-  if (togglePass) {
-    togglePass.textContent = "👁️";
-    togglePass.style.opacity = "1";
-  }
-
-  modal.style.opacity = "0";
-  box.style.transform = "scale(0.85)";
-  box.style.opacity = "0";
-
-  setTimeout(() => {
-    modal.style.display = "none";
-    unlockScroll();
-
-    // 🧠 Flush cache before reload
-    if (loginPass) loginPass.value = "";
-    requestAnimationFrame(() => {
-      location.reload(); // now reload after clearing everything
-    });
-  }, 350);
-});
-
-  // === 🧑‍💼 ADMIN - ADD USER FEATURE ===
+  // === 🧑‍💼 ADMIN ADD USER ===
   const addUserModal = document.getElementById("addUserModal");
   const addUserBox = document.getElementById("addUserBox");
   const newUserName = document.getElementById("newUserName");
@@ -5146,8 +5193,8 @@ loginSubmit.addEventListener("click", () => {
   const saveUserBtn = document.getElementById("saveUserBtn");
   const cancelAddUser = document.getElementById("cancelAddUser");
   const addUserError = document.getElementById("addUserError");
-  // 👁️ Toggle show/hide new user password (admin modal)
   const toggleNewPass = document.getElementById("toggleNewPass");
+
   if (toggleNewPass) {
     toggleNewPass.addEventListener("click", () => {
       const isHidden = newUserPass.type === "password";
@@ -5158,8 +5205,7 @@ loginSubmit.addEventListener("click", () => {
     });
   }
 
-  // Save new user
-  saveUserBtn.addEventListener("click", () => {
+  saveUserBtn.addEventListener("click", async () => {
     const u = newUserName.value.trim();
     const p = newUserPass.value.trim();
 
@@ -5169,24 +5215,12 @@ loginSubmit.addEventListener("click", () => {
       return;
     }
 
-    // Retrieve stored list
-    let users = JSON.parse(localStorage.getItem("extraUsers") || "[]");
-    if (users.some(user => user.user === u)) {
-      addUserError.textContent = "Username already exists.";
-      addUserError.style.opacity = "1";
-      return;
-    }
-
-    // Encode password in Base64 before saving
-    const encodedPass = btoa(p);
-    users.push({ user: u, pass: encodedPass });
-    localStorage.setItem("extraUsers", JSON.stringify(users));
+    await saveUserToCloud(u, p);
 
     addUserError.style.opacity = "0";
     newUserName.value = "";
     newUserPass.value = "";
 
-    // Close modal with animation
     addUserBox.style.transform = "scale(0.85)";
     addUserBox.style.opacity = "0";
     addUserModal.style.opacity = "0";
@@ -5207,8 +5241,11 @@ loginSubmit.addEventListener("click", () => {
     addUserBox.style.opacity = "0";
     setTimeout(() => (addUserModal.style.display = "none"), 300);
   });
+
 });
 </script>
+
+<div id="toast"></div>
 
 </body>
 </html>
