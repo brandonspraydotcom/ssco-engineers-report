@@ -4739,23 +4739,5 @@ document.addEventListener("DOMContentLoaded", () => {
 }
 </style>
 
-<script>
-function addPrintCover() {
-  const cover = document.getElementById('printFooterCover');
-  cover.style.display = 'block';
-  window.print();
-  setTimeout(() => (cover.style.display = 'none'), 1000);
-}
-
-// Example: trigger it from your existing “Save PDF” button
-const savePdfBtn = document.getElementById('savePdf');
-if (savePdfBtn) {
-  savePdfBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    addPrintCover();
-  });
-}
-</script>
-
 </body>
 </html>
