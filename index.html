@@ -622,14 +622,14 @@ gmpx-place-autocomplete {
   overflow: visible !important;
 }
 
-/* === Toast Notification === */
-#toast {
+/* === 🍞 Credentials Toast === */
+#credentialsToast {
   position: fixed;
   bottom: 24px;
   right: 24px;
   background: rgba(30,30,30,0.95);
   color: #fff;
-  padding: 12px 18px;
+  padding: 12px 18px 16px;
   border-radius: 10px;
   font-size: 15px;
   font-weight: 600;
@@ -637,12 +637,51 @@ gmpx-place-autocomplete {
   opacity: 0;
   transform: translateY(20px);
   transition: all 0.4s ease;
-  z-index: 999999;
+  z-index: 9999999 !important;
   pointer-events: none;
 }
-#toast.show {
+#credentialsToast.show {
   opacity: 1;
   transform: translateY(0);
+}
+#credentialsToastProgress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background: #1ea64a;
+  width: 100%;
+  border-radius: 0 0 8px 8px;
+  transition: width 2.5s linear;
+}
+
+/* Subtle appearance pop */
+@keyframes toastPop {
+  0%   { transform: translateY(20px) scale(0.96); opacity: 0; }
+  60%  { transform: translateY(-2px) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Gentle glow pulse */
+@keyframes toastGlow {
+  0%,100% { box-shadow: 0 6px 24px rgba(0,0,0,0.6); }
+  50%     { box-shadow: 0 0 20px rgba(46, 204, 113, 0.45); }
+}
+
+
+/* Mobile-friendly center placement */
+@media (max-width: 600px) {
+  #credentialsToast {
+    bottom: 18px;
+    right: 50%;
+    transform: translateX(50%) translateY(20px);
+    width: calc(100% - 48px);
+    max-width: 320px;
+    text-align: center;
+  }
+  #credentialsToast.show {
+    transform: translateX(50%) translateY(0);
+  }
 }
 </style>
 
@@ -1261,7 +1300,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <!-- ⋮ Floating Account Menu -->
 <button id="menuBtn"
-        style="display:none;position:fixed;top:65px;right:14px;
+        style="display:none;position:fixed;top:75px;right:14px;
                background:rgba(255,255,255,0.02);
                color:#eee;font-size:30px;border:none;border-radius:10px;
                padding:6px 12px;backdrop-filter:blur(2px);
@@ -4937,14 +4976,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   let validLogins = [];
   let lastFetch = 0;
 
-  // === 🍞 Toast Notification ===
-  const toast = document.getElementById("toast");
-  function showToast(msg) {
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 2500);
-  }
+// === 🍞 Credentials Toast Notification ===
+let toast = document.getElementById("credentialsToast");
+if (!toast) {
+  toast = document.createElement("div");
+  toast.id = "credentialsToast";
+  document.body.appendChild(toast);
+}
+
+// Progress bar element
+const progressBar = document.createElement("div");
+progressBar.id = "credentialsToastProgress";
+toast.appendChild(progressBar);
+
+function showToast(msg, duration = 2500) {
+  toast.textContent = msg;
+  toast.appendChild(progressBar);
+
+  // Reset and animate the progress bar
+  progressBar.style.transition = "none";
+  progressBar.style.width = "100%";
+  setTimeout(() => {
+    progressBar.style.transition = `width ${duration}ms linear`;
+    progressBar.style.width = "0%";
+  }, 50);
+
+  // Show toast
+  toast.classList.add("show");
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, duration);
+}
 
   async function loadUsers(force = false) {
     const now = Date.now();
@@ -5021,7 +5083,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const logoutNow = document.getElementById("logoutNow");
   const loggedInAs = document.getElementById("loggedInAs").querySelector("strong");
 
-  // 🔹 Show menu button + admin controls
   function showMenu(username) {
     if (!menuBtn) return;
     loggedInAs.textContent = username;
@@ -5066,6 +5127,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loginModal?.remove();
     document.body.classList.add("logged-in");
     showMenu(storedUser);
+    showToast(`👋 Welcome back, ${storedUser}`);
   } else {
     const showLogin = () => {
       loginModal.style.display = "flex";
@@ -5094,7 +5156,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       setTimeout(showLogin, 600);
     }
 
-    // 🧩 Login handler
     loginSubmit.addEventListener("click", () => {
       const u = loginUser.value.trim();
       const p = loginPass.value.trim();
@@ -5168,6 +5229,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   logoutNow?.addEventListener("click", () => {
+    const name = localStorage.getItem("username") || "User";
     localStorage.removeItem("loggedIn");
     localStorage.removeItem("username");
     if (loginPass) {
@@ -5180,7 +5242,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setTimeout(() => {
       modal.style.display = "none";
       unlockScroll();
-      showToast("👋 Logged out");
+      showToast(`👋 See you next time, ${name}`);
       location.reload();
     }, 350);
   });
@@ -5245,7 +5307,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 </script>
 
-<div id="toast"></div>
+<div id="credentialsToast"></div>
 
 </body>
 </html>
