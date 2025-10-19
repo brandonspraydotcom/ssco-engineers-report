@@ -579,17 +579,23 @@ gmpx-place-autocomplete {
 
 <style>
 @media print {
-  @page {margin: 20mm;}
-  body::after {
-    content: "" !important;
+  @page {
+    margin: 20mm;
+  }
+  #printFooterCover {
+    display: block !important;
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
     width: 100% !important;
-    height: 18mm !important; /* adjust slightly if needed */
-    background: #000 !important;
-    outline: 2px !important;
-    z-index: 9999 !important;
+    height: 18mm !important;
+    background: black !important; /* or match your paper background */
+    z-index: 99999 !important;
+  }
+}
+@media screen {
+  #printFooterCover {
+    display: none !important;
   }
 }
 </style>
@@ -597,6 +603,8 @@ gmpx-place-autocomplete {
 </head>
 
 <body>
+
+  <div id="printFooterCover"></div>
 
 <!-- 🌧️ Elegant Synchronized Splash Screen -->
 <div id="splashScreen"
