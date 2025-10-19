@@ -116,6 +116,39 @@
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
+#togglePass:hover,
+#toggleNewPass:hover {
+  opacity: 1 !important;
+  transform: scale(1.1);
+  transition: all .25s ease;
+}
+
+#accountBox, #addUserBox {
+  transition: all 0.35s cubic-bezier(.25,.8,.25,1);
+}
+
+.btn {
+  background: rgba(255,255,255,0.08);
+  color: #eee;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all .25s ease;
+}
+.btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+.btn.green {
+  background: rgba(0,200,100,0.25);
+}
+.btn.remove {
+  background: rgba(255,80,80,0.25);
+}
+.btn.silver {
+  background: rgba(255,255,255,0.15);
+}
+
   #shareConfirmModal.show { display:flex !important; opacity:1; }
   #shareConfirmModal.show #shareConfirmBox { transform:scale(1); opacity:1; }
 
@@ -884,6 +917,7 @@ document.addEventListener("DOMContentLoaded", () => {
               box-shadow:0 12px 40px rgba(0,0,0,.65);
               transform:scale(0.9);opacity:0;
               transition:all .35s cubic-bezier(.25,.8,.25,1);">
+              
     <div style="font-size:22px;font-weight:700;margin-bottom:12px;">🔐 Secure Login</div>
     <p style="font-size:15px;color:#ccc;margin-bottom:16px;">
       Please sign in to access the Engineers Report.
@@ -893,15 +927,34 @@ document.addEventListener("DOMContentLoaded", () => {
            style="width:100%;padding:12px;border-radius:8px;
                   border:1px solid rgba(255,255,255,0.12);
                   background:#161616;color:#eee;font-size:16px;margin-bottom:10px;">
-    <input id="loginPass" type="password" placeholder="Password"
-           style="width:100%;padding:12px;border-radius:8px;
-                  border:1px solid rgba(255,255,255,0.12);
-                  background:#161616;color:#eee;font-size:16px;margin-bottom:14px;">
 
-    <button id="loginSubmit"
-            class="btn green" style="width:100%;margin-bottom:10px;">Sign In</button>
+    <!-- Password input + 👁️ icon -->
+    <div style="position:relative;margin-bottom:14px;">
+      <input id="loginPass" 
+       type="password" 
+       placeholder="Password"
+       autocomplete="off" 
+       autocorrect="off"
+       autocapitalize="none"
+       spellcheck="false"
+             style="width:100%;padding:12px 42px 12px 12px;border-radius:8px;
+                    border:1px solid rgba(255,255,255,0.12);
+                    background:#161616;color:#eee;font-size:16px;">
+      <span id="togglePass" 
+            style="position:absolute; right:14px; top:50%; transform:translateY(-50%);
+                   font-size:18px; color:#aaa; cursor:pointer; user-select:none;
+                   opacity:0.85; transition:opacity .25s ease, transform .25s ease;">
+        👁️
+      </span>
+    </div>
+
+    <button id="loginSubmit" class="btn green" style="width:100%;margin-bottom:10px;">
+      Sign In
+    </button>
+
     <div id="loginError"
-         style="color:#ff5c5c;font-size:14px;height:18px;opacity:0;transition:opacity .3s ease;">
+         style="color:#ff5c5c;font-size:14px;height:18px;opacity:0;
+                transition:opacity .3s ease;">
     </div>
   </div>
 </div>
@@ -1184,12 +1237,12 @@ document.addEventListener("DOMContentLoaded", () => {
         style="display:none;position:fixed;top:14px;right:14px;
                background:rgba(255,255,255,0.02);
                color:#eee;font-size:22px;border:none;border-radius:10px;
-               padding:6px 12px;backdrop-filter:blur(6px);
-               -webkit-backdrop-filter:blur(6px);
-               box-shadow:0 0 8px rgba(0,0,0,0.4);
+               padding:6px 12px;backdrop-filter:blur(2px);
+               -webkit-backdrop-filter:blur(2px);
+               box-shadow:0 0 6px rgba(0,0,0,0.4);
                opacity:0;transform:translateY(-6px);
                transition:opacity .4s ease,transform .4s ease;
-               z-index:9999;cursor:pointer;">⋮</button>
+               z-index:9999;cursor:pointer;"><span style="font-size: 30px;">⋮</span></button>
 
 <!-- ⚙️ Account Modal -->
 <div id="accountModal"
@@ -1214,6 +1267,34 @@ document.addEventListener("DOMContentLoaded", () => {
             class="btn remove"
             style="width:100%;margin-bottom:12px;">Logout</button>
     <div style="font-size:13px;color:#888;">v1.0.1 • SSCo Engineers Report</div>
+  </div>
+</div>
+
+<!-- 🧑‍💼 Admin Add User Modal -->
+<div id="addUserModal"
+     style="display:none;position:fixed;inset:0;z-index:5400;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;opacity:0;
+            transition:opacity .3s ease;">
+  <div id="addUserBox"
+       style="background:rgba(30,30,31,0.95);border-radius:16px;
+              padding:24px 22px;max-width:360px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;transition:all .25s ease;">
+    <div style="font-size:20px;margin-bottom:10px;">👤 Add New User</div>
+    <input id="newUserName" type="text" placeholder="Username"
+           style="width:100%;margin-bottom:8px;padding:10px;
+                  border-radius:8px;border:none;text-align:center;">
+    <div style="position:relative;">
+  <input id="newUserPass" type="password" placeholder="Password" style="width:100%;padding:12px 42px 12px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#161616;color:#eee;font-size:16px;">
+  <span id="toggleNewPass" 
+        style="position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:18px;color:#aaa;cursor:pointer;user-select:none;transition:opacity .25s ease;">👁️</span>
+</div>
+    <div id="addUserError"
+         style="color:#ff5555;font-size:13px;opacity:0;
+                transition:opacity .3s ease;margin-bottom:6px;"></div>
+    <button id="saveUserBtn" class="btn green" style="width:100%;">Save User</button>
+    <button id="cancelAddUser" class="btn remove" style="width:100%;margin-top:8px;">Cancel</button>
   </div>
 </div>
   
@@ -4824,13 +4905,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const loginModal = document.getElementById("loginModal");
   const loginBox = document.getElementById("loginBox");
   const loginUser = document.getElementById("loginUser");
-  const loginPass = document.getElementById("loginPass");
   const loginSubmit = document.getElementById("loginSubmit");
   const loginError = document.getElementById("loginError");
+  const loginPass = document.getElementById("loginPass");
+  // 👁️ Show / Hide Password
+  const togglePass = document.getElementById("togglePass");
+  if (togglePass) {
+    togglePass.addEventListener("click", () => {
+      const isHidden = loginPass.type === "password";
+      loginPass.type = isHidden ? "text" : "password";
+      togglePass.textContent = isHidden ? "🙈" : "👁️";
+      togglePass.style.opacity = isHidden ? "0.6" : "1";
+      loginPass.focus();
+    });
+  }
 
   const validLogins = [
-    { user: "ssco", pass: "60189" },
-    { user: "Brandon", pass: "282807" }
+    { user: "ssco", pass: "NjAxODk=" },
+    { user: "Brandon", pass: "MjgyODA3" }
   ];
 
   // === ⚙️ ACCOUNT MENU ELEMENTS ===
@@ -4841,15 +4933,44 @@ document.addEventListener("DOMContentLoaded", () => {
   const loggedInAs = document.getElementById("loggedInAs").querySelector("strong");
 
   // 🔹 Function to show the 3-dot menu
-  function showMenu(username) {
-    if (!menuBtn) return;
-    loggedInAs.textContent = username;
-    menuBtn.style.display = "inline-block";
-    requestAnimationFrame(() => {
-      menuBtn.style.opacity = "1";
-      menuBtn.style.transform = "translateY(0)";
-    });
+function showMenu(username) {
+  if (!menuBtn) return;
+  loggedInAs.textContent = username;
+  menuBtn.style.display = "inline-block";
+  requestAnimationFrame(() => {
+    menuBtn.style.opacity = "1";
+    menuBtn.style.transform = "translateY(0)";
+  });
+
+  // 🧑‍💼 If Brandon logs in, show Admin Add User button
+  if (username === "Brandon") {
+    const existing = document.getElementById("adminAddBtn");
+    if (!existing) {
+      const adminOption = document.createElement("button");
+      adminOption.id = "adminAddBtn";
+      adminOption.textContent = "➕ Add New User";
+      adminOption.className = "btn silver";
+      adminOption.style.width = "100%";
+      adminOption.style.marginTop = "10px";
+
+      const logoutParent = logoutNow.parentElement;
+      logoutParent.insertBefore(adminOption, logoutNow);
+
+      adminOption.addEventListener("click", () => {
+        modal.style.opacity = "0";
+        setTimeout(() => {
+          modal.style.display = "none";
+          addUserModal.style.display = "flex";
+          requestAnimationFrame(() => {
+            addUserModal.style.opacity = "1";
+            addUserBox.style.transform = "scale(1)";
+            addUserBox.style.opacity = "1";
+          });
+        }, 250);
+      });
+    }
   }
+}
 
   // 🧠 If user already logged in, skip login and show menu
   const storedUser = localStorage.getItem("username");
@@ -4860,14 +4981,22 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     // 🔐 Show login modal after splash
     const showLogin = () => {
-      loginModal.style.display = "flex";
-      loginModal.style.pointerEvents = "auto";
-      requestAnimationFrame(() => {
-        loginModal.style.opacity = "1";
-        loginBox.style.opacity = "1";
-        loginBox.style.transform = "scale(1)";
-      });
-    };
+  // 🧹 Double safety: always clear password when showing login modal
+  const loginPass = document.getElementById("loginPass");
+  if (loginPass) {
+    loginPass.value = "";
+    loginPass.type = "password";
+  }
+
+  loginModal.style.display = "flex";
+  loginModal.style.pointerEvents = "auto";
+
+  requestAnimationFrame(() => {
+    loginModal.style.opacity = "1";
+    loginBox.style.opacity = "1";
+    loginBox.style.transform = "scale(1)";
+  });
+};
 
     const splash = document.getElementById("splashScreen");
     if (splash) {
@@ -4882,31 +5011,48 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(showLogin, 600);
     }
 
-    // 🧩 Login handler
-    loginSubmit.addEventListener("click", () => {
-      const u = loginUser.value.trim();
-      const p = loginPass.value.trim();
-      const ok = validLogins.some(acc => acc.user === u && acc.pass === p);
+// 🧩 Login handler
+loginSubmit.addEventListener("click", () => {
+  const u = loginUser.value.trim();
+  const p = loginPass.value.trim();
 
-      if (ok) {
-        loginError.style.opacity = "0";
-        localStorage.setItem("loggedIn", "true");
-        localStorage.setItem("username", u);
+  // Decode built-in users from Base64
+  const decodedValid = validLogins.map(acc => ({
+    user: acc.user,
+    pass: atob(acc.pass)
+  }));
 
-        // Fade out login modal
-        loginBox.style.transform = "scale(0.95)";
-        loginBox.style.opacity = "0";
-        loginModal.style.opacity = "0";
-        setTimeout(() => loginModal.remove(), 350);
+  // Decode any extra stored users
+  const extra = JSON.parse(localStorage.getItem("extraUsers") || "[]").map(acc => ({
+    user: acc.user,
+    pass: acc.pass ? atob(acc.pass) : acc.pass
+  }));
 
-        document.body.classList.add("logged-in");
-        showMenu(u);
-      } else {
-        loginError.textContent = "Invalid username or password";
-        loginError.style.opacity = "1";
-        loginPass.value = "";
-      }
-    });
+  // Merge all users
+  const allUsers = [...decodedValid, ...extra];
+
+  // Check credentials
+  const ok = allUsers.some(acc => acc.user === u && acc.pass === p);
+
+  if (ok) {
+    loginError.style.opacity = "0";
+    localStorage.setItem("loggedIn", "true");
+    localStorage.setItem("username", u);
+
+    // Fade out login modal
+    loginBox.style.transform = "scale(0.95)";
+    loginBox.style.opacity = "0";
+    loginModal.style.opacity = "0";
+    setTimeout(() => loginModal.remove(), 350);
+
+    document.body.classList.add("logged-in");
+    showMenu(u);
+  } else {
+    loginError.textContent = "Invalid username or password";
+    loginError.style.opacity = "1";
+    loginPass.value = "";
+  }
+});	
 
     // Press Enter to submit
     [loginUser, loginPass].forEach(input =>
@@ -4958,16 +5104,108 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   logoutNow?.addEventListener("click", () => {
-    localStorage.removeItem("loggedIn");
-    localStorage.removeItem("username");
-    modal.style.opacity = "0";
-    box.style.transform = "scale(0.85)";
-    box.style.opacity = "0";
+  localStorage.removeItem("loggedIn");
+  localStorage.removeItem("username");
+
+  // 🧹 Clear password field completely and disable caching
+  const loginPass = document.getElementById("loginPass");
+  if (loginPass) {
+    loginPass.value = "";
+    loginPass.type = "password"; // hide it again
+    loginPass.setAttribute("autocomplete", "off"); // prevent browser remembering it
+  }
+
+  // Optional: also clear the show/hide icon just to be sure
+  const togglePass = document.getElementById("togglePass");
+  if (togglePass) {
+    togglePass.textContent = "👁️";
+    togglePass.style.opacity = "1";
+  }
+
+  modal.style.opacity = "0";
+  box.style.transform = "scale(0.85)";
+  box.style.opacity = "0";
+
+  setTimeout(() => {
+    modal.style.display = "none";
+    unlockScroll();
+
+    // 🧠 Flush cache before reload
+    if (loginPass) loginPass.value = "";
+    requestAnimationFrame(() => {
+      location.reload(); // now reload after clearing everything
+    });
+  }, 350);
+});
+
+  // === 🧑‍💼 ADMIN - ADD USER FEATURE ===
+  const addUserModal = document.getElementById("addUserModal");
+  const addUserBox = document.getElementById("addUserBox");
+  const newUserName = document.getElementById("newUserName");
+  const newUserPass = document.getElementById("newUserPass");
+  const saveUserBtn = document.getElementById("saveUserBtn");
+  const cancelAddUser = document.getElementById("cancelAddUser");
+  const addUserError = document.getElementById("addUserError");
+  // 👁️ Toggle show/hide new user password (admin modal)
+  const toggleNewPass = document.getElementById("toggleNewPass");
+  if (toggleNewPass) {
+    toggleNewPass.addEventListener("click", () => {
+      const isHidden = newUserPass.type === "password";
+      newUserPass.type = isHidden ? "text" : "password";
+      toggleNewPass.textContent = isHidden ? "🙈" : "👁️";
+      toggleNewPass.style.opacity = isHidden ? "0.6" : "1";
+      newUserPass.focus();
+    });
+  }
+
+  // Save new user
+  saveUserBtn.addEventListener("click", () => {
+    const u = newUserName.value.trim();
+    const p = newUserPass.value.trim();
+
+    if (!u || !p) {
+      addUserError.textContent = "Please enter both fields.";
+      addUserError.style.opacity = "1";
+      return;
+    }
+
+    // Retrieve stored list
+    let users = JSON.parse(localStorage.getItem("extraUsers") || "[]");
+    if (users.some(user => user.user === u)) {
+      addUserError.textContent = "Username already exists.";
+      addUserError.style.opacity = "1";
+      return;
+    }
+
+    // Encode password in Base64 before saving
+    const encodedPass = btoa(p);
+    users.push({ user: u, pass: encodedPass });
+    localStorage.setItem("extraUsers", JSON.stringify(users));
+
+    addUserError.style.opacity = "0";
+    newUserName.value = "";
+    newUserPass.value = "";
+
+    // Close modal with animation
+    addUserBox.style.transform = "scale(0.85)";
+    addUserBox.style.opacity = "0";
+    addUserModal.style.opacity = "0";
     setTimeout(() => {
-      modal.style.display = "none";
-      unlockScroll();
-      location.reload(); // triggers login modal again
-    }, 350);
+      addUserModal.style.display = "none";
+      modal.style.display = "flex";
+      requestAnimationFrame(() => {
+        modal.style.opacity = "1";
+        box.style.transform = "scale(1)";
+        box.style.opacity = "1";
+      });
+    }, 300);
+  });
+
+  cancelAddUser.addEventListener("click", () => {
+    addUserModal.style.opacity = "0";
+    addUserBox.style.transform = "scale(0.85)";
+    addUserBox.style.opacity = "0";
+    setTimeout(() => (addUserModal.style.display = "none"), 300);
   });
 });
 </script>
