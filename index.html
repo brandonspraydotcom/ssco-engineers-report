@@ -582,20 +582,34 @@ gmpx-place-autocomplete {
   @page {
     margin: 20mm;
   }
+
+  /* Force Safari to keep the element visible */
+  html, body {
+    position: relative !important;
+    overflow: visible !important;
+  }
+
   #printFooterCover {
     display: block !important;
-    position: fixed !important;
+    position: absolute !important; /* ✅ instead of fixed */
     bottom: 0 !important;
     left: 0 !important;
     width: 100% !important;
     height: 18mm !important;
-    background: black !important; /* or match your paper background */
+    background: black !important;
     z-index: 99999 !important;
   }
 }
+
 @media screen {
   #printFooterCover {
     display: none !important;
+  }
+}
+
+@media print {
+  body {
+    background: white !important;
   }
 }
 </style>
