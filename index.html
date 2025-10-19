@@ -577,26 +577,27 @@ gmpx-place-autocomplete {
 }
 </style>
 
+
 <style>
 @media print {
   @page {
     margin: 20mm;
   }
 
-  /* Force Safari to keep the element visible */
   html, body {
     position: relative !important;
     overflow: visible !important;
+    background: white !important; /* ensures Safari paints the white sheet */
   }
 
   #printFooterCover {
     display: block !important;
-    position: absolute !important; /* ✅ instead of fixed */
+    position: absolute !important; /* ✅ works in Safari print */
     bottom: 0 !important;
     left: 0 !important;
     width: 100% !important;
     height: 18mm !important;
-    background: black !important;
+    background: black !important; /* switch to white later */
     z-index: 99999 !important;
   }
 }
@@ -604,12 +605,6 @@ gmpx-place-autocomplete {
 @media screen {
   #printFooterCover {
     display: none !important;
-  }
-}
-
-@media print {
-  body {
-    background: white !important;
   }
 }
 </style>
@@ -4743,6 +4738,24 @@ document.addEventListener("DOMContentLoaded", () => {
   border-radius: 0 0 12px 12px !important;
 }
 </style>
+
+<script>
+function addPrintCover() {
+  const cover = document.getElementById('printFooterCover');
+  cover.style.display = 'block';
+  window.print();
+  setTimeout(() => (cover.style.display = 'none'), 1000);
+}
+
+// Example: trigger it from your existing “Save PDF” button
+const savePdfBtn = document.getElementById('savePdf');
+if (savePdfBtn) {
+  savePdfBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    addPrintCover();
+  });
+}
+</script>
 
 </body>
 </html>
