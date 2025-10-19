@@ -8,6 +8,29 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f0f10">
 
+<!-- JSZip -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
+  integrity="sha384-lTK8S9mGVrImS9LThT0ypl9HVr3Go+UlINhMhxnbEvvPnA0T2qKhONIpyVh1jKQG"
+  crossorigin="anonymous"></script>
+
+<!-- FileSaver -->
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"
+  integrity="sha384-sgiNRcTytjYkM6nT2xK1yT9DT0BNo+KQ6PpXxTkN2Y6fI3rAwxE6h6eBo4mA2fMZ"
+  crossorigin="anonymous"></script>
+
+<!-- html2pdf -->
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
+  integrity="sha384-QyXp0EWB6Vw0qRgKf5GcqZzvb2n0TPDVu8oEwNf6Jr0F8+q8B4vQK0+O3Uu9yY7W"
+  crossorigin="anonymous"></script>
+
+<!-- jsPDF -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"
+  integrity="sha384-XZ1YftI2H8V2+6y3BVHuOfQghEYX7lLZkZbR+T4iXUy91L0oqo4CVu3tJH1CRslx"
+  crossorigin="anonymous"></script>
+
+<!-- Your App Logic -->
+<script src="main.js"></script>
+
   <!-- =======================
         🧩 Service Worker
   ======================== -->
@@ -272,7 +295,7 @@ select {
   .sigWrap{flex:1}
   .timeBox{background:var(--card);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.06)}
   .timeRow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
-  .small{font-size:13px;color:var(--muted)}
+  .small{font-size:20px;color:var(--muted)}
   .dayTotal{margin-top:8px;font-size:14px;color:#ccc}
   footer.appFooter{display:flex;gap:12px;align-items:center;margin-top:10px}
   .photo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
@@ -628,7 +651,7 @@ gmpx-place-autocomplete {
 #credentialsToast {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  right: 34px;
   background: rgba(30,30,30,0.3);
   backdrop-filter:blur(2px);
   -webkit-backdrop-filter:blur(2px);
@@ -676,7 +699,7 @@ gmpx-place-autocomplete {
 @media (max-width: 600px) {
   #credentialsToast {
     bottom: 18px;
-    right: 50%;
+    right: 75%;
     transform: translateX(50%) translateY(20px);
     width: calc(100% - 48px);
     max-width: 320px;
@@ -1312,7 +1335,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <!-- ⋮ Floating Account Menu -->
 <button id="menuBtn"
-        style="display:none;position:fixed;top:75px;right:14px;
+        style="display:none;position:fixed;top:85px;right:14px;
                background:rgba(255,255,255,0.02);
                color:#eee;font-size:30px;border:none;border-radius:10px;
                padding:6px 12px;backdrop-filter:blur(2px);
@@ -1344,7 +1367,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <button id="logoutNow"
             class="btn remove"
             style="width:100%;margin-bottom:12px;">Logout</button>
-    <div style="font-size:13px;color:#888;">v1.0.1 • SSCo Engineers Report</div>
+    <div style="font-size:13px;color:#888;">v1.0.0 • SSCo Engineers Report</div>
   </div>
 </div>
 
