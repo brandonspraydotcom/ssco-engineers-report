@@ -1,5 +1,5 @@
 // sw.js
-const VERSION = 'v1.0.0'; // bump on each deploy
+const VERSION = 'v1.0.2'; // bump on each deploy
 const APP_SHELL = [
   './',
   './index.html',
@@ -46,7 +46,13 @@ self.addEventListener('fetch', e => {
     e.respondWith((async () => {
       const cache = await caches.open('ssc-img-' + VERSION);
       const cached = await cache.match(request);
-      const prom = fetch(request).then(r => { cache.put(request, r.clone()); return r; }).catch(() => null);
+      const prom = fetch(request)
+  .then(r => {
+    if (r.ok && r.status === 200) cache.put(request, r.clone());
+    return r;
+  })
+  .catch(() => null);
+
       return cached || prom || fetch(request);
     })());
     return;
@@ -58,11 +64,12 @@ self.addEventListener('fetch', e => {
       const cache = await caches.open('ssc-audio-' + VERSION);
       const cached = await cache.match(request);
       const prom = fetch(request)
-        .then(r => {
-          cache.put(request, r.clone());
-          return r;
-        })
-        .catch(() => null);
+  .then(r => {
+    if (r.ok && r.status === 200) cache.put(request, r.clone());
+    return r;
+  })
+  .catch(() => null);
+
       return cached || prom || fetch(request);
     })());
     return;
