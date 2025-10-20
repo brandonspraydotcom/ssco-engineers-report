@@ -3,6 +3,21 @@
 <head>
   <base href="/ssco-engineers-report/">
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+     content="
+       default-src 'self';
+       script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maps.googleapis.com https://maps.gstatic.com;">https://maps.gstatic.com;
+       style-src 'self' 'unsafe-inline';
+       img-src 'self' blob: data:;
+       connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://api.jsonbin.io;
+       font-src 'self' data:;
+       media-src 'self' data: blob:;
+       worker-src 'self' blob:;
+       object-src 'none';
+       base-uri 'self';
+       form-action 'self';
+       frame-ancestors 'none';
+     ">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 
   <link rel="manifest" href="manifest.json">
@@ -10,22 +25,22 @@
 
 <!-- JSZip -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
-  integrity="sha384-lTK8S9mGVrImS9LThT0ypl9HVr3Go+UlINhMhxnbEvvPnA0T2qKhONIpyVh1jKQG"
+  integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG"
   crossorigin="anonymous"></script>
 
 <!-- FileSaver -->
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"
-  integrity="sha384-sgiNRcTytjYkM6nT2xK1yT9DT0BNo+KQ6PpXxTkN2Y6fI3rAwxE6h6eBo4mA2fMZ"
+  integrity="sha384-PlRSzpewlarQuj5alIadXwjNUX+2eNMKwr0f07ShWYLy8B6TjEbm7ZlcN/ScSbwy"
   crossorigin="anonymous"></script>
 
 <!-- html2pdf -->
 <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"
-  integrity="sha384-QyXp0EWB6Vw0qRgKf5GcqZzvb2n0TPDVu8oEwNf6Jr0F8+q8B4vQK0+O3Uu9yY7W"
+  integrity="sha384-Yv5O+t3uE3hunW8uyrbpPW3iw6/5/Y7HitWJBLgqfMoA36NogMmy+8wWZMpn3HWc"
   crossorigin="anonymous"></script>
 
 <!-- jsPDF -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"
-  integrity="sha384-XZ1YftI2H8V2+6y3BVHuOfQghEYX7lLZkZbR+T4iXUy91L0oqo4CVu3tJH1CRslx"
+  integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk"
   crossorigin="anonymous"></script>
 
 <!-- Your App Logic -->
@@ -60,11 +75,11 @@
   }
   </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> COMMENT OUT-->
+<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>COMMENT OUT-->
 
 <script async
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&v=weekly"></script>
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCTRlBRFoSVoX5SohcbclZevHYafGUAKMg&libraries=places&v=weekly"></script> <!-- NEW Security Key -->
 
 <!--<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANsgszUFtwzWFu3p2o4yEdZu7kGxn3oEQ&libraries=places&callback=initAutocomplete">
 </script> -->
@@ -5009,7 +5024,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // === 🌐 GLOBAL USER STORAGE (JSONBin.io) ===
   const JSONBIN_URL = "https://api.jsonbin.io/v3/b/68f5386043b1c97be971a853/latest";
   const JSONBIN_WRITE_URL = "https://api.jsonbin.io/v3/b/68f5386043b1c97be971a853";
-  const JSONBIN_KEY = "$2a$10$2gZj6smFExW8GSSTuR9iherTpDIOMZ5Z0LPk43JBztbNqcSFaaLD6";
+  const JSONBIN_KEY = "$2a$10$Ikh6/bgAsiI9Wjf2Q.11luQRarhfen0Oc3DzmRQUIxu2pQ8MuLPVm"; // X-Access-Key
 
   let validLogins = [];
   let lastFetch = 0;
