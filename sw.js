@@ -5,6 +5,11 @@ const APP_SHELL = [
   './index.html',
   './manifest.json',
   './bottle2.png',
+  './Bottle2.png',
+  './Bottle.png',
+  './Maintenance.jpg',
+  './icon-192.png',
+  './icon-512.png',
   './img-worker.js',
   './water-splash-46402.mp3',
   // add any css/js you reference by path
