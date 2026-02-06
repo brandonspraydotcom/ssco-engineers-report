@@ -110,7 +110,7 @@
   position: relative;
   z-index: 9999;
 }
-#testModeContainer { display: none; }
+#testModeContainer { display: show; }
 #testModeBanner {
   position: fixed;
   top: 0;
@@ -287,7 +287,7 @@ select {
   .photoWrap{position:relative;display:inline-block}
   .thumb{width:120px;height:88px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,.12)}
   .removePhoto{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;line-height:24px;text-align:center}
-  canvas.signature{max-width:100%;min-width:100%;height:200px;border-radius:8px;background:#fff;border:1px solid #000;touch-action:none}
+  canvas.signature{max-width:100%;min-width:100%;height:200px;border-radius:8px;background:#161616;border:2px solid rgba(255,255,255,0.1);touch-action:none}
   .sigRow{display:flex;gap:12px}
   .sigWrap{flex:1}
   .timeBox{background:var(--card);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.06)}
@@ -1174,6 +1174,7 @@ document.addEventListener("DOMContentLoaded", () => {
     		--gmpx-border-radius: 10px;
   		">
 	</gmpx-place-autocomplete>
+	<input id="custCompanyHidden" type="hidden">
 
   <div class="row" style="margin-top:10px">
     <!-- ✅ Address Line 1 autocomplete UI -->
@@ -1329,13 +1330,13 @@ document.addEventListener("DOMContentLoaded", () => {
          font-size:13px;color:#aaa;opacity:0.8;
          z-index:9999;backdrop-filter:blur(3px);
          transition:opacity 0.3s;">
-  v1.0.2 • Offline
+  v1.0.1 • Offline
 </span>
     </footer>
 
 <!-- ⋮ Floating Account Menu -->
 <button id="menuBtn"
-        style="display:none;position:fixed;top:98px;right:14px;
+        style="display:none;position:fixed;top:101px;right:14px;
                background:rgba(255,255,255,0.02);
                color:#eee;font-size:30px;border:none;border-radius:10px;
                padding:3px 6px;backdrop-filter:blur(2px);
@@ -1367,7 +1368,7 @@ document.addEventListener("DOMContentLoaded", () => {
     <button id="logoutNow"
             class="btn remove"
             style="width:100%;margin-bottom:12px;">Logout</button>
-    <div style="font-size:13px;color:#888;">v1.0.2 • SSCo Engineers Report</div>
+    <div style="font-size:13px;color:#888;">v1.0.0 • SSCo Engineers Report</div>
   </div>
 </div>
 
@@ -1490,7 +1491,7 @@ function initSignature(id){
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
     ctx.setTransform(ratio,0,0,ratio,0,0);
-    ctx.lineJoin='round'; ctx.lineCap='round'; ctx.lineWidth=2; ctx.strokeStyle='#000';
+    ctx.lineJoin='round'; ctx.lineCap='round'; ctx.lineWidth=2; ctx.strokeStyle='#fff';
   }
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
@@ -2441,6 +2442,22 @@ let lastPdfBlob = null;
 /* ---------- Build printable doc (light) and open it ---------- */
 function buildPdf(existingWindow = null) {
   // --- Capture signatures first ---
+  function getSignatureForPdf(id) {
+    const c = document.getElementById(id);
+    const tmp = document.createElement('canvas');
+    tmp.width = c.width;
+    tmp.height = c.height;
+    const tctx = tmp.getContext('2d');
+    // fill white background
+    tctx.fillStyle = '#fff';
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+    // draw the existing signature in black
+    tctx.drawImage(c, 0, 0);
+    const data = tmp.toDataURL();
+    tmp.remove();
+    return data;
+  }
+
   const sig1 = $('sig1').toDataURL();
   const sig2 = $('sig2').toDataURL();
   const clone = $('formContainer').cloneNode(true);
@@ -2487,7 +2504,7 @@ function buildPdf(existingWindow = null) {
   const projectNo = $('project').value || '—';
   const dateVal = $('date').value || new Date().toISOString().slice(0,10);
   const formattedDate = formatDateWithOrdinal(dateVal);
-  const company = $('custCompany').value || '—';
+  const company = $('custCompanyHidden').value || '—';
   const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
 
   const beforeImgs = JSON.parse(localStorage.getItem("beforeThumbs") || "[]");
@@ -4404,7 +4421,7 @@ window.addEventListener('load', () => {
   }
 });
 
-const version = "v1.0.2";
+const version = "v1.0.0";
 const badge = document.getElementById("versionBadge");
 
 function updateStatus() {
@@ -4948,6 +4965,39 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }, 1200);
   });
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  const companyField = document.getElementById("custCompany");
+  const hiddenCompany = document.getElementById("custCompanyHidden");
+
+  companyField.addEventListener("gmpx-placechange", (e) => {
+    const place = e.detail.place;
+
+    if (!place) return;
+
+    // Company name
+    hiddenCompany.value = place.displayName || "";
+
+    // Also auto-fill address (bonus — you get this free)
+    document.getElementById("addr1").value = place.formattedAddress || "";
+
+    if (place.addressComponents) {
+      const comps = place.addressComponents;
+
+      const get = (type) =>
+        comps.find(c => c.types.includes(type))?.longText || "";
+
+      document.getElementById("city").value = get("locality");
+      document.getElementById("region").value = get("administrative_area_level_1");
+      document.getElementById("postal").value = get("postal_code");
+      document.getElementById("country").value = get("country");
+    }
+  });
+
 });
 </script>
 
