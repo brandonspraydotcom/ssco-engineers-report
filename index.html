@@ -2108,7 +2108,9 @@ function prepareForPdf(clone, sigData) {
     salesEmail: $('salesEmail')?.value || '—',
     custName: $('custName')?.value || '—',
     custEmail: $('custEmail')?.value || '—',
-    custCompany: $('custCompany')?.value || '—',
+    custCompany: $('custCompanyHidden')?.value
+  || $('custCompany')?.value
+  || '—',
     addr1: $('addr1')?.value || '',
     addr2: $('addr2')?.value || '',
     city: $('city')?.value || '',
@@ -4981,6 +4983,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Company name
     hiddenCompany.value = place.displayName || "";
+    saveField(hiddenCompany); // or: hiddenCompany.dispatchEvent(new Event('change'))
 
     // Also auto-fill address (bonus — you get this free)
     document.getElementById("addr1").value = place.formattedAddress || "";
