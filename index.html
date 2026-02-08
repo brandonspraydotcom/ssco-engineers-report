@@ -2614,6 +2614,15 @@ function buildPdf(existingWindow = null) {
 }
 `;
 
+// Resolve company name reliably (gmpx / fallback / hidden / storage)
+const company =
+  (localStorage.getItem("custCompany") || "").trim() ||
+  (document.getElementById("custCompanyHidden")?.value || "").trim() ||
+  (document.getElementById("custCompanyFallback")?.value || "").trim() ||
+  (document.getElementById("custCompany")?.value || "").trim() ||
+  (document.getElementById("custCompany")?.getAttribute?.("value") || "").trim() ||
+  "—";
+
   // --- Build PDF document ---
   let doc = `
     <!doctype html><html><head>
@@ -2811,6 +2820,49 @@ function resizeSignatureCanvases() {
 
 /* ---------- Run once DOM is ready ---------- */
 document.addEventListener("DOMContentLoaded", () => {
+
+  /* ==========================================================
+     UNIVERSAL COMPANY SYNC (Fixes PDF + Prepared For)
+     ========================================================== */
+  function setCompanyName(name){
+    const clean = (name || "").trim();
+    if(!clean) return;
+
+    const hidden   = document.getElementById("custCompanyHidden");
+    const fallback = document.getElementById("custCompanyFallback");
+    const gmpx     = document.getElementById("custCompany"); // gmpx element
+
+    if (hidden) hidden.value = clean;
+    if (fallback) fallback.value = clean;
+
+    // persist for offline/reload
+    localStorage.setItem("custCompany", clean);
+  }
+
+  // Keep hidden/localStorage updated if user types (fallback input)
+  const fallbackCompany = document.getElementById("custCompanyFallback");
+  if (fallbackCompany) {
+    fallbackCompany.addEventListener("input", (e) => setCompanyName(e.target.value));
+    fallbackCompany.addEventListener("change", (e) => setCompanyName(e.target.value));
+  }
+
+  // Keep hidden/localStorage updated when user selects a place (Google gmpx)
+  const companyField = document.getElementById("custCompany");
+  if (companyField) {
+    companyField.addEventListener("gmpx-placechange", (e) => {
+      const place = e?.detail?.place;
+      const companyName =
+        place?.displayName ||
+        place?.name ||
+        "";
+      setCompanyName(companyName);
+    });
+  }
+
+  // On load, if we already have a saved company, re-apply it
+  const savedCompany = localStorage.getItem("custCompany");
+  if (savedCompany) setCompanyName(savedCompany);
+
   // Restore / resize
   resizeSignatureCanvases();
   restoreFields();
@@ -2824,6 +2876,8 @@ document.addEventListener("DOMContentLoaded", () => {
       el.addEventListener("change", () => saveField(el));
     }
   });
+
+
 
   ["sig1", "sig2"].forEach(id => {
     const c = document.getElementById(id);
