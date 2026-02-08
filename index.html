@@ -2507,7 +2507,13 @@ function buildPdf(existingWindow = null) {
   const projectNo = $('project').value || '—';
   const dateVal = $('date').value || new Date().toISOString().slice(0,10);
   const formattedDate = formatDateWithOrdinal(dateVal);
-  const company = $('custCompanyHidden').value || '—';
+  // Resolve company name reliably (localStorage / hidden / fallback / visible input)
+const company =
+  (localStorage.getItem("custCompany") || "").trim() ||
+  (document.getElementById("custCompanyHidden")?.value || "").trim() ||
+  (document.getElementById("custCompanyFallback")?.value || "").trim() ||
+  (document.getElementById("custCompany")?.value || "").trim() ||
+  "—";
   const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
 
   const beforeImgs = JSON.parse(localStorage.getItem("beforeThumbs") || "[]");
@@ -2614,15 +2620,6 @@ function buildPdf(existingWindow = null) {
   }
 }
 `;
-
-// Resolve company name reliably (gmpx / fallback / hidden / storage)
-const company =
-  (localStorage.getItem("custCompany") || "").trim() ||
-  (document.getElementById("custCompanyHidden")?.value || "").trim() ||
-  (document.getElementById("custCompanyFallback")?.value || "").trim() ||
-  (document.getElementById("custCompany")?.value || "").trim() ||
-  (document.getElementById("custCompany")?.getAttribute?.("value") || "").trim() ||
-  "—";
 
   // --- Build PDF document ---
   let doc = `
