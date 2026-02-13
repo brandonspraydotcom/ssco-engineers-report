@@ -2109,9 +2109,10 @@ function prepareForPdf(clone, sigData) {
     salesEmail: $('salesEmail')?.value || '—',
     custName: $('custName')?.value || '—',
     custEmail: $('custEmail')?.value || '—',
-    custCompany: $('custCompanyHidden')?.value
-  || $('custCompany')?.value
-  || '—',
+    custCompany:
+    (localStorage.getItem("custCompany") || "").trim() ||
+    $('custCompanyHidden')?.value?.trim() ||
+    $('custCompanyFallback')?.value?.trim() || '—',
     addr1: $('addr1')?.value || '',
     addr2: $('addr2')?.value || '',
     city: $('city')?.value || '',
@@ -2123,6 +2124,38 @@ function prepareForPdf(clone, sigData) {
     partsUsed: $('partsUsed')?.value || '',
     partsReq: $('partsReq')?.value || ''
   };
+
+/* ==========================================================
+   FIX: gmpx company field renders blank in PDF (custom element)
+   Replace it in the CLONE with a normal input containing the value
+   ========================================================== */
+const pdfCompanyValue = (data.custCompany || "—").trim();
+
+const gmpxCompanyEl = clone.querySelector("#custCompany"); // <gmpx-place-autocomplete ...>
+if (gmpxCompanyEl) {
+  const replacement = document.createElement("input");
+  replacement.type = "text";
+  replacement.id = "custCompany";
+  replacement.value = pdfCompanyValue;
+  replacement.placeholder = "Company";
+  replacement.readOnly = true;
+
+  // optional: match your theme classes if you have them
+  // replacement.className = "pdfInput"; 
+
+  // keep it visually consistent with your other inputs
+  replacement.style.display = "block";
+  replacement.style.width = "100%";
+  replacement.style.height = "46px";
+  replacement.style.borderRadius = "10px";
+  replacement.style.background = "#161616";
+  replacement.style.color = "#eee";
+  replacement.style.fontSize = "16px";
+  replacement.style.padding = "12px";
+  replacement.style.border = "1px solid rgba(255,255,255,0.06)";
+
+  gmpxCompanyEl.replaceWith(replacement);
+}
 
   // --- Address formatted like a letter ---
   const addressLines = [data.addr1, data.addr2, data.city, data.region, data.postal, data.country]
