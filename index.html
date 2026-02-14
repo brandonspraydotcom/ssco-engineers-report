@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html>test
 <html lang="en">
 <head>
   <base href="/ssco-engineers-report/">
@@ -1085,7 +1085,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="row">
         <div>
           <label>Engineer Name</label>
-          <input id="engineer" type="text" placeholder="Full name">
+          <select id="engineer" name="engineer" class="input" autocomplete="off"></select>
         </div>
         <div>
           <label>Date</label>
@@ -5265,6 +5265,28 @@ function showToast(msg, duration = 2500) {
   const logoutNow = document.getElementById("logoutNow");
   const loggedInAs = document.getElementById("loggedInAs").querySelector("strong");
 
+  function showSimpleModal(modalId, boxId) {
+    const m = document.getElementById(modalId);
+    const b = document.getElementById(boxId);
+    if (!m || !b) return;
+    m.style.display = "flex";
+    requestAnimationFrame(() => {
+      m.style.opacity = "1";
+      b.style.transform = "scale(1)";
+      b.style.opacity = "1";
+    });
+  }
+
+  function hideSimpleModal(modalId, boxId) {
+    const m = document.getElementById(modalId);
+    const b = document.getElementById(boxId);
+    if (!m || !b) return;
+    m.style.opacity = "0";
+    b.style.transform = "scale(0.85)";
+    b.style.opacity = "0";
+    setTimeout(() => (m.style.display = "none"), 300);
+  }
+
   function showMenu(username) {
     if (!menuBtn) return;
     loggedInAs.textContent = username;
@@ -5275,34 +5297,55 @@ function showToast(msg, duration = 2500) {
     });
 
     if (username === "Brandon") {
-      const existing = document.getElementById("adminAddBtn");
-      if (!existing) {
-        const adminOption = document.createElement("button");
-        adminOption.id = "adminAddBtn";
-        adminOption.textContent = "➕ Add New User";
-        adminOption.className = "btn silver";
-        adminOption.style.width = "100%";
-        adminOption.style.marginTop = "10px";
-        adminOption.style.marginBottom = "18px";
+  const existing = document.getElementById("adminPanel");
+  if (!existing) {
+    const panel = document.createElement("div");
+    panel.id = "adminPanel";
+    panel.style.marginTop = "10px";
+    panel.style.marginBottom = "18px";
 
-        const logoutParent = logoutNow.parentElement;
-        logoutParent.insertBefore(adminOption, logoutNow);
+    panel.innerHTML = `
+      <button id="adminAddEngineerBtn" class="btn silver" style="width:100%;margin-bottom:10px;">➕ Add New Engineer</button>
+      <button id="adminAddSalesBtn" class="btn silver" style="width:100%;margin-bottom:10px;">➕ Add New Sales Engineer</button>
+      <button id="adminAddUserBtn" class="btn silver" style="width:100%;">➕ Add New User</button>
+    `;
 
-        adminOption.addEventListener("click", () => {
-          modal.style.opacity = "0";
-          setTimeout(() => {
-            modal.style.display = "none";
-            addUserModal.style.display = "flex";
-            requestAnimationFrame(() => {
-              addUserModal.style.opacity = "1";
-              addUserBox.style.transform = "scale(1)";
-              addUserBox.style.opacity = "1";
-            });
-          }, 250);
+    const logoutParent = logoutNow.parentElement;
+    logoutParent.insertBefore(panel, logoutNow);
+
+    // ✅ Add User (your existing behaviour)
+    panel.querySelector("#adminAddUserBtn").addEventListener("click", () => {
+      modal.style.opacity = "0";
+      setTimeout(() => {
+        modal.style.display = "none";
+        addUserModal.style.display = "flex";
+        requestAnimationFrame(() => {
+          addUserModal.style.opacity = "1";
+          addUserBox.style.transform = "scale(1)";
+          addUserBox.style.opacity = "1";
         });
-      }
-    }
+      }, 250);
+    });
+
+    // ✅ Add Engineer
+    panel.querySelector("#adminAddEngineerBtn").addEventListener("click", () => {
+      modal.style.opacity = "0";
+      setTimeout(() => {
+        modal.style.display = "none";
+        showSimpleModal("addEngineerModal", "addEngineerBox");
+      }, 250);
+    });
+
+    // ✅ Add Sales Engineer
+    panel.querySelector("#adminAddSalesBtn").addEventListener("click", () => {
+      modal.style.opacity = "0";
+      setTimeout(() => {
+        modal.style.display = "none";
+        showSimpleModal("addSalesEngineerModal", "addSalesEngineerBox");
+      }, 250);
+    });
   }
+}
 
   const storedUser = localStorage.getItem("username");
   if (localStorage.getItem("loggedIn") === "true" && storedUser) {
