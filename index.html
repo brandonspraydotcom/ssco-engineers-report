@@ -178,6 +178,9 @@ window.onerror = function(msg, src, line, col, err) {
 .btn.silver {
   background: rgba(255,255,255,0.15);
 }
+.btn.purple {
+  background: rgba(128,0,128,0.15);
+}
 
   #shareConfirmModal.show { display:flex !important; opacity:1; }
   #shareConfirmModal.show #shareConfirmBox { transform:scale(1); opacity:1; }
@@ -1248,7 +1251,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </div>
 
     <div class="card">
-      <label>Report details</label>
+      <label>Report details</label><button id="aiRewriteReport" class="btn purple" type="button" style="flex:1">✨ Rewrite Report</button>
       <textarea id="report" type="text" rows="4" placeholder="Start typing report details..."></textarea>
       <div class="row" style="margin-top:10px">
         <textarea id="partsUsed" type="text" rows="3" placeholder="List any parts used..."></textarea>
@@ -1392,7 +1395,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <footer class="appFooter">
       <button id="savePdf" class="btn" type="button" style="flex:1"><span style="font-size: 30px;">💾</span></button> <button id="clearFormBtn" class="btn remove" style="flex:1"><span style="font-size: 30px;">🗑️</span></button>
-      <button id="sendEmail" class="btn green" type="button" style="flex:1"><span style="font-size: 30px;">📧</span></button>
+      <button id="sendEmail" class="btn green" type="button" style="flex:1"><span style="font-size: 30px;">📧</span></button><button id="aiEmail" class="btn green" type="button" style="flex:1">
+  <span style="font-size: 30px;">💫📧</span></button>
       <!-- Version Badge -->
 <span id="versionBadge"
   style="position:fixed;right:14px;bottom:12px;
@@ -1606,6 +1610,7 @@ document.addEventListener("DOMContentLoaded", () => {
 			<!-- /Annotator Modal -->
 
   
+
   </div>
 
 <script>
@@ -6628,6 +6633,452 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   });
 })();
+</script>
+
+<script>
+const AI_WORKER_URL = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev/";
+
+async function callAI(mode, inputs) {
+  const res = await fetch(AI_WORKER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ mode, inputs })
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.ok) {
+    const msg = data?.error || data?.details || `AI failed (${res.status})`;
+    throw new Error(msg);
+  }
+
+  return data.text || "";
+}
+
+function collectAIInputs() {
+  const v = (id) => (document.getElementById(id)?.value || "").trim();
+
+  // --- Google Places company handling (VERY IMPORTANT FIX) ---
+  let custCompany = "";
+
+  const hidden = document.getElementById("custCompanyHidden")?.value || "";
+  if (hidden) custCompany = hidden.trim();
+
+  const placeEl = document.getElementById("custCompany");
+  if (!custCompany && placeEl && typeof placeEl.value === "string") {
+    custCompany = placeEl.value.trim();
+  }
+
+  if (!custCompany) custCompany = (localStorage.getItem("custCompany") || "").trim();
+
+  return {
+    engineer: v("engineer"),
+    custName: v("custName"),
+    custEmail: v("custEmail"),
+    custCompany,
+    project: v("project"),
+    po: v("ponumber"),
+    date: v("date"),
+    projectDesc: v("projectDesc"),
+    report: v("report"),
+    partsUsed: v("partsUsed"),
+    partsReq: v("partsReq"),
+    salesName: v("salesName"),
+    salesEmail: v("salesEmail"),
+    visitType: v("visit"),
+    followUpType: v("followUpType"),
+    followUpNotes: v("followUpNotes"),
+    followUpDue: v("followUpDue"),
+  };
+}
+
+async function copyToClipboard(text) {
+  // iPad + Safari reliable copy fallback
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch {}
+
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+}
+
+// ---------------- EMAIL FLOW STATE ----------------
+let emailFlow = {
+  targets: { customer: true, sales: false },
+  appChoice: null, // "mail" | "outlook" | "copy"
+  drafts: [],      // [{to, subject, body}]
+};
+
+// Open/close modals
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = "flex";
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = "none";
+}
+
+function resetEmailFlow() {
+  emailFlow = { targets: { customer: true, sales: false }, appChoice: null, drafts: [] };
+  // reset checkboxes default
+  const c = document.getElementById("emailToCustomerChk");
+  const s = document.getElementById("emailToSalesChk");
+  if (c) c.checked = true;
+  if (s) s.checked = false;
+}
+
+// Build drafts (one or two)
+async function buildEmailDraftsFromAI() {
+  const inputs = collectAIInputs();
+
+  const drafts = [];
+
+  // CUSTOMER
+  if (emailFlow.targets.customer) {
+    showToast?.("📧 Writing customer email…", "info");
+    bump?.("info");
+
+    const body = await callAI("email_customer", inputs);
+
+    const subject = `Service Report – ${inputs.custCompany || "Customer"} – ${inputs.project || "PJ"} – ${inputs.date || ""}`.trim();
+    const to = (inputs.custEmail || "").trim();
+
+    drafts.push({ to, subject, body });
+  }
+
+  // SALES
+  if (emailFlow.targets.sales) {
+    showToast?.("📧 Writing sales email…", "info");
+    bump?.("info");
+
+    const body = await callAI("email_sales", inputs);
+
+    const subject = `Actions / Update – ${inputs.project || "PJ"} – ${inputs.custCompany || "Customer"}`.trim();
+    const to = (inputs.salesEmail || "").trim();
+
+    drafts.push({ to, subject, body });
+  }
+
+  return drafts;
+}
+
+// Open drafts in chosen app
+async function openDraftsWithChoice(choice, drafts) {
+  // If user selected BOTH, iOS will only open one "mailto" at a time.
+  // We'll open the first, and copy the second to clipboard with a toast.
+  const first = drafts[0];
+  const second = drafts[1];
+
+  if (!first) throw new Error("No draft to open.");
+
+  if (choice === "copy") {
+    // Copy all in one clipboard payload
+    const combined = drafts.map((d, idx) => {
+      return `--- EMAIL ${idx + 1} ---\nTO: ${d.to || "(enter recipient)"}\nSUBJECT: ${d.subject}\n\n${d.body}\n`;
+    }).join("\n");
+    await copyToClipboard(combined);
+    showToast?.("✅ Email text copied", "success");
+    bump?.("success");
+    return;
+  }
+
+  const openOne = (draft) => {
+    if (choice === "outlook") {
+      window.location.href = buildOutlookIOS(draft);
+    } else {
+      window.location.href = buildMailto(draft);
+    }
+  };
+
+  // Open first draft via app
+  openOne(first);
+
+  // If there is a second draft, copy it and tell user
+  if (second) {
+    const combinedSecond = `TO: ${second.to || "(enter recipient)"}\nSUBJECT: ${second.subject}\n\n${second.body}`;
+    await copyToClipboard(combinedSecond);
+    setTimeout(() => {
+      showToast?.("✅ Second email copied (paste into new draft)", "success");
+      bump?.("success");
+    }, 250);
+  }
+}
+
+document.addEventListener("click", async (e) => {
+
+  // ---------------- REWRITE REPORT ----------------
+  if (e.target.closest("#aiRewriteReport")) {
+    e.preventDefault();
+
+    try {
+      const inputs = collectAIInputs();
+      if (!inputs.report) {
+        showToast?.("Add some report text first.", "warning");
+        return;
+      }
+
+      showToast?.("✨ Rewriting report…", "info");
+      bump?.("info");
+
+      const text = await callAI("rewrite_report", { report: inputs.report });
+
+      const reportBox = document.getElementById("report");
+      if (reportBox) {
+        reportBox.value = text;
+        saveField?.(reportBox);
+      }
+
+      showToast?.("✅ Report improved", "success");
+      bump?.("success");
+
+    } catch (err) {
+      console.error(err);
+      showToast?.(`❌ ${err.message}`, "error");
+      bump?.("error");
+    }
+  }
+
+});
+
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function encodeMailValue(s) {
+  return encodeURIComponent((s || "").replace(/\r\n/g, "\n"));
+}
+
+function buildMailto({ to, subject, body, cc, bcc }) {
+  const params = [];
+  if (subject) params.push(`subject=${encodeMailValue(subject)}`);
+  if (body) params.push(`body=${encodeMailValue(body)}`);
+  if (cc) params.push(`cc=${encodeMailValue(cc)}`);
+  if (bcc) params.push(`bcc=${encodeMailValue(bcc)}`);
+  const qs = params.length ? `?${params.join("&")}` : "";
+  return `mailto:${encodeURIComponent(to || "")}${qs}`;
+}
+
+// Outlook deep link (works if Outlook installed + scheme allowed)
+function buildOutlookIOS({ to, subject, body, cc, bcc }) {
+  // Outlook iOS supports ms-outlook://compose
+  // Not all fields are guaranteed on every version, but to/subject/body work well.
+  const params = [];
+  if (to) params.push(`to=${encodeMailValue(to)}`);
+  if (subject) params.push(`subject=${encodeMailValue(subject)}`);
+  if (body) params.push(`body=${encodeMailValue(body)}`);
+  if (cc) params.push(`cc=${encodeMailValue(cc)}`);
+  if (bcc) params.push(`bcc=${encodeMailValue(bcc)}`);
+  return `ms-outlook://compose?${params.join("&")}`;
+}
+
+/**
+ * Open email draft choosing iOS Mail vs Outlook automatically.
+ * - On iOS: try Outlook first, if it "fails", fall back to Mail.
+ * - Else: mailto
+ */
+async function openEmailDraftSmart({ to, subject, body, cc, bcc }) {
+  const mailto = buildMailto({ to, subject, body, cc, bcc });
+
+  if (!isIOS()) {
+    window.location.href = mailto;
+    return;
+  }
+
+  // iOS: attempt Outlook deep link first, then fallback to mailto if not installed / blocked
+  const outlookUrl = buildOutlookIOS({ to, subject, body, cc, bcc });
+
+  let didHide = false;
+  const onHide = () => { didHide = true; };
+  document.addEventListener("visibilitychange", onHide, { once: true });
+
+  // Try to open Outlook
+  window.location.href = outlookUrl;
+
+  // If we *didn't* leave the page shortly, assume Outlook failed → fallback to Mail
+  setTimeout(() => {
+    document.removeEventListener("visibilitychange", onHide);
+    if (!didHide) window.location.href = mailto;
+  }, 850);
+}
+</script>
+
+<div id="emailTargetModal" style="
+position:fixed;inset:0;z-index:6000;
+background:rgba(0,0,0,.45);
+backdrop-filter:blur(5px);
+display:none;align-items:center;justify-content:center;">
+
+  <div style="
+  background:#1b1b1b;
+  border-radius:18px;
+  padding:22px;
+  width:320px;
+  text-align:left;
+  box-shadow:0 20px 60px rgba(0,0,0,.7);">
+
+    <div style="font-size:18px;margin-bottom:14px;font-weight:600;text-align:center">
+      Send Email To
+    </div>
+
+    <label style="display:flex;align-items:center;gap:10px;margin:10px 0;color:#eee;">
+      <input type="checkbox" id="emailToCustomerChk" checked>
+      Customer (uses Customer Email field)
+    </label>
+
+    <label style="display:flex;align-items:center;gap:10px;margin:10px 0;color:#eee;">
+      <input type="checkbox" id="emailToSalesChk">
+      Sales Engineer (uses Sales Email field)
+    </label>
+
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button id="emailTargetNext" class="btn green" style="flex:1">Next</button>
+      <button id="emailTargetCancel" class="btn remove" style="flex:1">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="emailAppModal" style="
+position:fixed;inset:0;z-index:6100;
+background:rgba(0,0,0,.45);
+backdrop-filter:blur(5px);
+display:none;align-items:center;justify-content:center;">
+
+  <div style="
+  background:#1b1b1b;
+  border-radius:18px;
+  padding:22px;
+  width:300px;
+  text-align:center;
+  box-shadow:0 20px 60px rgba(0,0,0,.7);">
+
+    <div style="font-size:18px;margin-bottom:16px;font-weight:600">
+      Open Draft In
+    </div>
+
+    <button id="emailOpenMail" class="btn green" style="width:100%;margin-bottom:10px">
+      ✉️	Apple Mail
+    </button>
+
+    <button id="emailOpenOutlook" class="btn blue" style="width:100%;margin-bottom:10px">
+      📧	Outlook
+    </button>
+
+    <button id="emailCopyOnly" class="btn silver" style="width:100%;margin-bottom:10px">
+      📋	Copy to Clipboard
+    </button>
+
+    <button id="emailAppBack" class="btn silver" style="width:100%;margin-bottom:10px">
+      ← Back
+    </button>
+
+    <button id="emailAppCancel" class="btn remove" style="width:100%">
+      Cancel
+    </button>
+  </div>
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+  // ---------------- SINGLE EMAIL BUTTON ----------------
+  document.getElementById("aiEmail")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    resetEmailFlow();
+    openModal("emailTargetModal");
+  });
+
+  // Modal 1 controls
+  document.getElementById("emailTargetCancel")?.addEventListener("click", () => {
+    closeModal("emailTargetModal");
+  });
+
+  document.getElementById("emailTargetNext")?.addEventListener("click", () => {
+    const customer = !!document.getElementById("emailToCustomerChk")?.checked;
+    const sales = !!document.getElementById("emailToSalesChk")?.checked;
+
+    if (!customer && !sales) {
+      showToast?.("Select at least one recipient.", "warning");
+      return;
+    }
+
+    emailFlow.targets = { customer, sales };
+    closeModal("emailTargetModal");
+    openModal("emailAppModal");
+  });
+
+  // Modal 2 controls
+  document.getElementById("emailAppCancel")?.addEventListener("click", () => {
+    closeModal("emailAppModal");
+  });
+
+  document.getElementById("emailAppBack")?.addEventListener("click", () => {
+    closeModal("emailAppModal");
+    openModal("emailTargetModal");
+  });
+
+  // App choices -> generate drafts -> open
+  document.getElementById("emailOpenMail")?.addEventListener("click", async () => {
+    try {
+      closeModal("emailAppModal");
+      showToast?.("⏳ Generating email…", "info");
+      const drafts = await buildEmailDraftsFromAI();
+      await openDraftsWithChoice("mail", drafts);
+    } catch (err) {
+      console.error(err);
+      showToast?.(`❌ ${err.message}`, "error");
+      bump?.("error");
+    }
+  });
+
+  document.getElementById("emailOpenOutlook")?.addEventListener("click", async () => {
+    try {
+      closeModal("emailAppModal");
+      showToast?.("⏳ Generating email…", "info");
+      const drafts = await buildEmailDraftsFromAI();
+      await openDraftsWithChoice("outlook", drafts);
+    } catch (err) {
+      console.error(err);
+      showToast?.(`❌ ${err.message}`, "error");
+      bump?.("error");
+    }
+  });
+
+  document.getElementById("emailCopyOnly")?.addEventListener("click", async () => {
+    try {
+      closeModal("emailAppModal");
+      showToast?.("⏳ Generating email…", "info");
+      const drafts = await buildEmailDraftsFromAI();
+      await openDraftsWithChoice("copy", drafts);
+    } catch (err) {
+      console.error(err);
+      showToast?.(`❌ ${err.message}`, "error");
+      bump?.("error");
+    }
+  });
+
+  document.getElementById("emailTargetModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "emailTargetModal") closeModal("emailTargetModal");
+  });
+  document.getElementById("emailAppModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "emailAppModal") closeModal("emailAppModal");
+  });
+
+});
 </script>
 
 </body>
