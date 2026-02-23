@@ -1719,51 +1719,113 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-/* ---------- Signature pads (pointer-safe + retina) ---------- */
+/* ---------- Signature pads (pointer-safe + retina + RESIZE SAFE + AUTOSAVE) ---------- */
 function initSignature(id){
   const canvas = $(id);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function applyStrokeStyle() {
+    ctx.lineJoin = 'round';
+    ctx.lineCap  = 'round';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff'; // white ink for dark UI
+  }
+
   function resizeCanvas(){
+    // ✅ preserve current drawing (resizing a canvas clears it)
+    const prev = canvas.toDataURL('image/png');
+
     const ratio = window.devicePixelRatio || 1;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    canvas.width = Math.round(w * ratio);
+
+    canvas.width  = Math.round(w * ratio);
     canvas.height = Math.round(h * ratio);
-    canvas.style.width = w + 'px';
+    canvas.style.width  = w + 'px';
     canvas.style.height = h + 'px';
-    ctx.setTransform(ratio,0,0,ratio,0,0);
-    ctx.lineJoin='round'; ctx.lineCap='round'; ctx.lineWidth=2; ctx.strokeStyle='#fff';
+
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    applyStrokeStyle();
+
+    // ✅ redraw previous ink after resize
+    if (prev && prev.startsWith('data:image')) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, w, h);
+      };
+      img.src = prev;
+    }
   }
+
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
 
-  let drawing=false;
+  let drawing = false;
+
   function getPos(e){
     const r = canvas.getBoundingClientRect();
-    if(e.touches && e.touches.length) return {x:e.touches[0].clientX - r.left, y:e.touches[0].clientY - r.top};
-    return {x: (e.clientX !== undefined ? e.clientX : e.pageX) - r.left, y: (e.clientY !== undefined ? e.clientY : e.pageY) - r.top};
+    if(e.touches && e.touches.length) {
+      return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
+    }
+    const cx = (e.clientX !== undefined ? e.clientX : e.pageX);
+    const cy = (e.clientY !== undefined ? e.clientY : e.pageY);
+    return { x: cx - r.left, y: cy - r.top };
   }
-  function start(e){ drawing=true; ctx.beginPath(); const p=getPos(e); ctx.moveTo(p.x,p.y); }
-  function move(e){ if(!drawing) return; e.preventDefault(); const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }
-  function end(){ drawing=false; }
+
+  function start(e){
+    drawing = true;
+    ctx.beginPath();
+    const p = getPos(e);
+    ctx.moveTo(p.x, p.y);
+  }
+
+  function move(e){
+    if(!drawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+
+  function end(){
+    if(!drawing) return;
+    drawing = false;
+    // ✅ autosave the signature as soon as the stroke ends (works on iPad/PWA)
+    if (typeof saveSignature === 'function') saveSignature(id);
+  }
+
   // pointer-friendly
   canvas.addEventListener('pointerdown', start);
   canvas.addEventListener('pointermove', move);
   canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('pointerleave', end);
+
   // fallback touch/mouse
   canvas.addEventListener('mousedown', start);
   canvas.addEventListener('mousemove', move);
   canvas.addEventListener('mouseup', end);
-  canvas.addEventListener('touchstart', start, {passive:false});
-  canvas.addEventListener('touchmove', move, {passive:false});
+
+  canvas.addEventListener('touchstart', start, { passive:false });
+  canvas.addEventListener('touchmove', move, { passive:false });
   canvas.addEventListener('touchend', end);
 }
+
 document.addEventListener("DOMContentLoaded", () => {
   initSignature('sig1');
   initSignature('sig2');
 });
-document.querySelectorAll('button[data-clear]').forEach(b=>b.addEventListener('click', ()=>{ const c=$(b.dataset.clear); c.getContext('2d').clearRect(0,0,c.width,c.height); }));
+
+// ✅ When clearing, also wipe storage so it doesn’t “restore” an old signature
+document.querySelectorAll('button[data-clear]').forEach(b =>
+  b.addEventListener('click', () => {
+    const id = b.dataset.clear;
+    const c = $(id);
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0,0,c.width,c.height);
+    localStorage.removeItem("sig_" + id);
+  })
+);
 
 /* ---------- Time slots ---------- */
 function addTimeSlot(){
@@ -2702,24 +2764,45 @@ let lastPdfBlob = null;
 /* ---------- Build printable doc (light) and open it ---------- */
 function buildPdf(existingWindow = null) {
   // --- Capture signatures first ---
-  function getSignatureForPdf(id) {
-    const c = document.getElementById(id);
-    const tmp = document.createElement('canvas');
-    tmp.width = c.width;
-    tmp.height = c.height;
-    const tctx = tmp.getContext('2d');
-    // fill white background
-    tctx.fillStyle = '#fff';
-    tctx.fillRect(0, 0, tmp.width, tmp.height);
-    // draw the existing signature in black
-    tctx.drawImage(c, 0, 0);
-    const data = tmp.toDataURL();
-    tmp.remove();
-    return data;
-  }
+  // --- Capture signatures for PDF: convert WHITE ink to BLACK on WHITE background ---
+   function getSignatureForPdf(id) {
+     const c = document.getElementById(id);
+     if (!c) return "";
 
-  const sig1 = $('sig1').toDataURL();
-  const sig2 = $('sig2').toDataURL();
+     const srcCtx = c.getContext("2d", { willReadFrequently: true });
+     const { width, height } = c;
+
+     const src = srcCtx.getImageData(0, 0, width, height);
+     const d = src.data;
+
+     const out = document.createElement("canvas");
+     out.width = width;
+     out.height = height;
+     const octx = out.getContext("2d");
+
+     // White background
+     octx.fillStyle = "#fff";
+     octx.fillRect(0, 0, width, height);
+
+     const outImg = octx.getImageData(0, 0, width, height);
+     const od = outImg.data;
+
+     // Any non-transparent pixel becomes BLACK
+     for (let i = 0; i < d.length; i += 4) {
+       const alpha = d[i + 3];
+       if (alpha > 0) {
+         od[i] = 0; od[i + 1] = 0; od[i + 2] = 0; od[i + 3] = 255;
+       } else {
+         od[i] = 255; od[i + 1] = 255; od[i + 2] = 255; od[i + 3] = 255;
+       }
+     }
+
+     octx.putImageData(outImg, 0, 0);
+     return out.toDataURL("image/png");
+   }
+
+  const sig1 = getSignatureForPdf('sig1');
+  const sig2 = getSignatureForPdf('sig2');
   const clone = $('formContainer').cloneNode(true);
   // ✅ Copy photo thumbnails into the cloned form before building PDF
 ["beforeThumbs", "afterThumbs"].forEach(id => {
@@ -3021,16 +3104,22 @@ function saveSignature(id) {
 function restoreSignatures() {
   ["sig1", "sig2"].forEach(id => {
     const data = localStorage.getItem("sig_" + id);
-    if (data) {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.getElementById(id);
-        const ctx = c.getContext("2d");
-        ctx.clearRect(0, 0, c.width, c.height);
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-      };
-      img.src = data;
-    }
+    if (!data) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const c = document.getElementById(id);
+      const ctx = c.getContext("2d");
+      // draw to the *CSS size* (not raw backing size)
+      const w = c.clientWidth;
+      const h = c.clientHeight;
+
+      // Because your initSignature sets transform(ratio,...),
+      // we can draw in CSS coordinates (0..w / 0..h)
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+    };
+    img.src = data;
   });
 }
 
@@ -3066,12 +3155,7 @@ function restorePhotos() {
   });
 }
 
-function resizeSignatureCanvases() {
-  document.querySelectorAll("canvas.signature").forEach(c => {
-    c.width = c.offsetWidth;
-    c.height = c.offsetHeight;
-  });
-}
+
 
 /* ---------- Run once DOM is ready ---------- */
 document.addEventListener("DOMContentLoaded", () => {
@@ -3118,8 +3202,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const savedCompany = localStorage.getItem("custCompany");
   if (savedCompany) setCompanyName(savedCompany);
 
-  // Restore / resize
-  resizeSignatureCanvases();
+  // Restore / resize resizeSignatureCanvases();
   restoreFields();
   restoreSignatures();
   restorePhotos();
@@ -3138,6 +3221,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const c = document.getElementById(id);
     c.addEventListener("mouseup", () => saveSignature(id));
     c.addEventListener("touchend", () => saveSignature(id));
+    c.addEventListener("pointerup", () => saveSignature(id));
+    c.addEventListener("pointercancel", () => saveSignature(id));
   });
 
   document.getElementById("beforeInput")?.addEventListener("change", savePhotos);
