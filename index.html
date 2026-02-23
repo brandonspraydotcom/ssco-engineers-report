@@ -1273,7 +1273,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <label>Follow-up Notes</label>
       <textarea id="followUpNotes" placeholder="Parts needed / who to contact / what to quote..."></textarea>
       </div>
-      <div style="margin-top:10px">
+      <div style="margin-top:10px;max-width:94%;">
       <label>Follow-up Due Date</label>
       <input type="date" id="followUpDue" />
       </div>
@@ -1308,7 +1308,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <span style="font-size: 24px;">⬇️📸</span>
     </button>
   </div>
-</div>
+</div>	
 
 <!-- 🌑 Enhanced Download Modal -->
 <div id="downloadPhotosModal"
@@ -1456,6 +1456,28 @@ document.addEventListener("DOMContentLoaded", () => {
       <h3 style="margin:0;">✅ Outstanding Actions</h3>
       <button id="closeOutstanding" class="btn ghost" type="button">✕</button>
     </div>
+
+	 <!-- Filter + Controls -->
+<div style="margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+  <div style="flex:1;min-width:160px;">
+    <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Engineer</label>
+    <select id="actionsEngineerFilter" style="width:100%;height:48px;border-radius:10px;">
+      <option value="__all__">All engineers</option>
+    </select>
+  </div>
+
+  <div style="min-width:140px;">
+    <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Status</label>
+    <select id="actionsStatusFilter" style="width:100%;height:48px;border-radius:10px;">
+      <option value="open">Open</option>
+      <option value="all">All</option>
+    </select>
+  </div>
+
+  <button id="clearDoneBtn" class="btn ghost" type="button" style="height:38px;">
+    Clear completed
+  </button>
+</div>
 
     <div id="outstandingList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
   </div>
@@ -1696,6 +1718,138 @@ window.markPdfSaved = markPdfSaved;
 window.hasSavedPdf = hasSavedPdf;
 window.clearPdfSaved = clearPdfSaved;
 
+
+// ===============================
+// STORAGE (Outstanding + Reports)
+// ===============================
+const LS_KEYS = {
+  actions: "ssco_outstanding_actions",
+  reports: "ssco_reports_log",
+};
+
+function lsReadArray(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function lsWriteArray(key, arr) {
+  localStorage.setItem(key, JSON.stringify(arr));
+}
+
+function makeId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`;
+}
+
+// ---- Company helper (because gmpx-place-autocomplete isn't a normal input)
+function getCompanyValue() {
+  // Prefer hidden mirror if you're populating it, else try the element value attr, else fallback empty
+  const hidden = document.getElementById("custCompanyHidden")?.value?.trim();
+  if (hidden) return hidden;
+
+  const el = document.getElementById("custCompany");
+  // gmpx-place-autocomplete sometimes exposes .value; if not, it may store in attribute
+  const v = (el?.value || el?.getAttribute?.("value") || "").trim();
+  return v || "";
+}
+
+function readReportMetaFromForm() {
+  const engineer = (document.getElementById("engineer")?.value || "").trim();
+  const date = (document.getElementById("date")?.value || "").trim();
+  const visitType = (document.getElementById("visit")?.value || "").trim();
+
+  const projectNo = (document.getElementById("project")?.value || "").trim();
+  const poNumber = (document.getElementById("ponumber")?.value || "").trim();
+  const projectDesc = (document.getElementById("projectDesc")?.value || "").trim();
+
+  const salesEngineer = (document.getElementById("salesName")?.value || "").trim();
+  const salesEmail = (document.getElementById("salesEmail")?.value || "").trim();
+
+  const customerName = (document.getElementById("custName")?.value || "").trim();
+  const customerEmail = (document.getElementById("custEmail")?.value || "").trim();
+  const companyName = getCompanyValue();
+
+  const followUpType = (document.getElementById("followUpType")?.value || "").trim(); // e.g. NONE, QUOTE...
+  const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
+  const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
+
+  return {
+    id: makeId("rep"),
+    createdAt: new Date().toISOString(), // log timestamp (useful even if date field is blank)
+    engineer,
+    date,
+    visitType,
+    projectNo,
+    poNumber,
+    projectDesc,
+    salesEngineer,
+    salesEmail,
+    customerName,
+    customerEmail,
+    companyName,
+    followUpType,
+    followUpNotes,
+    followUpDueDate,
+  };
+}
+
+function isFollowUpRequired(meta) {
+  // Your UI uses NONE for "No"
+  return !!meta.followUpType && meta.followUpType !== "NONE";
+}
+
+
+function addReportToLog(meta) {
+  const reports = lsReadArray(LS_KEYS.reports);
+
+  // Keep a clean log row (you can add fields later without breaking old rows)
+  reports.unshift({
+    id: meta.id,
+    createdAt: meta.createdAt,
+    engineer: meta.engineer,
+    date: meta.date,
+    visitType: meta.visitType,
+    projectNo: meta.projectNo,
+    poNumber: meta.poNumber,
+    companyName: meta.companyName,
+    customerName: meta.customerName,
+    salesEngineer: meta.salesEngineer,
+    followUpType: meta.followUpType || "NONE",
+    followUpDueDate: meta.followUpDueDate || "",
+  });
+
+  lsWriteArray(LS_KEYS.reports, reports);
+}
+
+function addOutstandingAction(meta) {
+  if (!isFollowUpRequired(meta)) return;
+
+  // Avoid creating useless actions
+  if (!meta.followUpDueDate && !meta.followUpNotes) return;
+
+  const actions = lsReadArray(LS_KEYS.actions);
+
+  actions.unshift({
+    id: makeId("act"),
+    createdAt: meta.createdAt,
+    dueDate: meta.followUpDueDate || "",
+    engineer: meta.engineer,
+    companyName: meta.companyName,
+    customerName: meta.customerName,
+    salesEngineer: meta.salesEngineer,
+    projectNo: meta.projectNo,
+    poNumber: meta.poNumber,
+    followUpType: meta.followUpType,
+    followUpNotes: meta.followUpNotes || "",
+    status: "open",
+  });
+
+  lsWriteArray(LS_KEYS.actions, actions);
+}
 
 /* ---------- Helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -4597,6 +4751,19 @@ function showToast(message, type = 'info') {
 </style>
 
 <script>
+// Helper: commit log + actions after PDF saved
+function commitReportSave() {
+  markPdfSaved();
+
+  const meta = readReportMetaFromForm();
+  addReportToLog(meta);
+  addOutstandingAction(meta);
+
+  if (typeof window.renderOutstandingActions === "function") {
+    window.renderOutstandingActions();
+  }
+}
+
 // --- SAVE PDF (Desktop + Safari PWA safe) ---
 document.addEventListener("DOMContentLoaded", () => {
   const saveBtn = document.getElementById("savePdf");
@@ -4609,7 +4776,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const printNow = document.getElementById("printNow");
   const closeModal = document.getElementById("closeModal");
 
-  // --- Step 1: click Save PDF button ---
   saveBtn.addEventListener("click", (e) => {
     e.preventDefault();
 
@@ -4619,11 +4785,9 @@ document.addEventListener("DOMContentLoaded", () => {
     bump("info");
     showToast("All fields complete — ready to save", "info");
 
-    // Reset modal each time
     step1.style.display = "block";
     step2.style.display = "none";
 
-    // Show modal (no PDF built yet!)
     modal.style.display = "flex";
     lockScroll();
     setTimeout(() => {
@@ -4633,7 +4797,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 50);
   });
 
-  // --- Cancel Save ---
   cancel.addEventListener("click", () => {
     bump("info");
     showToast("Save cancelled", "info");
@@ -4643,30 +4806,27 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => (modal.style.display = "none"), 300);
   });
 
-  // --- Confirm Save: build PDF only now ---
   ok.addEventListener("click", async () => {
     bump("info");
     showToast("Building PDF…", "info");
 
-    // Save signatures first
     saveSignature("sig1");
     saveSignature("sig2");
 
     try {
-      // ✅ Build PDF *only after confirmation*
       const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-      const w = isPWA ? null : window.open('', '_blank'); // don’t open tab in PWA
-      const pdfWin = buildPdf(w); // pass window ref to buildPdf
+      const w = isPWA ? null : window.open('', '_blank');
+      const pdfWin = buildPdf(w);
       window.lastBuiltPdfWindow = pdfWin;
+
       lastPdfBlob = await html2pdf().from(pdfWin.document?.body || document.body).output('blob');
 
-      // Safari PWA: we don’t open new tab, we’ll trigger hidden iframe print
       if (isPWA && pdfWin?.iframePrint) {
         setTimeout(() => {
           try {
             pdfWin.iframePrint.focus();
             pdfWin.iframePrint.print();
-            markPdfSaved();
+            commitReportSave(); // ✅ added
             showToast("✅ PDF ready and sent to print", "success");
             bump("success");
           } catch (err) {
@@ -4674,13 +4834,13 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("⚠️ Printing blocked in PWA", "warning");
           }
         }, 600);
+
       } else if (pdfWin) {
-        // Normal browsers
         setTimeout(() => {
           try {
             pdfWin.focus();
             pdfWin.print();
-            markPdfSaved();
+            commitReportSave(); // ✅ replaced
             bump("success");
             showToast("✅ PDF ready and sent to print", "success");
           } catch (err) {
@@ -4690,7 +4850,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 600);
       }
 
-      // Close modal after
       modal.classList.remove("show");
       box.style.transform = "scale(0.85)";
       box.style.opacity = "0";
@@ -4704,7 +4863,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Print Now (from Step 2) ---
   printNow.addEventListener("click", () => {
     bump("info");
     showToast("Opening print dialog…", "info");
@@ -4725,7 +4883,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Close modal manually ---
   closeModal.addEventListener("click", () => {
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
@@ -6219,6 +6376,29 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", () =>
 </script>
 
 <script>
+function populateEngineerFilterFromEngineerSelect() {
+  const src = document.getElementById("engineer");
+  const dst = document.getElementById("actionsEngineerFilter");
+  if (!src || !dst) return;
+
+  const current = dst.value || "__all__";
+
+  const names = Array.from(src.options)
+    .map(o => (o.value || "").trim())
+    .filter(v => v && v !== "-- Select --");
+
+  const unique = Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b));
+
+  dst.innerHTML =
+    `<option value="__all__">All engineers</option>` +
+    unique.map(n => `<option value="${n}">${n}</option>`).join("");
+
+  dst.value = unique.includes(current) ? current : "__all__";
+}
+</script>
+
+
+<script>
 window.isCurrentUser = function () {
   return window.isAdminUserNow();
 };
@@ -6387,36 +6567,45 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
-  // ✅ SINGLE global escape (your code uses window.escapeHtml)
+  // ✅ escape helper (keep yours)
   window.escapeHtml = window.escapeHtml || function (s) {
     return String(s ?? "").replace(/[&<>"]/g, c => ({
       "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"
     }[c]));
   };
 
-  function getOutstanding() {
-    try {
-      const arr = JSON.parse(localStorage.getItem("ssco_outstanding") || "[]");
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
+  // ---------- Filter population (reads from existing #engineer select) ----------
+  function populateEngineerFilterFromEngineerSelect() {
+    const src = document.getElementById("engineer");
+    const dst = document.getElementById("actionsEngineerFilter");
+    if (!src || !dst) return;
+
+    const current = dst.value || "__all__";
+
+    const names = Array.from(src.options)
+      .map(o => (o.value || "").trim())
+      .filter(v => v && v !== "-- Select --");
+
+    const unique = Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b));
+
+    dst.innerHTML =
+      `<option value="__all__">All engineers</option>` +
+      unique.map(n => `<option value="${n}">${n}</option>`).join("");
+
+    dst.value = unique.includes(current) ? current : "__all__";
   }
 
-  function ensureIds(items){
-    let changed = false;
-    items.forEach(it => {
-      if (!it.id) {
-        it.id = crypto.randomUUID?.() || String(Date.now() + Math.random());
-        changed = true;
-      }
-    });
-    if (changed) localStorage.setItem("ssco_outstanding", JSON.stringify(items));
-    return items;
-  }
-
+  // ---------- Core renderer ----------
   function renderOutstanding() {
-    let items = ensureIds(getOutstanding());
+    let items = lsReadArray(LS_KEYS.actions); // "ssco_outstanding_actions"
+
+    // status filter (optional)
+    const statusMode = document.getElementById("actionsStatusFilter")?.value || "open";
+    if (statusMode === "open") items = items.filter(a => (a.status || "open") === "open");
+
+    // engineer filter
+    const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
+    if (who !== "__all__") items = items.filter(a => (a.engineer || "") === who);
 
     if (!items.length) {
       listEl.innerHTML = `
@@ -6426,39 +6615,63 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const view = [...items].sort((a,b) => (a.due || "9999-12-31").localeCompare(b.due || "9999-12-31"));
+    // sort by due
+    const view = [...items].sort((a,b) => (a.dueDate || "9999-12-31").localeCompare(b.dueDate || "9999-12-31"));
 
-    listEl.innerHTML = view.map((it) => {
-      const due   = it.due ? new Date(it.due + "T00:00:00").toLocaleDateString("en-GB") : "—";
-      const type  = it.type || "FOLLOW_UP";
-      const title = it.title || it.company || it.customer || "Outstanding item";
-      const notes = it.notes ? String(it.notes) : "";
+    listEl.innerHTML = view.map((a) => {
+      const due   = a.dueDate ? new Date(a.dueDate + "T00:00:00").toLocaleDateString("en-GB") : "—";
+      const type  = a.followUpType || "FOLLOW_UP";
+      const title = a.companyName || a.customerName || a.projectNo || "Outstanding item";
+      const notes = a.followUpNotes ? String(a.followUpNotes) : "";
 
       return `
         <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
             <div style="flex:1;">
               <div style="font-weight:700;color:#eee;">${window.escapeHtml(title)}</div>
+
               <div style="font-size:13px;color:#aaa;margin-top:2px;">
                 Type: <span style="color:#7CFC00">${window.escapeHtml(type)}</span>
                 • Due: <span style="color:#fff">${window.escapeHtml(due)}</span>
               </div>
+
+              <div style="font-size:12px;color:#888;margin-top:6px;">
+                Engineer: <span style="color:#ccc">${window.escapeHtml(a.engineer || "—")}</span>
+                ${a.salesEngineer ? ` • Sales: <span style="color:#ccc">${window.escapeHtml(a.salesEngineer)}</span>` : ``}
+                ${a.projectNo ? ` • Project: <span style="color:#ccc">${window.escapeHtml(a.projectNo)}</span>` : ``}
+              </div>
+
               ${notes ? `<div style="font-size:13px;color:#ccc;margin-top:8px;line-height:1.35;">${window.escapeHtml(notes)}</div>` : ``}
             </div>
 
-            <button type="button"
-              class="btn remove"
-              data-out-del-id="${window.escapeHtml(it.id)}"
-              style="padding:8px 10px;min-width:44px;">
-              🗑
-            </button>
+            <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+              <button type="button"
+                class="btn ghost"
+                data-out-done-id="${window.escapeHtml(a.id)}"
+                style="padding:8px 10px;min-width:64px;">
+                ✅ Done
+              </button>
+
+              <button type="button"
+                class="btn remove"
+                data-out-del-id="${window.escapeHtml(a.id)}"
+                style="padding:8px 10px;min-width:64px;">
+                🗑 Delete
+              </button>
+            </div>
           </div>
         </div>`;
     }).join("");
   }
 
+  // expose for commitReportSave()
+  window.renderOutstandingActions = renderOutstanding;
+
+  // ---------- Open/Close ----------
   function openOutstanding() {
+    populateEngineerFilterFromEngineerSelect();
     renderOutstanding();
+
     modal.style.display = "flex";
     requestAnimationFrame(() => {
       modal.style.opacity = "1";
@@ -6478,7 +6691,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 250);
   }
 
-  // ✅ OPEN (close account first, then open outstanding)
   openBtn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -6486,53 +6698,67 @@ document.addEventListener("DOMContentLoaded", () => {
     const accountModal = document.getElementById("accountModal");
     const accountBox   = document.getElementById("accountBox");
 
-    // If account modal is open, close it FIRST, then open Outstanding
     if (accountModal && (accountModal.style.display === "flex" || accountModal.style.display === "")) {
       accountModal.style.opacity = "0";
       if (accountBox) {
         accountBox.style.transform = "scale(0.85)";
         accountBox.style.opacity = "0";
       }
-
       setTimeout(() => {
         accountModal.style.display = "none";
-        // now open outstanding
         openOutstanding();
-      }, 280); // slightly > your 260ms to be safe on Safari
+      }, 280);
     } else {
       openOutstanding();
     }
   });
 
-  // ✅ CLOSE button
   closeBtn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     closeOutstanding();
   });
 
-  // ✅ Click backdrop to close
   modal.addEventListener("click", (e) => {
     if (e.target === modal) closeOutstanding();
   });
 
-  // ✅ ESC to close (nice QoL)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && modal.style.display === "flex") closeOutstanding();
   });
 
-  // ✅ DELETE BY ID
+  // ---------- Filter changes ----------
+  document.getElementById("actionsEngineerFilter")?.addEventListener("change", renderOutstanding);
+  document.getElementById("actionsStatusFilter")?.addEventListener("change", renderOutstanding);
+
+  // ---------- Done/Delete via event delegation ----------
   document.addEventListener("click", (e) => {
-    const del = e.target.closest("[data-out-del-id]");
-    if (!del) return;
+    const delBtn = e.target.closest("[data-out-del-id]");
+    const doneBtn = e.target.closest("[data-out-done-id]");
 
-    const id = del.dataset.outDelId;
-    const before = getOutstanding();
-    const after = before.filter(it => it.id !== id);
+    if (doneBtn) {
+      const id = doneBtn.getAttribute("data-out-done-id");
+      const actions = lsReadArray(LS_KEYS.actions);
+      const idx = actions.findIndex(a => a.id === id);
+      if (idx >= 0) {
+        actions[idx].status = "done";
+        actions[idx].doneAt = new Date().toISOString();
+        lsWriteArray(LS_KEYS.actions, actions);
+        renderOutstanding();
+        showToast?.("Marked as done", "success");
+      }
+      return;
+    }
 
-    localStorage.setItem("ssco_outstanding", JSON.stringify(after));
-    renderOutstanding();
-    showToast?.("Removed outstanding item", "success");
+    if (delBtn) {
+      const id = delBtn.getAttribute("data-out-del-id");
+      const actions = lsReadArray(LS_KEYS.actions);
+      const next = actions.filter(a => a.id !== id);
+      lsWriteArray(LS_KEYS.actions, next);
+      renderOutstanding();
+      showToast?.("Removed outstanding item", "success");
+      return;
+    }
   });
 });
 </script>
