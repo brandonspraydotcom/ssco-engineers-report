@@ -1259,15 +1259,18 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
       <div style="margin-top:10px">
       <label>Follow-up Required?</label>
-      <select id="followUpType">
-        <option value="">-- Select --</option>
-        <option value="NONE">No</option>
-        <option value="QUOTE">Quote Required</option>
-        <option value="PARTS">Parts Required</option>
-        <option value="RETURN">Return Visit</option>
-        <option value="AWAITING_CUSTOMER">Awaiting Customer</option>
-        <option value="TRAINING">Training Needed</option>
-      </select>
+      <div id="followUpChecklist" class="followup-group">
+
+      <label><input type="checkbox" value="QUOTE"> Quote</label>
+      <label><input type="checkbox" value="PARTS"> Parts Required</label>
+      <label><input type="checkbox" value="RETURN_VISIT"> Return Visit</label>
+
+      <label><input type="checkbox" value="TEST"> Test Required</label>
+      <label><input type="checkbox" value="DOCUMENTATION"> System Documentation Needed</label>
+      <label><input type="checkbox" value="TRIAL"> Trial to Schedule</label>
+      <label><input type="checkbox" value="TRIAL"> Awaiting Customer</label>
+      <label><input type="checkbox" value="TRIAL"> Training to Schedule</label>
+
       </div>
       <div style="margin-top:10px">
       <label>Follow-up Notes</label>
@@ -1461,8 +1464,12 @@ document.addEventListener("DOMContentLoaded", () => {
 <div style="margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
   <div style="flex:1;min-width:160px;">
     <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Engineer</label>
-    <select id="actionsEngineerFilter" style="width:100%;height:48px;border-radius:10px;">
+    <select id="actionsEngineerFilter" style="width:100%;height:48px;border-radius:10px;margin-bottom:6px;">
       <option value="__all__">All engineers</option>
+    </select>
+    <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Sales Engineer</label>
+    <select id="actionsSalesFilter" style="flex:1;min-width:160px;">
+      <option value="__all__">All Sales Engineers</option>
     </select>
   </div>
 
@@ -1757,6 +1764,13 @@ function getCompanyValue() {
   return v || "";
 }
 
+// ---- Follow-up checklist helper ----
+function getSelectedFollowUps() {
+  return Array.from(
+    document.querySelectorAll('#followUpChecklist input[type="checkbox"]:checked')
+  ).map(cb => cb.value);
+}
+
 function readReportMetaFromForm() {
   const engineer = (document.getElementById("engineer")?.value || "").trim()
   || (localStorage.getItem("username") || "").trim();
@@ -1774,7 +1788,7 @@ function readReportMetaFromForm() {
   const customerEmail = (document.getElementById("custEmail")?.value || "").trim();
   const companyName = getCompanyValue();
 
-  const followUpType = (document.getElementById("followUpType")?.value || "").trim(); // e.g. NONE, QUOTE...
+  const followUpTypes = getSelectedFollowUps();
   const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
   const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
 
@@ -1792,15 +1806,10 @@ function readReportMetaFromForm() {
     customerName,
     customerEmail,
     companyName,
-    followUpType,
+    followUpTypes,
     followUpNotes,
     followUpDueDate,
   };
-}
-
-function isFollowUpRequired(meta) {
-  // Your UI uses NONE for "No"
-  return !!meta.followUpType && meta.followUpType !== "NONE";
 }
 
 
@@ -1829,30 +1838,37 @@ function addReportToLog(meta) {
 }
 
 function addOutstandingAction(meta) {
-  if (!isFollowUpRequired(meta)) return null;
-  if (!meta.followUpDueDate && !meta.followUpNotes) return null;
+
+  if (!meta.followUpTypes || !meta.followUpTypes.length) return null;
 
   const actions = lsReadArray(LS_KEYS.actions);
+  const created = [];
 
-  const action = {
-    id: makeId("act"),
-    createdAt: meta.createdAt,
-    dueDate: meta.followUpDueDate || "",
-    status: "open",
-    engineer: meta.engineer,
-    companyName: meta.companyName,
-    customerName: meta.customerName,
-    salesEngineer: meta.salesEngineer,
-    projectNo: meta.projectNo,
-    poNumber: meta.poNumber,
-    followUpType: meta.followUpType,
-    followUpNotes: meta.followUpNotes || ""
-  };
+  for (const type of meta.followUpTypes) {
 
-  actions.unshift(action);
+    const action = {
+      id: makeId("act"),
+      createdAt: meta.createdAt,
+      dueDate: meta.followUpDueDate || "",
+      status: "open",
+
+      engineer: meta.engineer,
+      companyName: meta.companyName,
+      customerName: meta.customerName,
+      salesEngineer: meta.salesEngineer,
+      projectNo: meta.projectNo,
+      poNumber: meta.poNumber,
+
+      followUpType: type,
+      followUpNotes: meta.followUpNotes || ""
+    };
+
+    actions.unshift(action);
+    created.push(action);
+  }
+
   lsWriteArray(LS_KEYS.actions, actions);
-
-  return action; // ✅ IMPORTANT
+  return created; // <-- now returns array
 }
 
 /* ---------- Helpers ---------- */
@@ -3966,6 +3982,34 @@ function validateImportantFields() {
     return false;
   }
 
+    // ✅ Follow-up validation (multi-select checklist)
+    const followUps = (typeof getSelectedFollowUps === "function") ? getSelectedFollowUps() : [];
+    const notes = document.getElementById("followUpNotes")?.value?.trim() || "";
+    const due   = document.getElementById("followUpDue")?.value || "";
+
+    // If user entered notes or a due date but didn't tick any follow-up type
+    if ((notes || due) && !followUps.length) {
+      bump("warning");
+      showToast("⚠️ Select at least one Follow-up type", "warning");
+
+      // scroll to the checklist so they see what to tick
+      document.getElementById("followUpChecklist")?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      const fu = document.getElementById("followUpChecklist");
+      if (fu) {
+        fu.style.outline = "2px solid rgba(255,165,0,0.9)";
+        fu.style.outlineOffset = "6px";
+        setTimeout(() => {
+          fu.style.outline = "";
+          fu.style.outlineOffset = "";
+        }, 1500);
+      }
+
+
+      if (navigator.vibrate) navigator.vibrate(50);
+      return false;
+    }
+
   return true;
 }
 
@@ -4814,18 +4858,21 @@ async function commitReportSave() {
   const meta = readReportMetaFromForm();
 
   // 1️⃣ Save locally first (offline-first behaviour)
-  const report = addReportToLog(meta);
-  const action = addOutstandingAction(meta);
+  const report  = addReportToLog(meta);
+  const actions = addOutstandingAction(meta); // now returns [] or null
 
   // Update UI immediately
-  if (typeof window.renderOutstandingActions === "function") {
-    window.renderOutstandingActions();
-  }
+  window.renderOutstandingActions?.();
 
   // 2️⃣ Now sync to Cloudflare (background)
   try {
+    // sync report log
     await syncReportToCloud(report);
-    if (action) await syncActionToCloud(action);
+
+    // sync actions (multiple)
+    if (actions && actions.length) {
+      await Promise.all(actions.map(a => syncActionToCloud(a)));
+    }
 
     showToast?.("☁️ Synced to cloud", "success");
   } catch (err) {
@@ -4859,7 +4906,7 @@ document.addEventListener("DOMContentLoaded", () => {
     step2.style.display = "none";
 
     modal.style.display = "flex";
-    lockScroll();
+    window.lockScroll?.();
     setTimeout(() => {
       modal.classList.add("show");
       box.style.transform = "scale(1)";
@@ -4874,6 +4921,7 @@ document.addEventListener("DOMContentLoaded", () => {
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
     setTimeout(() => (modal.style.display = "none"), 300);
+    window.unlockScroll?.();
   });
 
   ok.addEventListener("click", async () => {
@@ -4890,13 +4938,13 @@ document.addEventListener("DOMContentLoaded", () => {
       window.lastBuiltPdfWindow = pdfWin;
 
       lastPdfBlob = await html2pdf().from(pdfWin.document?.body || document.body).output('blob');
+      await commitReportSave(); // ✅ added
 
       if (isPWA && pdfWin?.iframePrint) {
         setTimeout(() => {
           try {
             pdfWin.iframePrint.focus();
             pdfWin.iframePrint.print();
-            commitReportSave(); // ✅ added
             showToast("✅ PDF ready and sent to print", "success");
             bump("success");
           } catch (err) {
@@ -4924,7 +4972,7 @@ document.addEventListener("DOMContentLoaded", () => {
       box.style.transform = "scale(0.85)";
       box.style.opacity = "0";
       setTimeout(() => (modal.style.display = "none"), 300);
-      unlockScroll();
+      window.unlockScroll?.();
 
     } catch (err) {
       console.error("❌ PDF build failed:", err);
@@ -4959,7 +5007,7 @@ document.addEventListener("DOMContentLoaded", () => {
     box.style.opacity = "0";
     setTimeout(() => {
       modal.style.display = "none";
-      unlockScroll();
+      window.unlockScroll?.();
     }, 300);
   });
 });
@@ -6470,6 +6518,25 @@ function populateEngineerFilterFromEngineerSelect() {
 }
 </script>
 
+<script>
+function populateSalesFilterFromSalesSelect() {
+  const sel = document.getElementById("actionsSalesFilter");
+  const salesSel = document.getElementById("salesName");
+  if (!sel || !salesSel) return;
+
+  const current = sel.value || "__all__";
+  const options = Array.from(salesSel.options || [])
+    .map(o => (o.value || "").trim())
+    .filter(v => v && v !== "-- Select --");
+
+  const unique = [...new Set(options)].sort((a,b)=>a.localeCompare(b));
+
+  sel.innerHTML = `<option value="__all__">All Sales Engineers</option>` +
+    unique.map(v => `<option value="${window.escapeHtml(v)}">${window.escapeHtml(v)}</option>`).join("");
+
+  sel.value = unique.includes(current) ? current : "__all__";
+}
+</script>
 
 <script>
 window.isCurrentUser = function () {
@@ -6668,6 +6735,24 @@ document.addEventListener("DOMContentLoaded", () => {
     dst.value = unique.includes(current) ? current : "__all__";
   }
 
+  function populateSalesFilterFromSalesSelect() {
+    const sel = document.getElementById("actionsSalesFilter");
+    const salesSel = document.getElementById("salesName");
+    if (!sel || !salesSel) return;
+
+    const current = sel.value || "__all__";
+    const options = Array.from(salesSel.options || [])
+      .map(o => (o.value || "").trim())
+      .filter(v => v && v !== "-- Select --");
+
+    const unique = [...new Set(options)].sort((a,b)=>a.localeCompare(b));
+
+    sel.innerHTML = `<option value="__all__">All Sales Engineers</option>` +
+      unique.map(v => `<option value="${window.escapeHtml(v)}">${window.escapeHtml(v)}</option>`).join("");
+
+    sel.value = unique.includes(current) ? current : "__all__";
+  }
+
   // ---------- Core renderer ----------
   function renderOutstanding() {
     let items = lsReadArray(LS_KEYS.actions); // "ssco_outstanding_actions"
@@ -6679,6 +6764,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // engineer filter
     const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
     if (who !== "__all__") items = items.filter(a => (a.engineer || "") === who);
+
+    // sales filter
+    const sales = document.getElementById("actionsSalesFilter")?.value || "__all__";
+    if (sales !== "__all__") items = items.filter(a => (a.salesEngineer || "") === sales);
 
     if (!items.length) {
       listEl.innerHTML = `
@@ -6743,13 +6832,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // ---------- Open/Close ----------
   async function openOutstanding() {
     populateEngineerFilterFromEngineerSelect();
+    populateSalesFilterFromSalesSelect();
     try {
       const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
+      const sales = document.getElementById("actionsSalesFilter")?.value || "__all__";
       const status = document.getElementById("actionsStatusFilter")?.value || "open";
 
       const qs = new URLSearchParams();
       qs.set("status", status);
       if (who !== "__all__") qs.set("engineer", who);
+      if (sales !== "__all__") qs.set("salesEngineer", sales);
 
       const res = await fetch(`${WORKER_BASE}/actions?${qs.toString()}`, {
         method: "GET",
@@ -6820,8 +6912,32 @@ document.addEventListener("DOMContentLoaded", () => {
   });	
 
   // ---------- Filter changes ----------
-  document.getElementById("actionsEngineerFilter")?.addEventListener("change", renderOutstanding);
-  document.getElementById("actionsStatusFilter")?.addEventListener("change", renderOutstanding);
+  async function refreshAndRenderOutstanding() {
+    try {
+      const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
+      const status = document.getElementById("actionsStatusFilter")?.value || "open";
+
+      const qs = new URLSearchParams();
+      qs.set("status", status);
+      if (who !== "__all__") qs.set("engineer", who);
+
+      const res = await fetch(`${WORKER_BASE}/actions?${qs.toString()}`, {
+        method: "GET",
+        headers: dbHeaders()
+      });
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.items)) {
+        lsWriteArray(LS_KEYS.actions, data.items);
+      }
+    } catch (e) {
+      console.warn("Fetch actions failed:", e);
+    }
+    renderOutstanding();
+  }
+
+  document.getElementById("actionsEngineerFilter")?.addEventListener("change", refreshAndRenderOutstanding);
+  document.getElementById("actionsSalesFilter")?.addEventListener("change", refreshAndRenderOutstanding);
+  document.getElementById("actionsStatusFilter")?.addEventListener("change", refreshAndRenderOutstanding);
 
   // ---------- Done/Delete via event delegation ----------
   document.addEventListener("click", (e) => {
