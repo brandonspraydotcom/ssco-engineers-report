@@ -1819,16 +1819,13 @@ function addReportToLog(meta) {
     customerName: meta.customerName,
     salesEngineer: meta.salesEngineer,
     followUpType: meta.followUpType || "NONE",
-    followUpDueDate: meta.followUpDueDate || "",
-    // future fields:
-    // revenue: null,
-    // cost: null,
+    followUpDueDate: meta.followUpDueDate || ""
   };
 
   reports.unshift(report);
   lsWriteArray(LS_KEYS.reports, reports);
 
-  return report;
+  return report; // ✅ IMPORTANT
 }
 
 function addOutstandingAction(meta) {
@@ -1849,13 +1846,13 @@ function addOutstandingAction(meta) {
     projectNo: meta.projectNo,
     poNumber: meta.poNumber,
     followUpType: meta.followUpType,
-    followUpNotes: meta.followUpNotes || "",
+    followUpNotes: meta.followUpNotes || ""
   };
 
   actions.unshift(action);
   lsWriteArray(LS_KEYS.actions, actions);
 
-  return action;
+  return action; // ✅ IMPORTANT
 }
 
 /* ---------- Helpers ---------- */
@@ -4758,6 +4755,58 @@ function showToast(message, type = 'info') {
 </style>
 
 <script>
+localStorage.setItem("DB_TOKEN","JustSomethingToEqualTheString")
+</script>
+
+<script>
+const WORKER_BASE = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev";
+
+function dbHeadersJson() {
+  return {
+    "Content-Type": "application/json",
+    "X-DB-Token": localStorage.getItem("DB_TOKEN") || ""
+  };
+}
+function dbHeaders() {
+  return {
+    "X-DB-Token": localStorage.getItem("DB_TOKEN") || ""
+  };
+}
+
+// ===== CLOUD SYNC FUNCTIONS =====
+
+// send an outstanding action to the database
+async function syncActionToCloud(action) {
+  if (!action) return;
+
+  const res = await fetch(`${WORKER_BASE}/actions`, {
+    method: "POST",
+    headers: dbHeadersJson(),
+    body: JSON.stringify(action)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("Action sync failed: " + res.status + " " + text);
+  }
+}
+
+// send a report log entry to the database
+async function syncReportToCloud(report) {
+  if (!report) return;
+
+  const res = await fetch(`${WORKER_BASE}/reports`, {
+    method: "POST",
+    headers: dbHeadersJson(),
+    body: JSON.stringify(report)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("Report sync failed: " + res.status + " " + text);
+  }
+}
+
 // Helper: commit log + actions after PDF saved
 async function commitReportSave() {
   markPdfSaved();
@@ -5135,7 +5184,10 @@ document.addEventListener("DOMContentLoaded", () => {
           "isAdmin",
           "ssco_engineers",
           "ssco_sales_engineers",
-          "custCompany" // optional: keep remembered company
+          "custCompany",
+          "ssco_outstanding_actions",// ✅ keep outstanding actions
+          "ssco_reports_log",        // ✅ keep report log
+          "DB_TOKEN"
         ]);
 
         Object.keys(localStorage).forEach(k => {
@@ -6689,8 +6741,27 @@ document.addEventListener("DOMContentLoaded", () => {
   window.renderOutstandingActions = renderOutstanding;
 
   // ---------- Open/Close ----------
-  function openOutstanding() {
+  async function openOutstanding() {
     populateEngineerFilterFromEngineerSelect();
+    try {
+      const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
+      const status = document.getElementById("actionsStatusFilter")?.value || "open";
+
+      const qs = new URLSearchParams();
+      qs.set("status", status);
+      if (who !== "__all__") qs.set("engineer", who);
+
+      const res = await fetch(`${WORKER_BASE}/actions?${qs.toString()}`, {
+        method: "GET",
+        headers: dbHeaders()
+      });
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.items)) {
+        lsWriteArray(LS_KEYS.actions, data.items);
+      }
+    } catch (e) {
+      console.warn("Fetch actions failed:", e);
+    }
     renderOutstanding();
 
     modal.style.display = "flex";
@@ -6746,7 +6817,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && modal.style.display === "flex") closeOutstanding();
-  });
+  });	
 
   // ---------- Filter changes ----------
   document.getElementById("actionsEngineerFilter")?.addEventListener("change", renderOutstanding);
