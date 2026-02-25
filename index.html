@@ -1758,7 +1758,8 @@ function getCompanyValue() {
 }
 
 function readReportMetaFromForm() {
-  const engineer = (document.getElementById("engineer")?.value || "").trim();
+  const engineer = (document.getElementById("engineer")?.value || "").trim()
+  || (localStorage.getItem("username") || "").trim();
   const date = (document.getElementById("date")?.value || "").trim();
   const visitType = (document.getElementById("visit")?.value || "").trim();
 
@@ -1806,8 +1807,7 @@ function isFollowUpRequired(meta) {
 function addReportToLog(meta) {
   const reports = lsReadArray(LS_KEYS.reports);
 
-  // Keep a clean log row (you can add fields later without breaking old rows)
-  reports.unshift({
+  const report = {
     id: meta.id,
     createdAt: meta.createdAt,
     engineer: meta.engineer,
@@ -1820,23 +1820,28 @@ function addReportToLog(meta) {
     salesEngineer: meta.salesEngineer,
     followUpType: meta.followUpType || "NONE",
     followUpDueDate: meta.followUpDueDate || "",
-  });
+    // future fields:
+    // revenue: null,
+    // cost: null,
+  };
 
+  reports.unshift(report);
   lsWriteArray(LS_KEYS.reports, reports);
+
+  return report;
 }
 
 function addOutstandingAction(meta) {
-  if (!isFollowUpRequired(meta)) return;
-
-  // Avoid creating useless actions
-  if (!meta.followUpDueDate && !meta.followUpNotes) return;
+  if (!isFollowUpRequired(meta)) return null;
+  if (!meta.followUpDueDate && !meta.followUpNotes) return null;
 
   const actions = lsReadArray(LS_KEYS.actions);
 
-  actions.unshift({
+  const action = {
     id: makeId("act"),
     createdAt: meta.createdAt,
     dueDate: meta.followUpDueDate || "",
+    status: "open",
     engineer: meta.engineer,
     companyName: meta.companyName,
     customerName: meta.customerName,
@@ -1845,10 +1850,12 @@ function addOutstandingAction(meta) {
     poNumber: meta.poNumber,
     followUpType: meta.followUpType,
     followUpNotes: meta.followUpNotes || "",
-    status: "open",
-  });
+  };
 
+  actions.unshift(action);
   lsWriteArray(LS_KEYS.actions, actions);
+
+  return action;
 }
 
 /* ---------- Helpers ---------- */
@@ -4752,15 +4759,29 @@ function showToast(message, type = 'info') {
 
 <script>
 // Helper: commit log + actions after PDF saved
-function commitReportSave() {
+async function commitReportSave() {
   markPdfSaved();
 
   const meta = readReportMetaFromForm();
-  addReportToLog(meta);
-  addOutstandingAction(meta);
 
+  // 1️⃣ Save locally first (offline-first behaviour)
+  const report = addReportToLog(meta);
+  const action = addOutstandingAction(meta);
+
+  // Update UI immediately
   if (typeof window.renderOutstandingActions === "function") {
     window.renderOutstandingActions();
+  }
+
+  // 2️⃣ Now sync to Cloudflare (background)
+  try {
+    await syncReportToCloud(report);
+    if (action) await syncActionToCloud(action);
+
+    showToast?.("☁️ Synced to cloud", "success");
+  } catch (err) {
+    console.warn("Cloud sync failed:", err);
+    showToast?.("⚠️ Saved locally (offline mode)", "warning");
   }
 }
 
