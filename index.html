@@ -1654,6 +1654,12 @@ const BOTTLE_B64 = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAJGCAYAAA
 </script>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+  startPresenceHeartbeat();
+});
+</script>
+
+<script>
 window.escapeHtml = function (s) {
   return String(s ?? "").replace(/[&<>"]/g, c => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"
@@ -4807,6 +4813,61 @@ localStorage.setItem("DB_TOKEN","JustSomethingToEqualTheString")
 </script>
 
 <script>
+// ===============================
+// PRESENCE (heartbeat)
+// ===============================
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem("SSCO_DEVICE_ID");
+  if (!id) {
+    id = (crypto.randomUUID?.() || `dev_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+    localStorage.setItem("SSCO_DEVICE_ID", id);
+  }
+  return id;
+}
+
+async function sendPresencePing() {
+  try {
+    // Only ping if logged in (adjust keys if yours differ)
+    const loggedIn = localStorage.getItem("loggedIn") === "true";
+    const user = (document.getElementById("engineer")?.value || localStorage.getItem("username") || "").trim();
+
+    if (!loggedIn || !user) return;
+    if (!navigator.onLine) return;
+
+    const payload = {
+      deviceId: getOrCreateDeviceId(),
+      user,
+      userAgent: navigator.userAgent,
+      appVersion: window.version || "v1.0.0"
+    };
+
+    const res = await fetch(`${WORKER_BASE}/presence`, {
+      method: "POST",
+      headers: dbHeadersJson(),   // uses X-DB-Token + JSON
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.warn("Presence ping failed:", res.status, t);
+    }
+  } catch (e) {
+    console.warn("Presence ping error:", e);
+  }
+}
+
+// Call once on app load + every 5 mins while app is open
+function startPresenceHeartbeat() {
+  sendPresencePing(); // immediate
+  setInterval(sendPresencePing, 5 * 60 * 1000); // every 5 minutes
+
+  // Extra pings when user returns to the app
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) sendPresencePing();
+  });
+}
+
+
 const WORKER_BASE = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev";
 
 function dbHeadersJson() {
