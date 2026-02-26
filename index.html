@@ -896,6 +896,9 @@ gmpx-place-autocomplete {
   width:92%; max-width:420px;
   box-shadow:0 12px 40px rgba(0,0,0,.6);
   transition:all .25s ease;
+  max-height: 85vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 </style>
 
@@ -1281,6 +1284,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <input type="date" id="followUpDue" />
       </div>
     </div>
+    </div>
 
     <div class="card timeBox">
       <label>Time Records</label>
@@ -1443,7 +1447,7 @@ document.addEventListener("DOMContentLoaded", () => {
        style="font-size:15px;color:#ccc;margin-bottom:16px;">
        Logged in as: <strong>—</strong>
     </p>
-    <button type="button" id="openOutstandingBtn" class="btn ghost" style="width:100%;margin-bottom:10px;">
+    <button type="button" id="openOutstandingBtn" class="btn" style="width:100%;margin-bottom:10px;">
   ✅ Outstanding Actions
     </button>
     <button id="logoutNow"
@@ -1481,7 +1485,7 @@ document.addEventListener("DOMContentLoaded", () => {
     </select>
   </div>
 
-  <button id="clearDoneBtn" class="btn ghost" type="button" style="height:38px;">
+  <button id="clearDoneBtn" class="btn remove" type="button" style="height:38px;">
     Clear completed
   </button>
 </div>
@@ -4835,6 +4839,31 @@ async function syncActionToCloud(action) {
   }
 }
 
+async function patchActionInCloud(id, patch) {
+  const res = await fetch(`${WORKER_BASE}/actions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: dbHeadersJson(),
+    body: JSON.stringify(patch)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("Action patch failed: " + res.status + " " + text);
+  }
+}
+
+async function deleteActionInCloud(id) {
+  const res = await fetch(`${WORKER_BASE}/actions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: dbHeaders()
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("Action delete failed: " + res.status + " " + text);
+  }
+}
+
 // send a report log entry to the database
 async function syncReportToCloud(report) {
   if (!report) return;
@@ -5980,13 +6009,13 @@ function showMenu(username, isAdminFlag=false) {
       panel.style.marginBottom = "18px";
 
       panel.innerHTML = `
-        <button type="button" id="adminAddEngineerBtn" class="btn silver" style="width:100%;margin-bottom:10px;">➕ Add New Engineer</button>
-        <button type="button" id="adminAddSalesBtn" class="btn silver" style="width:100%;margin-bottom:10px;">➕ Add New Sales Engineer</button>
-        <button type="button" id="adminAddUserBtn" class="btn silver" style="width:100%;margin-bottom:14px;">➕ Add New User</button>
+        <button type="button" id="adminAddEngineerBtn" class="btn green" style="width:100%;margin-bottom:10px;">➕ Add New Engineer</button>
+        <button type="button" id="adminAddSalesBtn" class="btn green" style="width:100%;margin-bottom:10px;">➕ Add New Sales Engineer</button>
+        <button type="button" id="adminAddUserBtn" class="btn green" style="width:100%;margin-bottom:14px;">➕ Add New User</button>
 
-        <button type="button" id="adminManageEngineersBtn" class="btn ghost" style="width:100%;margin-bottom:10px;">🗑 Manage Engineers</button>
-        <button type="button" id="adminManageSalesBtn" class="btn ghost" style="width:100%;margin-bottom:10px;">🗑 Manage Sales Engineers</button>
-        <button type="button" id="adminManageUsersBtn" class="btn ghost" style="width:100%;">🗑 Manage Users</button>
+        <button type="button" id="adminManageEngineersBtn" class="btn silver" style="width:100%;margin-bottom:10px;">🗑 Manage Engineers</button>
+        <button type="button" id="adminManageSalesBtn" class="btn silver" style="width:100%;margin-bottom:10px;">🗑 Manage Sales Engineers</button>
+        <button type="button" id="adminManageUsersBtn" class="btn silver" style="width:100%;">🗑 Manage Users</button>
       `;
 
       const logoutParent = logoutNow.parentElement;
@@ -6939,13 +6968,16 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("actionsSalesFilter")?.addEventListener("change", refreshAndRenderOutstanding);
   document.getElementById("actionsStatusFilter")?.addEventListener("change", refreshAndRenderOutstanding);
 
-  // ---------- Done/Delete via event delegation ----------
-  document.addEventListener("click", (e) => {
-    const delBtn = e.target.closest("[data-out-del-id]");
-    const doneBtn = e.target.closest("[data-out-done-id]");
+ // ---------- Done/Delete via event delegation (LOCAL + CLOUD) ----------
+document.addEventListener("click", async (e) => {
+  const delBtn  = e.target.closest("[data-out-del-id]");
+  const doneBtn = e.target.closest("[data-out-done-id]");
 
+    // ✅ DONE
     if (doneBtn) {
       const id = doneBtn.getAttribute("data-out-done-id");
+
+      // 1) Update local immediately
       const actions = lsReadArray(LS_KEYS.actions);
       const idx = actions.findIndex(a => a.id === id);
       if (idx >= 0) {
@@ -6955,16 +6987,35 @@ document.addEventListener("DOMContentLoaded", () => {
         renderOutstanding();
         showToast?.("Marked as done", "success");
       }
+
+      // 2) Sync to cloud
+      try {
+        await patchActionInCloud(id, { status: "done" });
+      } catch (err) {
+        console.warn("Cloud patch failed:", err);
+        showToast?.("⚠️ Done saved locally only", "warning");
+      }
       return;
     }
 
+    // 🗑 DELETE
     if (delBtn) {
       const id = delBtn.getAttribute("data-out-del-id");
+
+      // 1) Update local immediately
       const actions = lsReadArray(LS_KEYS.actions);
       const next = actions.filter(a => a.id !== id);
       lsWriteArray(LS_KEYS.actions, next);
       renderOutstanding();
       showToast?.("Removed outstanding item", "success");
+
+      // 2) Sync to cloud
+      try {
+        await deleteActionInCloud(id);
+      } catch (err) {
+        console.warn("Cloud delete failed:", err);
+        showToast?.("⚠️ Deleted locally only", "warning");
+      }
       return;
     }
   });
