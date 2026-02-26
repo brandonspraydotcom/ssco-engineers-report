@@ -4892,6 +4892,9 @@ async function commitReportSave() {
 
   // Update UI immediately
   window.renderOutstandingActions?.();
+  
+  console.log("FollowUps:", meta.followUpTypes);
+  console.log("Actions to sync:", actions);
 
   // 2️⃣ Now sync to Cloudflare (background)
   try {
