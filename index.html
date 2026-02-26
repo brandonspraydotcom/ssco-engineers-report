@@ -653,6 +653,33 @@ gmpx-place-autocomplete {
 </style>
 
 <style>
+  .modal{
+    position:fixed;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,0.55);
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    opacity:0;
+    transition:opacity .25s ease;
+  }
+  .modalBox{
+    background:rgba(30,30,31,0.95);
+    border-radius:16px;
+    padding:18px;
+    width:min(92vw, 560px);
+    max-height:80vh;
+    overflow:auto;
+    box-shadow:0 12px 40px rgba(0,0,0,.6);
+    transform:scale(.85);
+    opacity:0;
+    transition:all .25s ease;
+  }
+</style>
+
+<style>
 /* 🔥 Clear Form Modal (same style language as Save PDF) */
 
 #clearConfirmModal { pointer-events: none; }      /* base = non-blocking */
@@ -900,6 +927,8 @@ gmpx-place-autocomplete {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+#presenceBox { max-height:80vh; overflow:auto; -webkit-overflow-scrolling:touch; }
 </style>
 
 <script>
@@ -1428,7 +1457,9 @@ document.addEventListener("DOMContentLoaded", () => {
                transition:opacity .4s ease,transform .4s ease;
                z-index:9999;cursor:pointer;"><span style="font-size: 40px;">⋮</span></button>
 
+<!-- ========================= -->
 <!-- ⚙️ Account Modal -->
+<!-- ========================= -->
 <div id="accountModal"
      style="display:none;position:fixed;inset:0;
             background:rgba(0,0,0,0.55);
@@ -1443,54 +1474,89 @@ document.addEventListener("DOMContentLoaded", () => {
               transform:scale(0.85);opacity:0;
               transition:all .25s ease;">
     <div style="font-size:20px;margin-bottom:12px;">⚙️ Account</div>
-    <p id="loggedInAs"
-       style="font-size:15px;color:#ccc;margin-bottom:16px;">
-       Logged in as: <strong>—</strong>
+    <p id="loggedInAs" style="font-size:15px;color:#ccc;margin-bottom:16px;">
+      Logged in as: <strong>—</strong>
     </p>
+
     <button type="button" id="openOutstandingBtn" class="btn" style="width:100%;margin-bottom:10px;">
-  ✅ Outstanding Actions
+      ✅ Outstanding Actions
     </button>
-    <button id="logoutNow"
-            class="btn remove"
-            style="width:100%;margin-bottom:12px;">Logout</button>
+
+    <button type="button" id="openPresenceBtn" class="btn ghost" style="width:100%;margin-bottom:10px;display:none;">
+      👀 Who’s Online
+    </button>
+
+    <button id="logoutNow" class="btn remove" style="width:100%;margin-bottom:12px;">Logout</button>
     <div style="font-size:13px;color:#888;">v1.0.0 • SSCo Engineers Report</div>
   </div>
 </div>
 
-<div id="outstandingModal" class="modal" style="display:none;opacity:0;">
-  <div id="outstandingBox" class="modalBox" style="transform:scale(0.85);opacity:0;">
+<!-- ========================= -->
+<!-- ✅ Outstanding Actions Modal -->
+<!-- ========================= -->
+<div id="outstandingModal" class="modal" style="display:none;opacity:0;z-index:6000;">
+  <div id="outstandingBox" class="modalBox" style="transform:scale(0.85);opacity:0;max-height:80vh;overflow:auto;">
+
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h3 style="margin:0;">✅ Outstanding Actions</h3>
       <button id="closeOutstanding" class="btn ghost" type="button">✕</button>
     </div>
 
-	 <!-- Filter + Controls -->
-<div style="margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
-  <div style="flex:1;min-width:160px;">
-    <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Engineer</label>
-    <select id="actionsEngineerFilter" style="width:100%;height:48px;border-radius:10px;margin-bottom:6px;">
-      <option value="__all__">All engineers</option>
-    </select>
-    <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Sales Engineer</label>
-    <select id="actionsSalesFilter" style="flex:1;min-width:160px;">
-      <option value="__all__">All Sales Engineers</option>
-    </select>
-  </div>
+    <!-- Filter + Controls -->
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:160px;">
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Engineer</label>
+        <select id="actionsEngineerFilter" style="width:100%;height:48px;border-radius:10px;margin-bottom:6px;">
+          <option value="__all__">All engineers</option>
+        </select>
 
-  <div style="min-width:140px;">
-    <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Status</label>
-    <select id="actionsStatusFilter" style="width:100%;height:48px;border-radius:10px;">
-      <option value="open">Open</option>
-      <option value="all">All</option>
-    </select>
-  </div>
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Sales Engineer</label>
+        <select id="actionsSalesFilter" style="width:100%;height:48px;border-radius:10px;">
+          <option value="__all__">All Sales Engineers</option>
+        </select>
+      </div>
 
-  <button id="clearDoneBtn" class="btn remove" type="button" style="height:38px;">
-    Clear completed
-  </button>
-</div>
+      <div style="min-width:140px;">
+        <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Status</label>
+        <select id="actionsStatusFilter" style="width:100%;height:48px;border-radius:10px;">
+          <option value="open">Open</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+
+      <button id="clearDoneBtn" class="btn remove" type="button" style="height:48px;">
+        Clear completed
+      </button>
+    </div>
 
     <div id="outstandingList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
+
+  </div>
+</div>
+
+<!-- ========================= -->
+<!-- 👀 Presence Modal (SIBLING) -->
+<!-- ========================= -->
+<div id="presenceModal" class="modal" style="display:none;opacity:0;z-index:7000;">
+  <div id="presenceBox" class="modalBox">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;">👀 Who’s Online</h3>
+      <button id="closePresence" class="btn ghost" type="button">✕</button>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+      <label style="font-size:13px;color:#aaa;">Show last</label>
+      <select id="presenceDays" style="flex:1;">
+        <option value="1">24 hours</option>
+        <option value="7">7 days</option>
+        <option value="30" selected>30 days</option>
+      </select>
+      <button id="refreshPresence" class="btn" type="button" style="padding:10px 12px;">↻</button>
+    </div>
+
+    <div id="presenceList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
+
   </div>
 </div>
 
@@ -1665,6 +1731,8 @@ window.escapeHtml = function (s) {
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"
   }[c]));
 };
+
+window.__modalTransition = false;
 
 // ===== SINGLE SOURCE OF TRUTH (globals) =====
 window.normalizeFullName = function (s) {
@@ -6429,8 +6497,8 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", () =>
     document.body.style.touchAction = "none";
   }
   function unlockScroll() {
+    if (window.__modalTransition) return;
     document.body.style.overflow = "";
-    document.body.style.touchAction = "";
   }
 
   menuBtn?.addEventListener("click", () => {
@@ -6934,7 +7002,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const qs = new URLSearchParams();
       qs.set("status", status);
       if (who !== "__all__") qs.set("engineer", who);
-      if (sales !== "__all__") qs.set("salesEngineer", sales);
+      if (sales !== "__all__") qs.set("sales", sales);
 
       const res = await fetch(`${WORKER_BASE}/actions?${qs.toString()}`, {
         method: "GET",
@@ -7008,11 +7076,13 @@ document.addEventListener("DOMContentLoaded", () => {
   async function refreshAndRenderOutstanding() {
     try {
       const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
+      const sales = document.getElementById("actionsSalesFilter")?.value || "__all__";
       const status = document.getElementById("actionsStatusFilter")?.value || "open";
 
       const qs = new URLSearchParams();
       qs.set("status", status);
       if (who !== "__all__") qs.set("engineer", who);
+      if (sales !== "__all__") qs.set("sales", sales);
 
       const res = await fetch(`${WORKER_BASE}/actions?${qs.toString()}`, {
         method: "GET",
@@ -7531,6 +7601,140 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.id === "emailAppModal") closeModal("emailAppModal");
   });
 
+});
+</script>
+
+<script>
+/* iPad-safe debug helper */
+window._dbg = (msg) => {
+  try {
+    if (typeof showToast === "function") showToast("🐞 " + msg, "info");
+    else alert("DBG: " + msg);
+  } catch { alert("DBG: " + msg); }
+};
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const openBtn  = document.getElementById("openPresenceBtn");
+  const accountModal= document.getElementById("accountModal");
+  const accountBox  = document.getElementById("accountBox");
+
+  const modal    = document.getElementById("presenceModal");
+  const box      = document.getElementById("presenceBox");
+  const closeBtn = document.getElementById("closePresence");
+  const listEl   = document.getElementById("presenceList");
+  const daysSel  = document.getElementById("presenceDays");
+  const refresh  = document.getElementById("refreshPresence");
+
+  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  if (openBtn) openBtn.style.display = isAdmin ? "block" : "none";
+  if (!isAdmin) return;
+
+  if (!openBtn || !modal || !box || !closeBtn || !listEl || !daysSel || !refresh) {
+    showToast?.("Presence UI missing elements", "warning");
+    return;
+  }
+
+  function fmt(dtIso) {
+    if (!dtIso) return "—";
+    try { return new Date(dtIso).toLocaleString("en-GB"); }
+    catch { return String(dtIso); }
+  }
+
+  async function fetchPresence() {
+    listEl.innerHTML = `<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">Loading…</div>`;
+    try {
+      const days = daysSel.value || "30";
+      const res = await fetch(`${WORKER_BASE}/presence?days=${encodeURIComponent(days)}&limit=200`, {
+        method: "GET",
+        headers: dbHeaders()
+      });
+      const data = await res.json();
+      if (!data.ok || !Array.isArray(data.items)) throw new Error("Bad response");
+
+      if (!data.items.length) {
+        listEl.innerHTML = `<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">No presence records.</div>`;
+        return;
+      }
+
+      const now = Date.now();
+      const ONLINE_MS = 5 * 60 * 1000;
+
+      listEl.innerHTML = data.items.map(p => {
+        const last = p.lastSeenAt ? new Date(p.lastSeenAt).getTime() : 0;
+        const online = last && (now - last) <= ONLINE_MS;
+
+        return `
+          <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+            <div style="font-weight:700;color:#eee;">
+              ${(window.escapeHtml ? window.escapeHtml(p.user || "—") : (p.user || "—"))}
+              ${online ? `<span style="margin-left:8px;color:#7CFC00;">● online</span>` : `<span style="margin-left:8px;color:#aaa;">● offline</span>`}
+            </div>
+            <div style="font-size:13px;color:#aaa;margin-top:4px;">
+              Last seen: <span style="color:#fff">${window.escapeHtml ? window.escapeHtml(fmt(p.lastSeenAt)) : fmt(p.lastSeenAt)}</span>
+            </div>
+            <div style="font-size:12px;color:#888;margin-top:6px;">
+              Device: <span style="color:#ccc">${window.escapeHtml ? window.escapeHtml(p.deviceId || "—") : (p.deviceId || "—")}</span>
+              ${p.appVersion ? ` • App: <span style="color:#ccc">${window.escapeHtml ? window.escapeHtml(p.appVersion) : p.appVersion}</span>` : ``}
+            </div>
+          </div>
+        `;
+      }).join("");
+    } catch (e) {
+      console.warn("Presence fetch failed:", e);
+      listEl.innerHTML = `<div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">⚠️ Failed to load presence.</div>`;
+    }
+  }
+
+  function openPresence() {
+    fetchPresence();
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    });
+    window.lockScroll?.();
+  }
+
+  function closePresence() {
+    modal.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => {
+      modal.style.display = "none";
+      window.unlockScroll?.();
+    }, 250);
+  }
+
+  // Account button -> close account -> open presence
+  openBtn.type = "button";
+  openBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (accountModal) {
+      accountModal.style.opacity = "0";
+      if (accountBox) {
+        accountBox.style.transform = "scale(0.85)";
+        accountBox.style.opacity = "0";
+      }
+      setTimeout(() => {
+        accountModal.style.display = "none";
+        openPresence();
+      }, 260);
+    } else {
+      openPresence();
+    }
+  });
+
+  closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closePresence(); });
+  modal.addEventListener("click", (e) => { if (e.target === modal) closePresence(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && modal.style.display === "flex") closePresence(); });
+
+  refresh.addEventListener("click", fetchPresence);
+  daysSel.addEventListener("change", fetchPresence);
 });
 </script>
 
