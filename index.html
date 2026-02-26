@@ -1431,7 +1431,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <footer class="appFooter">
       <button id="savePdf" class="btn" type="button" style="flex:1"><span style="font-size: 30px;">💾</span></button> <button id="clearFormBtn" class="btn remove" style="flex:1"><span style="font-size: 30px;">🗑️</span></button>
-      <button id="sendEmail" class="btn green" type="button" style="flex:1"><span style="font-size: 30px;">📧</span></button><button id="aiEmail" class="btn green" type="button" style="flex:1">
+      <button id="sendEmail" class="btn green" type="button" style="flex:1;display:none;"><span style="font-size: 30px;">📧</span></button><button id="aiEmail" class="btn green" type="button" style="flex:1">
   <span style="font-size: 30px;">💫📧</span></button>
       <!-- Version Badge -->
 <span id="versionBadge"
@@ -7736,6 +7736,65 @@ document.addEventListener("DOMContentLoaded", () => {
   refresh.addEventListener("click", fetchPresence);
   daysSel.addEventListener("change", fetchPresence);
 });
+</script>
+
+<script>
+// ============================
+// Presence heartbeat (client)
+// ============================
+(function () {
+  // Only run when logged in (engineer selected)
+  function getCurrentUser() {
+    const name = (document.getElementById("engineer")?.value || "").trim();
+    if (!name || name === "-- Select --") return "";
+    return name;
+  }
+
+  function getOrCreateDeviceId() {
+    let id = localStorage.getItem("deviceId");
+    if (!id) {
+      id = (crypto?.randomUUID?.() || ("dev_" + Math.random().toString(16).slice(2) + Date.now()));
+      localStorage.setItem("deviceId", id);
+    }
+    return id;
+  }
+
+  async function sendPresence() {
+    const user = getCurrentUser();
+    if (!user) return; // don't spam if not "logged in"
+
+    const deviceId = getOrCreateDeviceId();
+
+    try {
+      await fetch(`${WORKER_BASE}/presence`, {
+        method: "POST",
+        headers: dbHeadersJson(), // must include X-DB-Token + Content-Type
+        body: JSON.stringify({
+          deviceId,
+          user,
+          userAgent: navigator.userAgent,
+          appVersion: (window.APP_VERSION || "v1.0.0")
+        })
+      });
+      // no toast - we want silent background behaviour
+    } catch (e) {
+      // silent fail (offline mode)
+    }
+  }
+
+  // Send once after load
+  document.addEventListener("DOMContentLoaded", () => {
+    sendPresence();
+
+    // Every 2 minutes while open
+    setInterval(sendPresence, 2 * 60 * 1000);
+
+    // Also send when tab becomes visible again
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) sendPresence();
+    });
+  });
+})();
 </script>
 
 </body>
