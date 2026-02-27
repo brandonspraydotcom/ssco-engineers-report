@@ -4950,6 +4950,82 @@ function dbHeaders() {
   };
 }
 
+
+/* ============================
+   PRESENCE HEARTBEAT (PWA -> Worker)
+   ============================ */
+
+(function () {
+  const HEARTBEAT_MS = 60_000; // 1 min (light + accurate enough)
+  let timer = null;
+
+  function getLoggedInUser() {
+    // adjust to match your existing login storage
+    return (localStorage.getItem("engineer") || localStorage.getItem("loggedInUser") || "").trim();
+  }
+
+  function getDeviceId() {
+    // stable per device (persisted)
+    let id = localStorage.getItem("deviceId");
+    if (!id) {
+      id = (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "_" + Math.random().toString(16).slice(2));
+      localStorage.setItem("deviceId", id);
+    }
+    return id;
+  }
+
+  async function sendPresenceOnce() {
+    try {
+      const user = getLoggedInUser();
+      if (!user) return; // don’t write presence unless someone is actually logged in
+
+      const payload = {
+        deviceId: getDeviceId(),
+        user,
+        userAgent: navigator.userAgent,
+        appVersion: window.APP_VERSION || "v1.0.0"
+      };
+
+      await fetch(`${WORKER_BASE}/presence`, {
+        method: "POST",
+        headers: dbHeaders(),
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      // silent fail (offline / blocked / etc.)
+      console.warn("Presence heartbeat failed:", e);
+    }
+  }
+
+  function startPresence() {
+    if (timer) return;
+    // send immediately, then interval
+    sendPresenceOnce();
+    timer = setInterval(sendPresenceOnce, HEARTBEAT_MS);
+  }
+
+  function stopPresence() {
+    if (!timer) return;
+    clearInterval(timer);
+    timer = null;
+  }
+
+  // Start when page is visible
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") startPresence();
+    else stopPresence();
+  });
+
+  // Start on load (if visible)
+  window.addEventListener("load", () => {
+    if (document.visibilityState === "visible") startPresence();
+  });
+
+  // Expose manual trigger for testing
+  window.pingPresenceNow = sendPresenceOnce;
+})();
+
+
 // ===== CLOUD SYNC FUNCTIONS =====
 
 // send an outstanding action to the database
