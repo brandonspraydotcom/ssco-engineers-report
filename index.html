@@ -1486,6 +1486,10 @@ document.addEventListener("DOMContentLoaded", () => {
       👀 Who’s Online
     </button>
 
+    <button type="button" id="openReportsLogBtn" class="btn ghost" style="width:100%;margin-bottom:10px;display:none;">
+      🧾 Reports Log
+    </button>
+
     <button id="logoutNow" class="btn remove" style="width:100%;margin-bottom:12px;">Logout</button>
     <div style="font-size:13px;color:#888;">v1.0.0 • SSCo Engineers Report</div>
   </div>
@@ -1556,6 +1560,33 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 
     <div id="presenceList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
+
+  </div>
+</div>
+
+<!-- ========================= -->
+<!-- 🧾 Reports Log Modal (SIBLING) -->
+<!-- ========================= -->
+<div id="reportsLogModal" class="modal" style="display:none;opacity:0;z-index:7000;">
+  <div id="reportsLogBox" class="modalBox"
+       style="transform:scale(0.85);opacity:0;max-height:80vh;overflow:auto;">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;">🧾 Reports Log</h3>
+      <button id="closeReportsLog" class="btn ghost" type="button">✕</button>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+      <label style="font-size:13px;color:#aaa;">Engineer</label>
+      <select id="reportsEngineerFilter" style="flex:1;height:48px;border-radius:10px;">
+        <option value="__all__">All engineers</option>
+      </select>
+
+      <button id="refreshReportsLog" class="btn" type="button" style="padding:10px 12px;">↻</button>
+    </div>
+
+    <div id="reportsLogList"
+         style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
 
   </div>
 </div>
@@ -7871,6 +7902,192 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 })();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const modal      = document.getElementById("reportsLogModal");
+  const box        = document.getElementById("reportsLogBox");
+  const closeBtn   = document.getElementById("closeReportsLog");
+  const listEl     = document.getElementById("reportsLogList");
+  const engSel     = document.getElementById("reportsEngineerFilter");
+  const refreshBtn = document.getElementById("refreshReportsLog");
+  const openBtn    = document.getElementById("openReportsLogBtn");
+
+  // Admin-only visibility
+  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  if (openBtn) openBtn.style.display = isAdmin ? "block" : "none";
+
+  // If not admin, don't wire anything else
+  if (!isAdmin) return;
+
+  if (!modal || !box || !closeBtn || !listEl || !engSel || !refreshBtn) {
+    console.warn("Reports Log wiring skipped: missing element(s)");
+    return;
+  }
+
+  // Populate engineer filter from main #engineer select (same approach as actions)
+  function populateEngineerFilterFromEngineerSelect() {
+    const src = document.getElementById("engineer");
+    if (!src) return;
+
+    const current = engSel.value || "__all__";
+    const names = Array.from(src.options || [])
+      .map(o => (o.value || "").trim())
+      .filter(v => v && v !== "-- Select --");
+
+    const unique = Array.from(new Set(names)).sort((a,b) => a.localeCompare(b));
+    engSel.innerHTML =
+      `<option value="__all__">All engineers</option>` +
+      unique.map(n => `<option value="${window.escapeHtml ? window.escapeHtml(n) : n}">${window.escapeHtml ? window.escapeHtml(n) : n}</option>`).join("");
+
+    engSel.value = unique.includes(current) ? current : "__all__";
+  }
+
+  function fmtDateTime(iso) {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleString("en-GB"); }
+    catch { return String(iso); }
+  }
+
+  function renderReports(items) {
+    if (!items || !items.length) {
+      listEl.innerHTML = `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
+          No reports saved yet.
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = items.map(r => {
+      const created = fmtDateTime(r.createdAt);
+      const title =
+        (r.companyName && String(r.companyName).trim()) ||
+        (r.customerName && String(r.customerName).trim()) ||
+        (r.projectNo && String(r.projectNo).trim()) ||
+        "Report";
+
+      const engineer = r.engineer || "—";
+      const visit    = r.visitType || "—";
+      const date     = r.date || "—";
+      const proj     = r.projectNo || "—";
+      const po       = r.poNumber || "—";
+
+      const esc = window.escapeHtml ? window.escapeHtml : (s) => String(s ?? "");
+
+      return `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+          <div style="font-weight:700;color:#eee;">${esc(title)}</div>
+
+          <div style="font-size:13px;color:#aaa;margin-top:4px;">
+            Saved: <span style="color:#fff">${esc(created)}</span>
+          </div>
+
+          <div style="font-size:12px;color:#888;margin-top:6px;line-height:1.4;">
+            Engineer: <span style="color:#ccc">${esc(engineer)}</span>
+            • Visit: <span style="color:#ccc">${esc(visit)}</span><br>
+            Date: <span style="color:#ccc">${esc(date)}</span>
+            • Project: <span style="color:#ccc">${esc(proj)}</span>
+            • PO: <span style="color:#ccc">${esc(po)}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function fetchReports() {
+    listEl.innerHTML = `
+      <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
+        Loading…
+      </div>`;
+
+    try {
+      const who = engSel.value || "__all__";
+      const qs = new URLSearchParams();
+      qs.set("limit", "200");
+      if (who !== "__all__") qs.set("engineer", who);
+
+      const res = await fetch(`${WORKER_BASE}/reports?${qs.toString()}`, {
+        method: "GET",
+        headers: dbHeaders()
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok || !Array.isArray(data.items)) throw new Error("Bad response");
+
+      renderReports(data.items);
+    } catch (e) {
+      console.warn("Reports fetch failed:", e);
+      listEl.innerHTML = `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
+          ⚠️ Failed to load reports.
+        </div>`;
+    }
+  }
+
+  function openReportsLog() {
+    populateEngineerFilterFromEngineerSelect();
+    fetchReports();
+
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    });
+    window.lockScroll?.();
+  }
+
+  function closeReportsLog() {
+    modal.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+    setTimeout(() => {
+      modal.style.display = "none";
+      window.unlockScroll?.();
+    }, 250);
+  }
+
+  // ✅ expose global opener (Account button will call this)
+  window.openReportsLogModal = openReportsLog;
+
+  closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closeReportsLog(); });
+  modal.addEventListener("click", (e) => { if (e.target === modal) closeReportsLog(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal.style.display === "flex") closeReportsLog();
+  });
+
+  refreshBtn.addEventListener("click", fetchReports);
+  engSel.addEventListener("change", fetchReports);
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const btn          = document.getElementById("openReportsLogBtn");
+  const accountModal = document.getElementById("accountModal");
+  const accountBox   = document.getElementById("accountBox");
+  if (!btn || !accountModal) return;
+
+  btn.type = "button";
+
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // close account modal (match your animation style)
+    accountModal.style.opacity = "0";
+    if (accountBox) {
+      accountBox.style.transform = "scale(0.85)";
+      accountBox.style.opacity = "0";
+    }
+
+    setTimeout(() => {
+      accountModal.style.display = "none";
+      window.openReportsLogModal?.();
+    }, 280);
+  });
+});
 </script>
 
 </body>
