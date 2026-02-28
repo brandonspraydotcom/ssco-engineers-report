@@ -1757,6 +1757,49 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+// ===============================
+// ADMIN: single source of truth
+// ===============================
+window.isCurrentAdmin = function () {
+  // 1) stored flag (set on login)
+  if (localStorage.getItem("isAdmin") === "true") return true;
+
+  // 2) fallback: name match (covers edge cases)
+  const u = (localStorage.getItem("username") || "").trim().toLowerCase();
+  return u === "brandon phelps";
+};
+
+// ===============================
+// ADMIN UI visibility
+// ===============================
+window.updateAdminUI = function () {
+  const admin = window.isCurrentAdmin();
+
+  const ids = [
+    "openPresenceBtn",
+    "openReportsLogBtn",
+
+    // admin panel buttons (exist only after showMenu builds them)
+    "adminAddEngineerBtn",
+    "adminAddSalesBtn",
+    "adminAddUserBtn",
+    "adminManageEngineersBtn",
+    "adminManageSalesBtn",
+    "adminManageUsersBtn",
+  ];
+
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = admin ? "block" : "none";
+  });
+
+  // Optional: also hide entire adminPanel wrapper if it exists
+  const panel = document.getElementById("adminPanel");
+  if (panel) panel.style.display = admin ? "block" : "none";
+};
+</script>
+
+<script>
 window.escapeHtml = function (s) {
   return String(s ?? "").replace(/[&<>"]/g, c => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"
@@ -5226,7 +5269,7 @@ document.addEventListener("DOMContentLoaded", () => {
           try {
             pdfWin.focus();
             pdfWin.print();
-            commitReportSave(); // ✅ replaced
+             // ✅ replaced
             bump("success");
             showToast("✅ PDF ready and sent to print", "success");
           } catch (err) {
@@ -6200,6 +6243,7 @@ loginSubmit?.addEventListener("click", () => {
   localStorage.setItem("loggedIn", "true");
   localStorage.setItem("username", fullName);
   localStorage.setItem("isAdmin", String(admin));
+  window.updateAdminButtons?.();
 
   loginModal.style.opacity = "0";
   setTimeout(() => loginModal.remove(), 300);
@@ -6207,6 +6251,7 @@ loginSubmit?.addEventListener("click", () => {
   document.body.classList.add("logged-in");
   showMenu(fullName, admin);
   refreshPeopleDropdowns?.();
+  window.updateAdminButtons?.();
   showToast?.(`👋 Welcome, ${fullName}`, "success");
 });
 
@@ -6390,10 +6435,7 @@ function renderUsersManager() {
 // Admin helpers
 // ===============================
 
-function isCurrentAdmin() {
-  return window.isAdminUserNow(); // ✅ uses window.PROTECTED_NAME internally
-}
-// ✅ single source of truth
+
 
 
 // ===============================
@@ -6405,38 +6447,38 @@ document.addEventListener("click", (e) => {
 
   // ---- ADD ----
   if (btn.id === "adminAddEngineerBtn") {
-    if (!isCurrentAdmin()) return showToast?.("⛔ Admin only", "warning");
+    if (!window.isCurrentAdmin?.()) return showToast?.("⛔ Admin only", "warning");
     closeAccountModal(() => window.showSimpleModal("addEngineerModal", "addEngineerBox"));
     return;
   }
 
   if (btn.id === "adminAddSalesBtn") {
-    if (!isCurrentAdmin()) return showToast?.("⛔ Admin only", "warning");
+    if (!window.isCurrentAdmin?.()) return showToast?.("⛔ Admin only", "warning");
     closeAccountModal(() => window.showSimpleModal("addSalesEngineerModal", "addSalesEngineerBox"));
     return;
   }
 
   if (btn.id === "adminAddUserBtn") {
-    if (!isCurrentAdmin()) return showToast?.("⛔ Admin only", "warning");
+    if (!window.isCurrentAdmin?.()) return showToast?.("⛔ Admin only", "warning");
     closeAccountModal(() => window.showSimpleModal("addUserModal", "addUserBox"));
     return;
   }
 
   // ---- MANAGE ----
   if (btn.id === "adminManageEngineersBtn") {
-    if (!isCurrentAdmin()) return showToast?.("⛔ Admin only", "warning");
+    if (!window.isCurrentAdmin?.()) return showToast?.("⛔ Admin only", "warning");
     closeAccountModal(() => window.renderEngineerManager?.());
     return;
   }
 
   if (btn.id === "adminManageSalesBtn") {
-    if (!isCurrentAdmin()) return showToast?.("⛔ Admin only", "warning");
+    if (!window.isCurrentAdmin?.()) return showToast?.("⛔ Admin only", "warning");
     closeAccountModal(() => window.renderSalesManager?.());
     return;
   }
 
   if (btn.id === "adminManageUsersBtn") {
-    if (!isCurrentAdmin()) return showToast?.("⛔ Admin only", "warning");
+    if (!window.isCurrentAdmin?.()) return showToast?.("⛔ Admin only", "warning");
     closeAccountModal(() => window.renderUsersManager?.());
     return;
   }
@@ -6725,8 +6767,9 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", () =>
   if (localStorage.getItem("loggedIn") === "true" && storedUser) {
     loginModal?.remove();
     document.body.classList.add("logged-in");
-    showMenu(storedUser, window.isAdminUserNow?.() || false);
+    showMenu(storedUser, localStorage.getItem("isAdmin") === "true");
     refreshPeopleDropdowns();
+    window.updateAdminButtons?.();
     showToast(`👋 Welcome back, ${storedUser}`);
     // guarantee dropdowns populate after scripts finish loading
       setTimeout(() => {
@@ -7722,6 +7765,29 @@ window._dbg = (msg) => {
 </script>
 
 <script>
+  // ✅ Single admin rule (Brandon Phelps only)
+  window.isCurrentAdmin = function () {
+    const flag = localStorage.getItem("isAdmin");
+    if (flag === "true") return true;
+
+    // fallback: derive from username if needed
+    const u = (localStorage.getItem("username") || "").trim().toLowerCase();
+    return u === "brandon phelps";
+  };
+
+  // ✅ Always call this after login/logout and on load
+  window.updateAdminButtons = function () {
+    const admin = window.isCurrentAdmin();
+
+    const presenceBtn = document.getElementById("openPresenceBtn");
+    const reportsBtn  = document.getElementById("openReportsLogBtn");
+
+    if (presenceBtn) presenceBtn.style.display = admin ? "block" : "none";
+    if (reportsBtn)  reportsBtn.style.display  = admin ? "block" : "none";
+  };
+</script>
+
+<script>
 document.addEventListener("DOMContentLoaded", () => {
   const openBtn  = document.getElementById("openPresenceBtn");
   const accountModal= document.getElementById("accountModal");
@@ -7734,7 +7800,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const daysSel  = document.getElementById("presenceDays");
   const refresh  = document.getElementById("refreshPresence");
 
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  
+  const isAdmin = window.isCurrentAdmin?.() === true;
   if (openBtn) openBtn.style.display = isAdmin ? "block" : "none";
   if (!isAdmin) return;
 
@@ -7915,7 +7982,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const openBtn    = document.getElementById("openReportsLogBtn");
 
   // Admin-only visibility
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  
+  const isAdmin = window.isCurrentAdmin?.() === true;
   if (openBtn) openBtn.style.display = isAdmin ? "block" : "none";
 
   // If not admin, don't wire anything else
@@ -8051,43 +8119,39 @@ document.addEventListener("DOMContentLoaded", () => {
   // ✅ expose global opener (Account button will call this)
   window.openReportsLogModal = openReportsLog;
 
-  closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closeReportsLog(); });
-  modal.addEventListener("click", (e) => { if (e.target === modal) closeReportsLog(); });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && modal.style.display === "flex") closeReportsLog();
-  });
-
-  refreshBtn.addEventListener("click", fetchReports);
-  engSel.addEventListener("change", fetchReports);
-});
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const btn          = document.getElementById("openReportsLogBtn");
-  const accountModal = document.getElementById("accountModal");
-  const accountBox   = document.getElementById("accountBox");
-  if (!btn || !accountModal) return;
-
-  btn.type = "button";
-
-  btn.addEventListener("click", (e) => {
+  // ✅ Button click: close account modal -> open Reports Log
+  openBtn.type = "button";
+  openBtn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // close account modal (match your animation style)
-    accountModal.style.opacity = "0";
-    if (accountBox) {
-      accountBox.style.transform = "scale(0.85)";
-      accountBox.style.opacity = "0";
-    }
+    const accountModal = document.getElementById("accountModal");
+    const accountBox   = document.getElementById("accountBox");
 
-    setTimeout(() => {
-      accountModal.style.display = "none";
-      window.openReportsLogModal?.();
-    }, 280);
+    if (accountModal) {
+      accountModal.style.opacity = "0";
+      if (accountBox) {
+        accountBox.style.transform = "scale(0.85)";
+        accountBox.style.opacity = "0";
+      }
+      setTimeout(() => {
+        accountModal.style.display = "none";
+        openReportsLog(); // ✅ direct call
+      }, 260);
+    } else {
+      openReportsLog();
+    }
   });
-});
+
+    closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closeReportsLog(); });
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeReportsLog(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modal.style.display === "flex") closeReportsLog();
+    });
+
+    refreshBtn.addEventListener("click", fetchReports);
+    engSel.addEventListener("change", fetchReports);
+  });
 </script>
 
 </body>
