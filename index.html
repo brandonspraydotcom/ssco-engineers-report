@@ -1293,6 +1293,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <label>Follow-up Required?</label>
       <div id="followUpChecklist" class="followup-group">
 
+      <label><input type="checkbox" value="QUOTE"> N/A</label>
       <label><input type="checkbox" value="QUOTE"> Quote</label>
       <label><input type="checkbox" value="PARTS"> Parts Required</label>
       <label><input type="checkbox" value="RETURN_VISIT"> Return Visit</label>
@@ -1577,10 +1578,15 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 
     <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
-      <label style="font-size:13px;color:#aaa;">Engineer</label>
-      <select id="reportsEngineerFilter" style="flex:1;height:48px;border-radius:10px;">
+      <select id="reportsEngineerFilter">
         <option value="__all__">All engineers</option>
       </select>
+
+      <select id="reportsSalesFilter">
+        <option value="__all__">All Sales Engineers</option>
+      </select>
+
+      <input id="reportsCustomerFilter" type="text" placeholder="Search customer / company…" style="width:100%;margin-top:5px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;">
 
       <button id="refreshReportsLog" class="btn" type="button" style="padding:10px 12px;">↻</button>
     </div>
@@ -8012,6 +8018,56 @@ document.addEventListener("DOMContentLoaded", () => {
     engSel.value = unique.includes(current) ? current : "__all__";
   }
 
+  function populateReportsSalesFilterFromSalesSelect() {
+    const salesSel = document.getElementById("salesName"); // main form select
+    const dst = document.getElementById("reportsSalesFilter"); // reports filter select
+    if (!salesSel || !dst) return;
+
+    const current = dst.value || "__all__";
+
+    const names = Array.from(salesSel.options || [])
+      .map(o => (o.value || "").trim())
+      .filter(v => v && v !== "-- Select --");
+
+    const unique = Array.from(new Set(names)).sort((a,b)=>a.localeCompare(b));
+
+    dst.innerHTML =
+      `<option value="__all__">All Sales Engineers</option>` +
+      unique.map(n => `<option value="${window.escapeHtml ? window.escapeHtml(n) : n}">${window.escapeHtml ? window.escapeHtml(n) : n}</option>`).join("");
+
+    dst.value = unique.includes(current) ? current : "__all__";
+  }
+
+  
+  function applyReportsClientFilters(items) {
+    const eng   = (document.getElementById("reportsEngineerFilter")?.value || "__all__").trim();
+    const sales = (document.getElementById("reportsSalesFilter")?.value || "__all__").trim();
+    const q     = (document.getElementById("reportsCustomerFilter")?.value || "").trim().toLowerCase();
+
+    return (items || []).filter(r => {
+      // engineer
+      if (eng !== "__all__" && (r.engineer || "") !== eng) return false;
+
+      // sales (support either field name)
+      const s = (r.salesEngineer || r.salesName || "").trim();
+      if (sales !== "__all__" && s !== sales) return false;
+
+      // customer/company search
+      if (q) {
+        const hay = [
+          r.companyName,
+          r.customerName,
+          r.custCompany,
+          r.custName,
+          r.customer,
+        ].map(x => String(x || "").toLowerCase()).join(" ");
+        if (!hay.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }
+
   function fmtDateTime(iso) {
     if (!iso) return "—";
     try { return new Date(iso).toLocaleString("en-GB"); }
@@ -8083,7 +8139,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok || !Array.isArray(data.items)) throw new Error("Bad response");
 
-      renderReports(data.items);
+      const filtered = applyReportsClientFilters(data.items);
+      renderReports(filtered);
     } catch (e) {
       console.warn("Reports fetch failed:", e);
       listEl.innerHTML = `
@@ -8095,6 +8152,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function openReportsLog() {
     populateEngineerFilterFromEngineerSelect();
+    populateReportsSalesFilterFromSalesSelect();
     fetchReports();
 
     modal.style.display = "flex";
@@ -8151,6 +8209,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     refreshBtn.addEventListener("click", fetchReports);
     engSel.addEventListener("change", fetchReports);
+
+    document.getElementById("reportsSalesFilter")?.addEventListener("change", fetchReports);
+
+    document.getElementById("reportsCustomerFilter")?.addEventListener("input", () => {
+      clearTimeout(window.__reportsSearchT);
+      window.__reportsSearchT = setTimeout(fetchReports, 150);
+  });
+
   });
 </script>
 
