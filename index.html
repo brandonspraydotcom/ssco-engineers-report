@@ -2074,7 +2074,18 @@ function readReportMetaFromForm() {
     followUpTypes,
     followUpNotes,
     followUpDueDate,
+    visitChargeAmount,
+    visitChargeCurrency,
+    poRequired,
+    poReceived,
   };
+  // ===== VISIT CHARGE + PO FLAGS =====
+  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
+  const visitChargeCurrency = localStorage.getItem("visitChargeCurrency") || "£";
+
+  const poRequired = !!document.getElementById("poRequired")?.checked;
+  const poReceived = !!document.getElementById("poReceived")?.checked;
+
 }
 
 
