@@ -653,6 +653,33 @@ gmpx-place-autocomplete {
 </style>
 
 <style>
+/* ===== Fix iOS white number input ===== */
+input[type="number"] {
+  -webkit-appearance: none;
+  appearance: none;
+
+  background: #1b1b1b;
+  color: #eee;
+
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+
+  padding: 10px 12px;
+  width: 100%;
+  box-sizing: border-box;
+
+  font-size: 15px;
+}
+
+/* Remove iOS spinner arrows */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+</style>
+
+<style>
   .modal{
     position:fixed;
     inset:0;
@@ -1196,7 +1223,53 @@ document.addEventListener("DOMContentLoaded", () => {
           <input id="project" type="text" placeholder="PJ number">
         </div>
       </div>
+	
 	  <div class="row" style="margin-top:10px">
+       <div style="flex:1;">
+         <label>Visit Charge</label>
+
+         <div style="display:flex;gap:10px;align-items:center;">
+           <select id="visitCurrency" style="width:110px;">
+             <option value="GBP">£ GBP</option>
+             <option value="EUR">€ EUR</option>
+           </select>
+
+           <div style="position:relative;flex:1;">
+             <span id="visitCurrencyPrefix" style="
+               position:absolute;
+               left:12px;
+               top:50%;
+               transform:translateY(-50%);
+               opacity:.9;
+               font-weight:700;
+               pointer-events:none;">
+               £
+             </span>
+
+             <input
+               id="visitCharge"
+               type="text"
+               inputmode="decimal"
+               placeholder="0.00"
+               style="width:100%;padding-left:36px;"
+             >
+           </div>
+         </div>
+       </div>
+
+       <div style="display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;">
+         <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+           <input type="checkbox" id="poRequired">
+           PO Required
+         </label>
+
+         <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+           <input type="checkbox" id="poReceived">
+           PO Received
+         </label>
+       </div>
+     </div>
+	
   <div>
     <label>Purchase Order Number</label>
     <input id="ponumber" type="text" placeholder="PO Number">
@@ -3090,6 +3163,48 @@ async function printHtmlViaIframe(beforeImgs, afterImgs) {
 </script>
 
 <script>
+const chargeInput = document.getElementById("visitCharge");
+const poReq = document.getElementById("poRequired");
+const poRec = document.getElementById("poReceived");
+
+function updatePOLogic() {
+  const charge = parseFloat(chargeInput?.value || "0");
+
+  // If no charge → disable PO completely
+  if (!charge || charge <= 0) {
+    poReq.checked = false;
+    poRec.checked = false;
+    poReq.disabled = true;
+    poRec.disabled = true;
+    return;
+  }
+
+  // Charge exists → enable PO logic
+  poReq.disabled = false;
+  poRec.disabled = false;
+}
+
+// Only one of the PO states can be active logically
+poReq?.addEventListener("change", () => {
+  if (poReq.checked) poRec.checked = false;
+});
+
+poRec?.addEventListener("change", () => {
+  if (poRec.checked) poReq.checked = false;
+});
+
+chargeInput?.addEventListener("input", updatePOLogic);
+updatePOLogic();
+
+document.getElementById("poReceived")?.addEventListener("change", (e) => {
+  if (e.target.checked) {
+    const req = document.getElementById("poRequired");
+    if (req) req.checked = false;
+  }
+});
+</script>
+
+<script>
 // === Global cache for sharing ===
 let lastPdfBlob = null;
 
@@ -4198,6 +4313,105 @@ function highlightField(el, isFirst = false) {
 </script>
 
 <script>
+(function wireVisitChargeAndPO() {
+  const chargeEl = document.getElementById("visitCharge");
+  const curEl    = document.getElementById("visitCurrency");       // select GBP/EUR
+  const preEl    = document.getElementById("visitCurrencyPrefix"); // span £/€
+  const poReq    = document.getElementById("poRequired");
+  const poRec    = document.getElementById("poReceived");
+
+  if (!chargeEl || !poReq || !poRec) return;
+
+  function symbolFromCurrency(code) {
+    return code === "EUR" ? "€" : "£";
+  }
+
+  function getCurrencyCode() {
+    // default GBP
+    return (curEl?.value || "GBP").toUpperCase();
+  }
+
+  function syncCurrencyUI() {
+    const code = getCurrencyCode();
+    const sym  = symbolFromCurrency(code);
+
+    if (preEl) preEl.textContent = sym;
+    // optional but nice: keep placeholder aligned too
+    chargeEl.placeholder = sym + "0.00";
+  }
+
+  // numeric sanitiser: digits + one dot
+  function cleanNumber(s) {
+    s = String(s || "")
+      .replace(/[£€\s]/g, "") // strip symbols/spaces if user pasted them
+      .replace(",", ".")
+      .replace(/[^\d.]/g, "");
+    const parts = s.split(".");
+    if (parts.length <= 2) return s;
+    return parts[0] + "." + parts.slice(1).join("");
+  }
+
+  function parseAmount() {
+    const cleaned = cleanNumber(chargeEl.value);
+    const amount = parseFloat(cleaned);
+    return (!cleaned || isNaN(amount)) ? 0 : amount;
+  }
+
+  function updatePOLogic() {
+    const amount = parseAmount();
+    const hasCharge = amount > 0;
+
+    const code = getCurrencyCode();
+    const sym  = symbolFromCurrency(code);
+
+    // store clean values for emails/outstanding actions
+    localStorage.setItem("visitChargeCurrency", sym);
+    localStorage.setItem("visitChargeAmount", hasCharge ? String(amount) : "");
+
+    // PO logic
+    if (!hasCharge) {
+      poReq.checked = false;
+      poRec.checked = false;
+      poReq.disabled = true;
+      poRec.disabled = true;
+      if (poReq.parentElement) poReq.parentElement.style.opacity = "0.45";
+      if (poRec.parentElement) poRec.parentElement.style.opacity = "0.45";
+    } else {
+      poReq.disabled = false;
+      poRec.disabled = false;
+      if (poReq.parentElement) poReq.parentElement.style.opacity = "1";
+      if (poRec.parentElement) poRec.parentElement.style.opacity = "1";
+    }
+  }
+
+  // input: keep numeric only
+  chargeEl.addEventListener("input", () => {
+    const clean = cleanNumber(chargeEl.value);
+    if (chargeEl.value !== clean) chargeEl.value = clean;
+    updatePOLogic();
+  });
+
+  // blur: format numeric only (NO symbol in the input)
+  chargeEl.addEventListener("blur", () => {
+    const amount = parseAmount();
+    chargeEl.value = amount > 0 ? Number(amount).toFixed(2) : "";
+    updatePOLogic();
+  });
+
+  // currency change -> update prefix UI + store currency + re-eval PO
+  curEl?.addEventListener("change", () => {
+    syncCurrencyUI();
+    updatePOLogic();
+  });
+
+  // run once on load
+  chargeEl.value = cleanNumber(chargeEl.value); // strip any old £/€
+  syncCurrencyUI();
+  updatePOLogic();
+})();
+</script>
+
+<script>
 // ==========================
 // Email Reminder + Send Email (Fixed Scroll + Highlight + Auto-Clear)
 // ==========================
@@ -5030,6 +5244,46 @@ function dbHeaders() {
   };
 }
 
+function newId() {
+  return (crypto?.randomUUID?.() || ("id_" + Date.now() + "_" + Math.random().toString(16).slice(2)));
+}
+
+function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// POST /actions (cloud)
+async function createActionInCloud(item) {
+  const res = await fetch(`${WORKER_BASE}/actions`, {
+    method: "POST",
+    headers: dbHeadersJson(),
+    body: JSON.stringify(item)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) throw new Error(data.error || "Create action failed");
+  return data;
+}
+
+// Adds locally + cloud (best effort)
+async function addOutstandingAction(item) {
+  // local first
+  const actions = lsReadArray(LS_KEYS.actions);
+  actions.push(item);
+  lsWriteArray(LS_KEYS.actions, actions);
+  window.renderOutstandingActions?.();
+
+  // cloud
+  try {
+    await createActionInCloud(item);
+  } catch (e) {
+    console.warn("Cloud create action failed:", e);
+    showToast?.("⚠️ Outstanding action saved locally only", "warning");
+  }
+}
 
 /* ============================
    PRESENCE HEARTBEAT (PWA -> Worker)
@@ -5173,9 +5427,14 @@ async function commitReportSave() {
 
   // 1️⃣ Save locally first (offline-first behaviour)
   const report  = addReportToLog(meta);
-  const actions = addOutstandingAction(meta); // now returns [] or null
 
-  // Update UI immediately
+  let actions = addOutstandingAction(meta) || [];   // ✅ guarantee array
+
+  // ✅ add PO-related action (if applicable)
+  const poAction = buildPOOutstandingFromForm();
+  if (poAction) actions.push(poAction);
+
+  // ✅ Update UI immediately
   window.renderOutstandingActions?.();
   
   console.log("FollowUps:", meta.followUpTypes);
@@ -5196,6 +5455,53 @@ async function commitReportSave() {
     console.warn("Cloud sync failed:", err);
     showToast?.("⚠️ Saved locally (offline mode)", "warning");
   }
+}
+
+function buildPOOutstandingFromForm() {
+  const amt = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
+  const cur = (localStorage.getItem("visitChargeCurrency") || "£").trim();
+  const hasCharge = amt > 0;
+
+  const poReq = !!document.getElementById("poRequired")?.checked;
+  const poRec = !!document.getElementById("poReceived")?.checked;
+
+  // ✅ If no charge, PO flags are redundant → no action
+  if (!hasCharge) return null;
+
+  // Only create actions when PO is relevant
+  if (!poReq && !poRec) return null;
+
+  const inputs = collectAIInputs();
+  const money = `${cur}${amt.toFixed(2)}`;
+
+  // Choose action type + notes
+  const followUpType = poRec ? "PO_RECEIVED" : "PO_REQUIRED";
+  const followUpNotes = poRec
+    ? `Purchase order received. Visit charge ${money}. Please invoice ASAP.`
+    : `Purchase order needed. Visit charge ${money}. Please obtain PO and invoice ASAP.`;
+
+  return {
+    id: newId(),
+    status: "open",
+    createdAt: new Date().toISOString(),
+    dueDate: todayISO(), // or blank if you prefer
+    followUpType,
+    followUpNotes,
+
+    engineer: inputs.engineer || "",
+    salesEngineer: inputs.salesName || "",
+    projectNo: inputs.project || "",
+
+    companyName: inputs.custCompany || "",
+    customerName: inputs.custName || "",
+    visitType: inputs.visitType || "",
+
+    // useful for future
+    visitChargeAmount: amt,
+    visitChargeCurrency: cur,
+    poRequired: poReq,
+    poReceived: poRec,
+  };
 }
 
 // --- SAVE PDF (Desktop + Safari PWA safe) ---
@@ -7370,6 +7676,13 @@ function collectAIInputs() {
     followUpType: v("followUpType"),
     followUpNotes: v("followUpNotes"),
     followUpDue: v("followUpDue"),
+    visitCharge: document.getElementById("visitCharge")?.value || "",
+    poRequired: document.getElementById("poRequired")?.checked || false,
+    poReceived: document.getElementById("poReceived")?.checked || false,
+    visitCharge: (localStorage.getItem("visitChargeAmount") || "").trim(),
+    visitChargeCurrency: (localStorage.getItem("visitChargeCurrency") || "£").trim(),
+    poRequired: !!document.getElementById("poRequired")?.checked,
+    poReceived: !!document.getElementById("poReceived")?.checked,
   };
 }
 
@@ -7443,7 +7756,10 @@ async function buildEmailDraftsFromAI() {
     showToast?.("📧 Writing sales email…", "info");
     bump?.("info");
 
-    const body = await callAI("email_sales", inputs);
+    let body = await callAI("email_sales", inputs);
+
+    // ✅ append billing/PO block
+    body += buildBillingBlock(inputs);
 
     const subject = `Actions / Update – ${inputs.project || "PJ"} – ${inputs.custCompany || "Customer"}`.trim();
     const to = (inputs.salesEmail || "").trim();
@@ -7452,6 +7768,28 @@ async function buildEmailDraftsFromAI() {
   }
 
   return drafts;
+
+  function buildBillingBlock(inputs) {
+    const amt = parseFloat(inputs.visitCharge || "0");
+    const cur = inputs.visitChargeCurrency || "£";
+    const hasCharge = amt > 0;
+
+    if (!hasCharge) return "";
+
+    const money = `${cur}${amt.toFixed(2)}`;
+    const lines = [];
+
+    lines.push("");
+    lines.push("—");
+    lines.push(`Billing: Visit charge ${money}`);
+
+    if (inputs.poRequired) lines.push("PO needed — please obtain PO and invoice ASAP.");
+    if (inputs.poReceived) lines.push("PO received — please invoice ASAP.");
+
+    // If both are ticked, keep both lines (or choose one if you prefer)
+    return lines.join("\n");
+  }
+
 }
 
 // Open drafts in chosen app
