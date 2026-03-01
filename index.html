@@ -5363,6 +5363,8 @@ function buildPOOutstandingFromForm() {
   const amt = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
   const cur = (localStorage.getItem("visitChargeCurrency") || "£").trim();
   const hasCharge = amt > 0;
+  const due = (document.getElementById("followUpDue")?.value || "").trim() 
+           || (typeof todayISO === "function" ? todayISO() : new Date().toISOString().slice(0,10));
 
   const poReq = !!document.getElementById("poRequired")?.checked;
   const poRec = !!document.getElementById("poReceived")?.checked;
@@ -5403,6 +5405,7 @@ function buildPOOutstandingFromForm() {
     visitChargeCurrency: cur,
     poRequired: poReq,
     poReceived: poRec,
+    dueDate: due,
   };
 }
 
@@ -5475,7 +5478,8 @@ async function commitReportSave() {
   // 1️⃣ Save locally first (offline-first behaviour)
   const report  = addReportToLog(meta);
 
-  let actions = addOutstandingAction(meta) || [];   // ✅ guarantee array
+  let actions = addOutstandingAction(meta);
+  if (!Array.isArray(actions)) actions = actions ? [actions] : [];
 
   // ✅ add PO-related action (if applicable)
   const poAction = buildPOOutstandingFromForm();
@@ -7411,6 +7415,10 @@ document.addEventListener("DOMContentLoaded", () => {
     listEl.innerHTML = view.map((a) => {
       const due   = a.dueDate ? new Date(a.dueDate + "T00:00:00").toLocaleDateString("en-GB") : "—";
       const type  = a.followUpType || "FOLLOW_UP";
+      const badge =
+        (a.followUpType === "PO_REQUIRED") ? "🧾 PO Required" :
+        (a.followUpType === "PO_RECEIVED") ? "✅ PO Received" :
+        "";
       const title = a.companyName || a.customerName || a.projectNo || "Outstanding item";
       const notes = a.followUpNotes ? String(a.followUpNotes) : "";
 
@@ -7423,6 +7431,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <div style="font-size:13px;color:#aaa;margin-top:2px;">
                 Type: <span style="color:#7CFC00">${window.escapeHtml(type)}</span>
                 • Due: <span style="color:#fff">${window.escapeHtml(due)}</span>
+                ${badge ? ` • <span style="color:#ffcc66">${window.escapeHtml(badge)}</span>` : ``}
               </div>
 
               <div style="font-size:12px;color:#888;margin-top:6px;">
@@ -7682,6 +7691,7 @@ function collectAIInputs() {
     followUpNotes: v("followUpNotes"),
     followUpDue: v("followUpDue"),
     visitCharge: document.getElementById("visitCharge")?.value || "",
+    visitChargeAmount: (localStorage.getItem("visitChargeAmount") || "").trim(),
     poRequired: document.getElementById("poRequired")?.checked || false,
     poReceived: document.getElementById("poReceived")?.checked || false,
     visitCharge: (localStorage.getItem("visitChargeAmount") || "").trim(),
@@ -8468,6 +8478,19 @@ document.addEventListener("DOMContentLoaded", () => {
         Loading…
       </div>`;
 
+    // helper: read local reports log (whatever key your addReportToLog uses)
+    function readLocalReports() {
+      try {
+        // If you already have LS_KEYS.reports, use that:
+        if (window.LS_KEYS?.reports) return lsReadArray(window.LS_KEYS.reports);
+
+        // Otherwise, try common keys:
+        return JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+      } catch {
+        return [];
+      }
+    }
+
     try {
       const who = engSel.value || "__all__";
       const qs = new URLSearchParams();
@@ -8482,14 +8505,25 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok || !Array.isArray(data.items)) throw new Error("Bad response");
 
-      const filtered = applyReportsClientFilters(data.items);
-      renderReports(filtered);
+      // ✅ if cloud is empty, fall back to local
+      const cloudItems = data.items || [];
+      const items = cloudItems.length ? cloudItems : readLocalReports();
+
+      renderReports(items);
     } catch (e) {
       console.warn("Reports fetch failed:", e);
-      listEl.innerHTML = `
-        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
-          ⚠️ Failed to load reports.
-        </div>`;
+
+      // ✅ fallback to local on error
+      const localItems = (function () {
+        try {
+          if (window.LS_KEYS?.reports) return lsReadArray(window.LS_KEYS.reports);
+          return JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+        } catch {
+          return [];
+        }
+      })();
+
+      renderReports(localItems);
     }
   }
 
