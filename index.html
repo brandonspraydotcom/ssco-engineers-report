@@ -5359,6 +5359,53 @@ async function addOutstandingAction(item) {
   window.pingPresenceNow = sendPresenceOnce;
 })();
 
+function buildPOOutstandingFromForm() {
+  const amt = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
+  const cur = (localStorage.getItem("visitChargeCurrency") || "£").trim();
+  const hasCharge = amt > 0;
+
+  const poReq = !!document.getElementById("poRequired")?.checked;
+  const poRec = !!document.getElementById("poReceived")?.checked;
+
+  // ✅ If no charge, PO flags are redundant → no action
+  if (!hasCharge) return null;
+
+  // Only create actions when PO is relevant
+  if (!poReq && !poRec) return null;
+
+  const inputs = collectAIInputs();
+  const money = `${cur}${amt.toFixed(2)}`;
+
+  // Choose action type + notes
+  const followUpType = poRec ? "PO_RECEIVED" : "PO_REQUIRED";
+  const followUpNotes = poRec
+    ? `Purchase order received. Visit charge ${money}. Please invoice ASAP.`
+    : `Purchase order needed. Visit charge ${money}. Please obtain PO and invoice ASAP.`;
+
+  return {
+    id: newId(),
+    status: "open",
+    createdAt: new Date().toISOString(),
+    dueDate: todayISO(), // or blank if you prefer
+    followUpType,
+    followUpNotes,
+
+    engineer: inputs.engineer || "",
+    salesEngineer: inputs.salesName || "",
+    projectNo: inputs.project || "",
+
+    companyName: inputs.custCompany || "",
+    customerName: inputs.custName || "",
+    visitType: inputs.visitType || "",
+
+    // useful for future
+    visitChargeAmount: amt,
+    visitChargeCurrency: cur,
+    poRequired: poReq,
+    poReceived: poRec,
+  };
+}
+
 
 // ===== CLOUD SYNC FUNCTIONS =====
 
@@ -5457,53 +5504,6 @@ async function commitReportSave() {
   }
 }
 
-function buildPOOutstandingFromForm() {
-  const amt = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
-  const cur = (localStorage.getItem("visitChargeCurrency") || "£").trim();
-  const hasCharge = amt > 0;
-
-  const poReq = !!document.getElementById("poRequired")?.checked;
-  const poRec = !!document.getElementById("poReceived")?.checked;
-
-  // ✅ If no charge, PO flags are redundant → no action
-  if (!hasCharge) return null;
-
-  // Only create actions when PO is relevant
-  if (!poReq && !poRec) return null;
-
-  const inputs = collectAIInputs();
-  const money = `${cur}${amt.toFixed(2)}`;
-
-  // Choose action type + notes
-  const followUpType = poRec ? "PO_RECEIVED" : "PO_REQUIRED";
-  const followUpNotes = poRec
-    ? `Purchase order received. Visit charge ${money}. Please invoice ASAP.`
-    : `Purchase order needed. Visit charge ${money}. Please obtain PO and invoice ASAP.`;
-
-  return {
-    id: newId(),
-    status: "open",
-    createdAt: new Date().toISOString(),
-    dueDate: todayISO(), // or blank if you prefer
-    followUpType,
-    followUpNotes,
-
-    engineer: inputs.engineer || "",
-    salesEngineer: inputs.salesName || "",
-    projectNo: inputs.project || "",
-
-    companyName: inputs.custCompany || "",
-    customerName: inputs.custName || "",
-    visitType: inputs.visitType || "",
-
-    // useful for future
-    visitChargeAmount: amt,
-    visitChargeCurrency: cur,
-    poRequired: poReq,
-    poReceived: poRec,
-  };
-}
-
 // --- SAVE PDF (Desktop + Safari PWA safe) ---
 document.addEventListener("DOMContentLoaded", () => {
   const saveBtn = document.getElementById("savePdf");
@@ -5561,7 +5561,12 @@ document.addEventListener("DOMContentLoaded", () => {
       window.lastBuiltPdfWindow = pdfWin;
 
       lastPdfBlob = await html2pdf().from(pdfWin.document?.body || document.body).output('blob');
-      await commitReportSave(); // ✅ added
+      try {
+        await commitReportSave();
+      } catch (err) {
+        console.warn("commitReportSave failed:", err);
+        showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
+      }
 
       if (isPWA && pdfWin?.iframePrint) {
         setTimeout(() => {
