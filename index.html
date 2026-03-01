@@ -1664,6 +1664,40 @@ document.addEventListener("DOMContentLoaded", () => {
       <button id="refreshReportsLog" class="btn" type="button" style="padding:10px 12px;">↻</button>
     </div>
 
+    <div id="reportsKPIBox"
+         style="
+         margin-top:12px;
+         padding:14px;
+         border-radius:14px;
+         background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+         display:grid;
+         grid-template-columns:repeat(2,1fr);
+         gap:10px;
+         font-size:13px;
+         color:#ddd;">
+
+      <div>
+        <div style="color:#9aa0a6">Visits</div>
+        <div id="kpiVisits" style="font-size:18px;font-weight:700">—</div>
+      </div>
+
+      <div>
+        <div style="color:#9aa0a6">Chargeable Visits</div>
+        <div id="kpiChargeable" style="font-size:18px;font-weight:700">—</div>
+      </div>
+
+      <div>
+        <div style="color:#9aa0a6">Invoiceable (£/€)</div>
+        <div id="kpiInvoiceable" style="font-size:18px;font-weight:700;color:#7CFC00">—</div>
+      </div>
+
+      <div>
+        <div style="color:#9aa0a6">Outstanding PO</div>
+        <div id="kpiPOs" style="font-size:18px;font-weight:700;color:#ffb74d">—</div>
+      </div>
+
+    </div>
+
     <div id="reportsLogList"
          style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
 
@@ -5388,7 +5422,9 @@ function buildPOOutstandingFromForm() {
     id: newId(),
     status: "open",
     createdAt: new Date().toISOString(),
-    dueDate: todayISO(), // or blank if you prefer
+    dueDate: poRec
+      ? new Date(Date.now() + 86400000).toISOString().slice(0,10)
+      : todayISO(),
     followUpType,
     followUpNotes,
 
@@ -5477,6 +5513,7 @@ async function commitReportSave() {
 
   // 1️⃣ Save locally first (offline-first behaviour)
   const report  = addReportToLog(meta);
+  localStorage.setItem("lastSavedReport", JSON.stringify(report));
 
   let actions = addOutstandingAction(meta);
   if (!Array.isArray(actions)) actions = actions ? [actions] : [];
@@ -5567,6 +5604,7 @@ document.addEventListener("DOMContentLoaded", () => {
       lastPdfBlob = await html2pdf().from(pdfWin.document?.body || document.body).output('blob');
       try {
         await commitReportSave();
+        window.__reportsLastSavedAt = Date.now();
       } catch (err) {
         console.warn("commitReportSave failed:", err);
         showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
@@ -7413,7 +7451,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const view = [...items].sort((a,b) => (a.dueDate || "9999-12-31").localeCompare(b.dueDate || "9999-12-31"));
 
     listEl.innerHTML = view.map((a) => {
-      const due   = a.dueDate ? new Date(a.dueDate + "T00:00:00").toLocaleDateString("en-GB") : "—";
+      const rawDue = a.dueDate || a.due_date || a.followUpDueDate || "";
+      const due = rawDue
+        ? new Date(rawDue + "T00:00:00").toLocaleDateString("en-GB")
+        : "—";
       const type  = a.followUpType || "FOLLOW_UP";
       const badge =
         (a.followUpType === "PO_REQUIRED") ? "🧾 PO Required" :
@@ -7656,21 +7697,26 @@ async function callAI(mode, inputs) {
   return data.text || "";
 }
 
+function getCompanyName() {
+  // 1️⃣ Google hidden field (most reliable)
+  const hidden = (document.getElementById("custCompanyHidden")?.value || "").trim();
+  if (hidden) return hidden;
+
+  // 2️⃣ Visible company input
+  const visible = (document.getElementById("custCompany")?.value || "").trim();
+  if (visible) return visible;
+
+  // 3️⃣ Last fallback (local restore)
+  const stored = (localStorage.getItem("custCompany") || "").trim();
+  if (stored) return stored;
+
+  return "";
+}
+
 function collectAIInputs() {
   const v = (id) => (document.getElementById(id)?.value || "").trim();
 
-  // --- Google Places company handling (VERY IMPORTANT FIX) ---
-  let custCompany = "";
-
-  const hidden = document.getElementById("custCompanyHidden")?.value || "";
-  if (hidden) custCompany = hidden.trim();
-
-  const placeEl = document.getElementById("custCompany");
-  if (!custCompany && placeEl && typeof placeEl.value === "string") {
-    custCompany = placeEl.value.trim();
-  }
-
-  if (!custCompany) custCompany = (localStorage.getItem("custCompany") || "").trim();
+  const custCompany = getCompanyName();
 
   return {
     engineer: v("engineer"),
@@ -7747,9 +7793,29 @@ function resetEmailFlow() {
   if (s) s.checked = false;
 }
 
+function getLastSavedReport() {
+  try {
+    return JSON.parse(localStorage.getItem("lastSavedReport") || "null");
+  } catch {
+    return null;
+  }
+}
+
 // Build drafts (one or two)
 async function buildEmailDraftsFromAI() {
-  const inputs = collectAIInputs();
+  let inputs = collectAIInputs();
+
+  // If a saved report exists, prefer it (prevents stale form data)
+  const saved = getLastSavedReport();
+  if (saved) {
+    inputs = {
+      ...inputs,
+      custCompany: saved.companyName || inputs.custCompany,
+      project: saved.projectNo || inputs.project,
+      date: saved.date || inputs.date,
+      po: saved.poNumber || inputs.po,
+    };
+  }
 
   const drafts = [];
 
@@ -7760,7 +7826,8 @@ async function buildEmailDraftsFromAI() {
 
     const body = await callAI("email_customer", inputs);
 
-    const subject = `Service Report – ${inputs.custCompany || "Customer"} – ${inputs.project || "PJ"} – ${inputs.date || ""}`.trim();
+    const company = getCompanyName() || "Customer";
+    const subject = `Service Report – ${company} – ${inputs.project || "No Project"} – ${inputs.date || ""}`;
     const to = (inputs.custEmail || "").trim();
 
     drafts.push({ to, subject, body });
@@ -7776,7 +7843,8 @@ async function buildEmailDraftsFromAI() {
     // ✅ append billing/PO block
     body += buildBillingBlock(inputs);
 
-    const subject = `Actions / Update – ${inputs.project || "PJ"} – ${inputs.custCompany || "Customer"}`.trim();
+    const company = getCompanyName() || "Customer";
+    const subject = `Service Visit Update – ${company} – ${inputs.project || "No Project"}`;
     const to = (inputs.salesEmail || "").trim();
 
     drafts.push({ to, subject, body });
@@ -8509,7 +8577,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const cloudItems = data.items || [];
       const items = cloudItems.length ? cloudItems : readLocalReports();
 
-      renderReports(items);
+      const filtered = applyReportsClientFilters(items);
+      renderReports(filtered);
+      calculateKPI(filtered);
     } catch (e) {
       console.warn("Reports fetch failed:", e);
 
@@ -8523,7 +8593,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       })();
 
-      renderReports(localItems);
+      const filtered = applyReportsClientFilters(localItems);
+      renderReports(filtered);
+      calculateKPI(filtered);
     }
   }
 
@@ -8595,6 +8667,45 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   });
+
+function calculateKPI(reports) {
+  const el = (id) => document.getElementById(id);
+  if (!el("kpiVisits")) return; // KPI UI not present
+
+  let visits = 0;
+  let chargeable = 0;
+  let invoiceable = 0;
+  let poOutstanding = 0;
+
+  (reports || []).forEach(r => {
+
+    visits++;
+
+    const amt = parseFloat(r.visitChargeAmount || 0);
+    const poReq = r.poRequired === 1 || r.poRequired === true;
+    const poRec = r.poReceived === 1 || r.poReceived === true;
+
+    if (amt > 0) {
+      chargeable++;
+
+      // ready to invoice
+      if (poRec) {
+        invoiceable += amt;
+      }
+
+      // PO still needed
+      if (poReq && !poRec) {
+        poOutstanding++;
+      }
+    }
+  });
+
+  document.getElementById("kpiVisits").textContent = visits;
+  document.getElementById("kpiChargeable").textContent = chargeable;
+  document.getElementById("kpiInvoiceable").textContent =
+    invoiceable > 0 ? "£" + invoiceable.toFixed(2) : "£0.00";
+  document.getElementById("kpiPOs").textContent = poOutstanding;
+}
 </script>
 
 </body>
