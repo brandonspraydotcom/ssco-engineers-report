@@ -2057,6 +2057,13 @@ function readReportMetaFromForm() {
   const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
   const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
 
+  // ===== VISIT CHARGE + PO FLAGS =====
+  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
+  const visitChargeCurrency = localStorage.getItem("visitChargeCurrency") || "£";
+
+  const poRequired = !!document.getElementById("poRequired")?.checked;
+  const poReceived = !!document.getElementById("poReceived")?.checked;
+
   return {
     id: makeId("rep"),
     createdAt: new Date().toISOString(), // log timestamp (useful even if date field is blank)
@@ -2079,12 +2086,7 @@ function readReportMetaFromForm() {
     poRequired,
     poReceived,
   };
-  // ===== VISIT CHARGE + PO FLAGS =====
-  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
-  const visitChargeCurrency = localStorage.getItem("visitChargeCurrency") || "£";
-
-  const poRequired = !!document.getElementById("poRequired")?.checked;
-  const poReceived = !!document.getElementById("poReceived")?.checked;
+  
 
 }
 
@@ -2104,7 +2106,16 @@ function addReportToLog(meta) {
     customerName: meta.customerName,
     salesEngineer: meta.salesEngineer,
     followUpType: meta.followUpType || "NONE",
-    followUpDueDate: meta.followUpDueDate || ""
+    followUpDueDate: meta.followUpDueDate || "",
+    followUpTypes: Array.isArray(meta.followUpTypes) ? meta.followUpTypes : [],
+    followUpNotes: meta.followUpNotes || "",
+    followUpDueDate: meta.followUpDueDate || "",
+
+    // ✅ store charge/PO info too (useful for KPI + audit trail)
+    visitChargeAmount: meta.visitChargeAmount || 0,
+    visitChargeCurrency: meta.visitChargeCurrency || "£",
+    poRequired: !!meta.poRequired,
+    poReceived: !!meta.poReceived,
   };
 
   reports.unshift(report);
@@ -8680,31 +8691,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 function calculateKPI(reports) {
-  const el = (id) => document.getElementById(id);
-  if (!el("kpiVisits")) return; // KPI UI not present
-
   let visits = 0;
   let chargeable = 0;
-  let invoiceable = 0;
+  let invoiceGBP = 0;
+  let invoiceEUR = 0;
   let poOutstanding = 0;
 
   (reports || []).forEach(r => {
-
     visits++;
 
     const amt = parseFloat(r.visitChargeAmount || 0);
+    const cur = (r.visitChargeCurrency || "£").trim();
     const poReq = r.poRequired === 1 || r.poRequired === true;
     const poRec = r.poReceived === 1 || r.poReceived === true;
 
     if (amt > 0) {
       chargeable++;
 
-      // ready to invoice
       if (poRec) {
-        invoiceable += amt;
+        if (cur === "€") invoiceEUR += amt;
+        else invoiceGBP += amt;
       }
 
-      // PO still needed
       if (poReq && !poRec) {
         poOutstanding++;
       }
@@ -8713,8 +8721,13 @@ function calculateKPI(reports) {
 
   document.getElementById("kpiVisits").textContent = visits;
   document.getElementById("kpiChargeable").textContent = chargeable;
-  document.getElementById("kpiInvoiceable").textContent =
-    invoiceable > 0 ? "£" + invoiceable.toFixed(2) : "£0.00";
+
+  const invText =
+    (invoiceGBP > 0 ? `£${invoiceGBP.toFixed(2)}` : "") +
+    (invoiceEUR > 0 ? (invoiceGBP > 0 ? " + " : "") + `€${invoiceEUR.toFixed(2)}` : "") ||
+    "£0.00";
+
+  document.getElementById("kpiInvoiceable").textContent = invText;
   document.getElementById("kpiPOs").textContent = poOutstanding;
 }
 </script>
