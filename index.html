@@ -341,6 +341,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   .card {
     padding: 12px !important;   /* less bulky on mobile */
     margin-bottom: 12px !important;
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    box-shadow:0 0 10px rgba(0,0,0,0.4);
   }
 
   footer {
@@ -2066,13 +2069,24 @@ function readReportMetaFromForm() {
   const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
   const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
 
-  // ✅ VISIT CHARGE + PO FLAGS (from the storage your visit charge script writes)
-  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0") || 0;
-  const visitChargeCurrency = (localStorage.getItem("visitChargeCurrency") || "£").trim();
+    // ✅ VISIT CHARGE + PO FLAGS (read directly from form)
+  const chargeRaw = (document.getElementById("visitCharge")?.value || "").trim();
+  const chargeNum = parseFloat(
+    chargeRaw
+      .replace(",", ".")
+      .replace(/[^\d.]/g, "")
+      .replace(/(\..*)\./g, "$1") // keep only first dot
+  );
+  const visitChargeAmount = isNaN(chargeNum) ? 0 : chargeNum;
+
+  // Currency: prefer dropdown if you have it, otherwise prefix span
+  const curSel = document.getElementById("visitCurrency");
+  const curPre = document.getElementById("visitCurrencyPrefix");
+  const visitChargeCurrency =
+    (curSel ? (curSel.value === "EUR" ? "€" : "£") : (curPre?.textContent || "£")).trim();
 
   const poRequired = !!document.getElementById("poRequired")?.checked;
   const poReceived = !!document.getElementById("poReceived")?.checked;
-
   return {
     id: makeId("rep"),
     createdAt: new Date().toISOString(),
@@ -8613,9 +8627,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const cur = (r.visitChargeCurrency || "£").trim();
       const chargeText = amt > 0 ? `${cur}${amt.toFixed(2)}` : "—";
 
-      const poText = amt > 0
-        ? (r.poReceived ? "PO Received ✅" : (r.poRequired ? "PO Required ⚠️" : "PO —"))
-        : "PO —";
+      const poText =
+        (r.poReceived ? "PO Received ✅" : (r.poRequired ? "PO Required ⚠️" : "PO —"));
       const date     = r.date || "—";
       const proj     = r.projectNo || "—";
       const po       = r.poNumber || "—";
