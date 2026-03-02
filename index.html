@@ -5555,6 +5555,14 @@ async function commitReportSave() {
 
   const meta = readReportMetaFromForm();
 
+  console.log("META CHARGE/PO:", {
+    companyName: meta.companyName,
+    visitChargeAmount: meta.visitChargeAmount,
+    visitChargeCurrency: meta.visitChargeCurrency,
+    poRequired: meta.poRequired,
+    poReceived: meta.poReceived
+  });
+
   // 1️⃣ Save locally first (offline-first behaviour)
   const report  = addReportToLog(meta);
   localStorage.setItem("lastSavedReport", JSON.stringify(report));
