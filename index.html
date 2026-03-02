@@ -2018,16 +2018,22 @@ function makeId(prefix) {
 }
 
 // ---- Company helper (because gmpx-place-autocomplete isn't a normal input)
+// ---- Company helper (because gmpx-place-autocomplete isn't a normal input)
 function getCompanyValue() {
-  // Prefer hidden mirror if you're populating it, else try the element value attr, else fallback empty
-  const hidden = document.getElementById("custCompanyHidden")?.value?.trim();
+  // 1) Hidden mirror (best)
+  const hidden = (document.getElementById("custCompanyHidden")?.value || "").trim();
   if (hidden) return hidden;
 
+  // 2) LocalStorage fallback (your app already uses this elsewhere)
+  const ls = (localStorage.getItem("custCompany") || "").trim();
+  if (ls) return ls;
+
+  // 3) Element value / attribute fallback
   const el = document.getElementById("custCompany");
-  // gmpx-place-autocomplete sometimes exposes .value; if not, it may store in attribute
   const v = (el?.value || el?.getAttribute?.("value") || "").trim();
   return v || "";
 }
+
 
 // ---- Follow-up checklist helper ----
 function getSelectedFollowUps() {
@@ -2038,31 +2044,30 @@ function getSelectedFollowUps() {
 
 function readReportMetaFromForm() {
   const engineer =
-    (document.getElementById("engineer")?.value || "").trim() ||
-    (localStorage.getItem("username") || "").trim();
+    (document.getElementById("engineer")?.value || "").trim()
+    || (localStorage.getItem("username") || "").trim();
 
-  const date      = (document.getElementById("date")?.value || "").trim();
+  const date = (document.getElementById("date")?.value || "").trim();
   const visitType = (document.getElementById("visit")?.value || "").trim();
 
-  const projectNo   = (document.getElementById("project")?.value || "").trim();
-  const poNumber    = (document.getElementById("ponumber")?.value || "").trim();
+  const projectNo = (document.getElementById("project")?.value || "").trim();
+  const poNumber = (document.getElementById("ponumber")?.value || "").trim();
   const projectDesc = (document.getElementById("projectDesc")?.value || "").trim();
 
   const salesEngineer = (document.getElementById("salesName")?.value || "").trim();
-  const salesEmail    = (document.getElementById("salesEmail")?.value || "").trim();
+  const salesEmail = (document.getElementById("salesEmail")?.value || "").trim();
 
-  const customerName  = (document.getElementById("custName")?.value || "").trim();
+  const customerName = (document.getElementById("custName")?.value || "").trim();
   const customerEmail = (document.getElementById("custEmail")?.value || "").trim();
+  const companyName = getCompanyValue(); // ✅ fixed helper above
 
-  // ✅ COMPANY (your helper already handles hidden mirror)
-  const companyName = (getCompanyValue?.() || "").trim();
-
-  const followUpTypes   = getSelectedFollowUps?.() || [];
-  const followUpNotes   = (document.getElementById("followUpNotes")?.value || "").trim();
+  // Follow up
+  const followUpTypes = (typeof getSelectedFollowUps === "function") ? getSelectedFollowUps() : [];
+  const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
   const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
 
-  // ✅ VISIT CHARGE + PO FLAGS
-  const visitChargeAmount   = parseFloat(localStorage.getItem("visitChargeAmount") || "0") || 0;
+  // ✅ VISIT CHARGE + PO FLAGS (from the storage your visit charge script writes)
+  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0") || 0;
   const visitChargeCurrency = (localStorage.getItem("visitChargeCurrency") || "£").trim();
 
   const poRequired = !!document.getElementById("poRequired")?.checked;
@@ -2075,6 +2080,7 @@ function readReportMetaFromForm() {
     engineer,
     date,
     visitType,
+
     projectNo,
     poNumber,
     projectDesc,
@@ -2090,7 +2096,6 @@ function readReportMetaFromForm() {
     followUpNotes,
     followUpDueDate,
 
-    // ✅ saved into reports log + KPI
     visitChargeAmount,
     visitChargeCurrency,
     poRequired,
@@ -2099,40 +2104,46 @@ function readReportMetaFromForm() {
 }
 
 
+
 function addReportToLog(meta) {
   const reports = lsReadArray(LS_KEYS.reports);
 
   const report = {
-  id: meta.id,
-  createdAt: meta.createdAt,
+    id: meta.id,
+    createdAt: meta.createdAt,
 
-  engineer: meta.engineer,
-  date: meta.date,
-  visitType: meta.visitType,
+    engineer: meta.engineer,
+    date: meta.date,
+    visitType: meta.visitType,
 
-  projectNo: meta.projectNo,
-  poNumber: meta.poNumber,
+    projectNo: meta.projectNo,
+    poNumber: meta.poNumber,
 
-  companyName: meta.companyName,
-  customerName: meta.customerName,
-  salesEngineer: meta.salesEngineer,
+    companyName: meta.companyName,
+    customerName: meta.customerName,
+    salesEngineer: meta.salesEngineer,
 
-  // ✅ follow-up (keep your old fields too if you want)
-  followUpTypes: meta.followUpTypes || [],
-  followUpNotes: meta.followUpNotes || "",
-  followUpDueDate: meta.followUpDueDate || "",
+    // ✅ follow-up
+    followUpTypes: meta.followUpTypes || [],
+    followUpNotes: meta.followUpNotes || "",
+    followUpDueDate: meta.followUpDueDate || "",
 
-  // ✅ visit charge + PO status (THIS is what KPI + UI need)
-  visitChargeAmount: meta.visitChargeAmount || 0,
-  visitChargeCurrency: meta.visitChargeCurrency || "£",
-  poRequired: !!meta.poRequired,
-  poReceived: !!meta.poReceived,
-};
+    // ✅ visit charge + PO status (THIS is what KPI + UI need)
+    visitChargeAmount: meta.visitChargeAmount || 0,
+    visitChargeCurrency: meta.visitChargeCurrency || "£",
+    poRequired: !!meta.poRequired,
+    poReceived: !!meta.poReceived,
+  };
 
+  // newest first
   reports.unshift(report);
+
+  // optional: cap log size
+  if (reports.length > 500) reports.length = 500;
+
   lsWriteArray(LS_KEYS.reports, reports);
 
-  return report; // ✅ IMPORTANT
+  return report;
 }
 
 function addOutstandingAction(meta) {
