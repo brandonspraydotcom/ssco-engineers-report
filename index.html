@@ -8530,12 +8530,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const created = fmtDateTime(r.createdAt);
       const title =
         (r.companyName && String(r.companyName).trim()) ||
-        (r.customerName && String(r.customerName).trim()) ||
-        (r.projectNo && String(r.projectNo).trim()) ||
-        "Report";
+        (r.custCompany && String(r.custCompany).trim()) ||
+        "Company";
 
       const engineer = r.engineer || "—";
       const visit    = r.visitType || "—";
+      const amt = parseFloat(r.visitChargeAmount || 0) || 0;
+      const cur = (r.visitChargeCurrency || "£").trim();
+      const chargeText = amt > 0 ? `${cur}${amt.toFixed(2)}` : "—";
+
+      const poText = amt > 0
+        ? (r.poReceived ? "PO Received ✅" : (r.poRequired ? "PO Required ⚠️" : "PO —"))
+        : "PO —";
       const date     = r.date || "—";
       const proj     = r.projectNo || "—";
       const po       = r.poNumber || "—";
@@ -8556,6 +8562,10 @@ document.addEventListener("DOMContentLoaded", () => {
             Date: <span style="color:#ccc">${esc(date)}</span>
             • Project: <span style="color:#ccc">${esc(proj)}</span>
             • PO: <span style="color:#ccc">${esc(po)}</span>
+          </div>
+          <div style="font-size:12px;color:#888;margin-top:6px;">
+            Charge: <span style="color:#ccc">${esc(chargeText)}</span>
+            • <span style="color:#ccc">${esc(poText)}</span>
           </div>
         </div>
       `;
@@ -8700,34 +8710,33 @@ function calculateKPI(reports) {
   (reports || []).forEach(r => {
     visits++;
 
-    const amt = parseFloat(r.visitChargeAmount || 0);
-    const cur = (r.visitChargeCurrency || "£").trim();
+    const amt = parseFloat(r.visitChargeAmount);
+    const safeAmt = isNaN(amt) ? 0 : amt;
+
+    const curRaw = (r.visitChargeCurrency || "£").trim();
+    const isEUR = (curRaw === "€" || curRaw.toUpperCase?.() === "EUR");
     const poReq = r.poRequired === 1 || r.poRequired === true;
     const poRec = r.poReceived === 1 || r.poReceived === true;
 
-    if (amt > 0) {
+    if (safeAmt > 0) {
       chargeable++;
 
       if (poRec) {
-        if (cur === "€") invoiceEUR += amt;
-        else invoiceGBP += amt;
+        if (isEUR) invoiceEUR += safeAmt;
+        else invoiceGBP += safeAmt;
       }
 
-      if (poReq && !poRec) {
-        poOutstanding++;
-      }
+      if (poReq && !poRec) poOutstanding++;
     }
   });
 
   document.getElementById("kpiVisits").textContent = visits;
   document.getElementById("kpiChargeable").textContent = chargeable;
 
-  const invText =
-    (invoiceGBP > 0 ? `£${invoiceGBP.toFixed(2)}` : "") +
-    (invoiceEUR > 0 ? (invoiceGBP > 0 ? " + " : "") + `€${invoiceEUR.toFixed(2)}` : "") ||
-    "£0.00";
-
-  document.getElementById("kpiInvoiceable").textContent = invText;
+  const parts = [];
+  if (invoiceGBP > 0) parts.push(`£${invoiceGBP.toFixed(2)}`);
+  if (invoiceEUR > 0) parts.push(`€${invoiceEUR.toFixed(2)}`);
+  document.getElementById("kpiInvoiceable").textContent = parts.length ? parts.join(" / ") : "£0.00";
   document.getElementById("kpiPOs").textContent = poOutstanding;
 }
 </script>
