@@ -2037,57 +2037,65 @@ function getSelectedFollowUps() {
 }
 
 function readReportMetaFromForm() {
-  const engineer = (document.getElementById("engineer")?.value || "").trim()
-  || (localStorage.getItem("username") || "").trim();
-  const date = (document.getElementById("date")?.value || "").trim();
+  const engineer =
+    (document.getElementById("engineer")?.value || "").trim() ||
+    (localStorage.getItem("username") || "").trim();
+
+  const date      = (document.getElementById("date")?.value || "").trim();
   const visitType = (document.getElementById("visit")?.value || "").trim();
 
-  const projectNo = (document.getElementById("project")?.value || "").trim();
-  const poNumber = (document.getElementById("ponumber")?.value || "").trim();
+  const projectNo   = (document.getElementById("project")?.value || "").trim();
+  const poNumber    = (document.getElementById("ponumber")?.value || "").trim();
   const projectDesc = (document.getElementById("projectDesc")?.value || "").trim();
 
   const salesEngineer = (document.getElementById("salesName")?.value || "").trim();
-  const salesEmail = (document.getElementById("salesEmail")?.value || "").trim();
+  const salesEmail    = (document.getElementById("salesEmail")?.value || "").trim();
 
-  const customerName = (document.getElementById("custName")?.value || "").trim();
+  const customerName  = (document.getElementById("custName")?.value || "").trim();
   const customerEmail = (document.getElementById("custEmail")?.value || "").trim();
-  const companyName = getCompanyValue();
 
-  const followUpTypes = getSelectedFollowUps();
-  const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
+  // ✅ COMPANY (your helper already handles hidden mirror)
+  const companyName = (getCompanyValue?.() || "").trim();
+
+  const followUpTypes   = getSelectedFollowUps?.() || [];
+  const followUpNotes   = (document.getElementById("followUpNotes")?.value || "").trim();
   const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
 
-  // ===== VISIT CHARGE + PO FLAGS =====
-  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
-  const visitChargeCurrency = localStorage.getItem("visitChargeCurrency") || "£";
+  // ✅ VISIT CHARGE + PO FLAGS
+  const visitChargeAmount   = parseFloat(localStorage.getItem("visitChargeAmount") || "0") || 0;
+  const visitChargeCurrency = (localStorage.getItem("visitChargeCurrency") || "£").trim();
 
   const poRequired = !!document.getElementById("poRequired")?.checked;
   const poReceived = !!document.getElementById("poReceived")?.checked;
 
   return {
     id: makeId("rep"),
-    createdAt: new Date().toISOString(), // log timestamp (useful even if date field is blank)
+    createdAt: new Date().toISOString(),
+
     engineer,
     date,
     visitType,
     projectNo,
     poNumber,
     projectDesc,
+
     salesEngineer,
     salesEmail,
+
     customerName,
     customerEmail,
     companyName,
+
     followUpTypes,
     followUpNotes,
     followUpDueDate,
+
+    // ✅ saved into reports log + KPI
     visitChargeAmount,
     visitChargeCurrency,
     poRequired,
     poReceived,
   };
-  
-
 }
 
 
@@ -2095,28 +2103,31 @@ function addReportToLog(meta) {
   const reports = lsReadArray(LS_KEYS.reports);
 
   const report = {
-    id: meta.id,
-    createdAt: meta.createdAt,
-    engineer: meta.engineer,
-    date: meta.date,
-    visitType: meta.visitType,
-    projectNo: meta.projectNo,
-    poNumber: meta.poNumber,
-    companyName: meta.companyName,
-    customerName: meta.customerName,
-    salesEngineer: meta.salesEngineer,
-    followUpType: meta.followUpType || "NONE",
-    followUpDueDate: meta.followUpDueDate || "",
-    followUpTypes: Array.isArray(meta.followUpTypes) ? meta.followUpTypes : [],
-    followUpNotes: meta.followUpNotes || "",
-    followUpDueDate: meta.followUpDueDate || "",
+  id: meta.id,
+  createdAt: meta.createdAt,
 
-    // ✅ store charge/PO info too (useful for KPI + audit trail)
-    visitChargeAmount: meta.visitChargeAmount || 0,
-    visitChargeCurrency: meta.visitChargeCurrency || "£",
-    poRequired: !!meta.poRequired,
-    poReceived: !!meta.poReceived,
-  };
+  engineer: meta.engineer,
+  date: meta.date,
+  visitType: meta.visitType,
+
+  projectNo: meta.projectNo,
+  poNumber: meta.poNumber,
+
+  companyName: meta.companyName,
+  customerName: meta.customerName,
+  salesEngineer: meta.salesEngineer,
+
+  // ✅ follow-up (keep your old fields too if you want)
+  followUpTypes: meta.followUpTypes || [],
+  followUpNotes: meta.followUpNotes || "",
+  followUpDueDate: meta.followUpDueDate || "",
+
+  // ✅ visit charge + PO status (THIS is what KPI + UI need)
+  visitChargeAmount: meta.visitChargeAmount || 0,
+  visitChargeCurrency: meta.visitChargeCurrency || "£",
+  poRequired: !!meta.poRequired,
+  poReceived: !!meta.poReceived,
+};
 
   reports.unshift(report);
   lsWriteArray(LS_KEYS.reports, reports);
@@ -8421,6 +8432,47 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+function calculateKPI(reports) {
+  let visits = 0;
+  let chargeable = 0;
+  let invoiceGBP = 0;
+  let invoiceEUR = 0;
+  let poOutstanding = 0;
+
+  (reports || []).forEach(r => {
+    visits++;
+
+    const amt = parseFloat(r.visitChargeAmount);
+    const safeAmt = isNaN(amt) ? 0 : amt;
+
+    const curRaw = (r.visitChargeCurrency || "£").trim();
+    const isEUR = (curRaw === "€" || curRaw.toUpperCase?.() === "EUR");
+    const poReq = r.poRequired === 1 || r.poRequired === true;
+    const poRec = r.poReceived === 1 || r.poReceived === true;
+
+    if (safeAmt > 0) {
+      chargeable++;
+
+      if (poRec) {
+        if (isEUR) invoiceEUR += safeAmt;
+        else invoiceGBP += safeAmt;
+      }
+
+      if (poReq && !poRec) poOutstanding++;
+    }
+  });
+
+  document.getElementById("kpiVisits").textContent = visits;
+  document.getElementById("kpiChargeable").textContent = chargeable;
+
+  const parts = [];
+  if (invoiceGBP > 0) parts.push(`£${invoiceGBP.toFixed(2)}`);
+  if (invoiceEUR > 0) parts.push(`€${invoiceEUR.toFixed(2)}`);
+  document.getElementById("kpiInvoiceable").textContent = parts.length ? parts.join(" / ") : "£0.00";
+  document.getElementById("kpiPOs").textContent = poOutstanding;
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
   const modal      = document.getElementById("reportsLogModal");
   const box        = document.getElementById("reportsLogBox");
@@ -8528,10 +8580,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     listEl.innerHTML = items.map(r => {
       const created = fmtDateTime(r.createdAt);
-      const title =
+      
+      const company =
         (r.companyName && String(r.companyName).trim()) ||
         (r.custCompany && String(r.custCompany).trim()) ||
-        "Company";
+        "(No company saved)";
+
+      const title = company;
 
       const engineer = r.engineer || "—";
       const visit    = r.visitType || "—";
@@ -8700,45 +8755,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   });
 
-function calculateKPI(reports) {
-  let visits = 0;
-  let chargeable = 0;
-  let invoiceGBP = 0;
-  let invoiceEUR = 0;
-  let poOutstanding = 0;
 
-  (reports || []).forEach(r => {
-    visits++;
-
-    const amt = parseFloat(r.visitChargeAmount);
-    const safeAmt = isNaN(amt) ? 0 : amt;
-
-    const curRaw = (r.visitChargeCurrency || "£").trim();
-    const isEUR = (curRaw === "€" || curRaw.toUpperCase?.() === "EUR");
-    const poReq = r.poRequired === 1 || r.poRequired === true;
-    const poRec = r.poReceived === 1 || r.poReceived === true;
-
-    if (safeAmt > 0) {
-      chargeable++;
-
-      if (poRec) {
-        if (isEUR) invoiceEUR += safeAmt;
-        else invoiceGBP += safeAmt;
-      }
-
-      if (poReq && !poRec) poOutstanding++;
-    }
-  });
-
-  document.getElementById("kpiVisits").textContent = visits;
-  document.getElementById("kpiChargeable").textContent = chargeable;
-
-  const parts = [];
-  if (invoiceGBP > 0) parts.push(`£${invoiceGBP.toFixed(2)}`);
-  if (invoiceEUR > 0) parts.push(`€${invoiceEUR.toFixed(2)}`);
-  document.getElementById("kpiInvoiceable").textContent = parts.length ? parts.join(" / ") : "£0.00";
-  document.getElementById("kpiPOs").textContent = poOutstanding;
-}
 </script>
 
 </body>
