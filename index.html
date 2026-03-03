@@ -8871,51 +8871,28 @@ async function fetchReports() {
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const el = document.getElementById("custCompany");        // gmpx-place-autocomplete
   const hidden = document.getElementById("custCompanyHidden");
-  if (!el || !hidden) return;
-
-  function syncCompany() {
-    const v = getCompanyValue(); // uses robust logic above
-    if (v) {
-      hidden.value = v;
-      localStorage.setItem("custCompany", v);
-    }
-  }
-
-  // gmpx event (works when it fires)
-  el.addEventListener("gmpx-placechange", (e) => {
-    const place = e.detail?.place;
-    const name = (place?.displayName || place?.name || "").trim();
-    if (name) {
-      hidden.value = name;
-      localStorage.setItem("custCompany", name);
-    } else {
-      syncCompany();
-    }
-  });
-
-  // Safari/PWA safety net (covers cases where gmpx-placechange doesn’t fire)
-  el.addEventListener("blur", syncCompany, true);
-  setTimeout(syncCompany, 300); // one-time late sync after component renders
-});
-</script>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const hidden = document.getElementById("custCompanyHidden");
-  const el     = document.getElementById("custCompany"); // might be input OR a wrapper div
+  const el     = document.getElementById("custCompany"); // gmpx-place-autocomplete
   if (!hidden || !el) return;
 
-  function getText() {
-    // Prefer .value when it exists, else fall back to textContent
-    const v = (typeof el.value === "string") ? el.value : (el.textContent || "");
-    return String(v || "").trim();
-  }
+  function getCompanyText() {
+    try {
+      // 1) If component exposes string value
+      if (typeof el.value === "string") return el.value;
 
-  function setText(v) {
-    // Only set .value if it exists (input/textarea)
-    if (typeof el.value === "string") el.value = v;
+      // 2) If component exposes a nested object with description/name
+      if (el.value && typeof el.value === "object") {
+        return el.value.description || el.value.name || "";
+      }
+
+      // 3) Fallback: try to read internal input if shadowRoot is open
+      const innerInput = el.shadowRoot?.querySelector("input");
+      if (innerInput && typeof innerInput.value === "string") return innerInput.value;
+
+      return "";
+    } catch {
+      return "";
+    }
   }
 
   function syncCompany(raw) {
@@ -8926,22 +8903,20 @@ document.addEventListener("DOMContentLoaded", () => {
     else localStorage.removeItem("custCompany");
   }
 
-  // Input-like events (works for inputs; harmless for wrappers)
-  el.addEventListener("input", () => syncCompany(getText()));
-  el.addEventListener("change", () => syncCompany(getText()));
-  el.addEventListener("blur", () => syncCompany(getText()));
+  const syncNow = () => syncCompany(getCompanyText());
 
-  // On load: hydrate from localStorage if UI is empty
-  const current = getText();
-  if (!current) {
-    const ls = (localStorage.getItem("custCompany") || "").trim();
-    if (ls) {
-      setText(ls);
-      syncCompany(ls);
-    }
-  } else {
-    syncCompany(current);
-  }
+  // Try multiple events (gmpx differs by version)
+  el.addEventListener("input", syncNow);
+  el.addEventListener("change", syncNow);
+  el.addEventListener("placechange", syncNow);
+  el.addEventListener("gmpx-placechange", syncNow);
+  el.addEventListener("blur", syncNow, true);
+
+  // On load: restore from LS if component currently empty
+  const ls = (localStorage.getItem("custCompany") || "").trim();
+  const current = getCompanyText().trim();
+  if (!current && ls) syncCompany(ls);
+  else syncCompany(current);
 });
 </script>
 
