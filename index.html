@@ -3745,6 +3745,60 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+(function wireCompanyMirror() {
+  const gmpx     = document.getElementById("custCompany");        // <gmpx-place-autocomplete>
+  const fallback = document.getElementById("custCompanyFallback");// plain input (if you have it)
+  const hidden   = document.getElementById("custCompanyHidden");  // your hidden mirror
+
+  function bestGuessCompany() {
+    // prefer visible fallback input, then hidden, then gmpx internal text
+    let v = (fallback?.value || "").trim() || (hidden?.value || "").trim();
+    if (v) return v;
+
+    if (gmpx) {
+      v = String(gmpx.value || gmpx.getAttribute?.("value") || "").trim();
+      if (!v) {
+        try { v = (gmpx.querySelector("input")?.value || "").trim(); } catch {}
+      }
+      if (!v) {
+        try { v = (gmpx.shadowRoot?.querySelector("input")?.value || "").trim(); } catch {}
+      }
+    }
+    return v;
+  }
+
+  function sync() {
+    const name = bestGuessCompany();
+    if (name) setCompanyName(name); // <-- your function (sets hidden + LS)
+  }
+
+  // If user uses fallback text input
+  fallback?.addEventListener("input", sync);
+  fallback?.addEventListener("blur", sync);
+
+  // When a place is selected from dropdown
+  gmpx?.addEventListener("gmpx-placechange", () => {
+    // gmpx.value usually becomes the selected label
+    sync();
+  });
+
+  // ALSO mirror while typing in the gmpx internal input
+  function hookInnerInput() {
+    if (!gmpx) return;
+    const inp = gmpx.querySelector("input") || gmpx.shadowRoot?.querySelector("input");
+    if (!inp) return;
+    inp.addEventListener("input", sync);
+    inp.addEventListener("blur", sync);
+  }
+
+  hookInnerInput();
+  setTimeout(hookInnerInput, 400); // gmpx can render input slightly later
+
+  // run once on load
+  sync();
+})();
+
+
   // On load, if we already have a saved company, re-apply it
   const savedCompany = localStorage.getItem("custCompany");
   if (savedCompany) setCompanyName(savedCompany);
