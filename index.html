@@ -8721,64 +8721,91 @@ document.addEventListener("DOMContentLoaded", () => {
     }).join("");
   }
 
-  async function fetchReports() {
-    listEl.innerHTML = `
-      <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
-        Loading…
-      </div>`;
+async function fetchReports() {
+  listEl.innerHTML = `
+    <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
+      Loading…
+    </div>`;
 
-    // helper: read local reports log (whatever key your addReportToLog uses)
-    function readLocalReports() {
-      try {
-        // If you already have LS_KEYS.reports, use that:
-        if (window.LS_KEYS?.reports) return lsReadArray(window.LS_KEYS.reports);
-
-        // Otherwise, try common keys:
-        return JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
-      } catch {
-        return [];
-      }
-    }
-
+  function readLocalReports() {
     try {
-      const who = engSel.value || "__all__";
-      const qs = new URLSearchParams();
-      qs.set("limit", "200");
-      if (who !== "__all__") qs.set("engineer", who);
-
-      const res = await fetch(`${WORKER_BASE}/reports?${qs.toString()}`, {
-        method: "GET",
-        headers: dbHeaders()
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !Array.isArray(data.items)) throw new Error("Bad response");
-
-      // ✅ if cloud is empty, fall back to local
-      const cloudItems = data.items || [];
-      const items = cloudItems.length ? cloudItems : readLocalReports();
-
-      const filtered = applyReportsClientFilters(items);
-      renderReports(filtered);
-      calculateKPI(filtered);
-    } catch (e) {
-      console.warn("Reports fetch failed:", e);
-
-      // ✅ fallback to local on error
-      const localItems = (function () {
-        try {
-          if (window.LS_KEYS?.reports) return lsReadArray(window.LS_KEYS.reports);
-          return JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
-        } catch {
-          return [];
-        }
-      })();
-
-      const filtered = applyReportsClientFilters(localItems);
-      renderReports(filtered);
-      calculateKPI(filtered);
+      if (window.LS_KEYS?.reports) return lsReadArray(window.LS_KEYS.reports);
+      return JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+    } catch {
+      return [];
     }
   }
+
+  // prefer the report version that actually contains new fields
+  function hasChargeFields(r) {
+    return r && (r.visitChargeAmount != null || r.visitChargeCurrency != null || r.poRequired != null || r.poReceived != null);
+  }
+
+  function mergeReportsPreferRicher(cloudItems, localItems) {
+    const map = new Map();
+
+    // start with cloud
+    (cloudItems || []).forEach(r => {
+      if (r?.id) map.set(r.id, r);
+    });
+
+    // overlay local if richer or cloud missing
+    (localItems || []).forEach(lr => {
+      if (!lr?.id) return;
+      const cr = map.get(lr.id);
+
+      if (!cr) {
+        map.set(lr.id, lr);
+        return;
+      }
+
+      const cloudRich = hasChargeFields(cr);
+      const localRich = hasChargeFields(lr);
+
+      // if local has the new fields and cloud doesn’t, prefer local
+      if (localRich && !cloudRich) {
+        map.set(lr.id, lr);
+      } else {
+        // otherwise keep cloud (or you can always prefer local if you want)
+        map.set(lr.id, cr);
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  try {
+    const who = engSel.value || "__all__";
+    const qs = new URLSearchParams();
+    qs.set("limit", "200");
+    if (who !== "__all__") qs.set("engineer", who);
+
+    const res = await fetch(`${WORKER_BASE}/reports?${qs.toString()}`, {
+      method: "GET",
+      headers: dbHeaders()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) throw new Error("Bad response");
+
+    const cloudItems = data.items || [];
+    const localItems = readLocalReports();
+
+    // ✅ this is the key line
+    const merged = mergeReportsPreferRicher(cloudItems, localItems);
+
+    const filtered = applyReportsClientFilters(merged);
+    renderReports(filtered);
+    calculateKPI(filtered);
+  } catch (e) {
+    console.warn("Reports fetch failed:", e);
+
+    const localItems = readLocalReports();
+    const filtered = applyReportsClientFilters(localItems);
+    renderReports(filtered);
+    calculateKPI(filtered);
+  }
+}
 
   function openReportsLog() {
     populateEngineerFilterFromEngineerSelect();
