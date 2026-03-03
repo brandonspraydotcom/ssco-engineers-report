@@ -2046,47 +2046,44 @@ function getSelectedFollowUps() {
 }
 
 function readReportMetaFromForm() {
-  const engineer =
-    (document.getElementById("engineer")?.value || "").trim()
-    || (localStorage.getItem("username") || "").trim();
+  const v = (id) => (document.getElementById(id)?.value || "").trim();
 
-  const date = (document.getElementById("date")?.value || "").trim();
-  const visitType = (document.getElementById("visit")?.value || "").trim();
+  // Engineer (fallback to stored username)
+  const engineer = v("engineer") || (localStorage.getItem("username") || "").trim();
 
-  const projectNo = (document.getElementById("project")?.value || "").trim();
-  const poNumber = (document.getElementById("ponumber")?.value || "").trim();
-  const projectDesc = (document.getElementById("projectDesc")?.value || "").trim();
+  // Core fields
+  const date = v("date");
+  const visitType = v("visit");
+  const projectNo = v("project");
+  const poNumber = v("ponumber");
+  const projectDesc = v("projectDesc");
 
-  const salesEngineer = (document.getElementById("salesName")?.value || "").trim();
-  const salesEmail = (document.getElementById("salesEmail")?.value || "").trim();
+  const salesEngineer = v("salesName");
+  const salesEmail = v("salesEmail");
 
-  const customerName = (document.getElementById("custName")?.value || "").trim();
-  const customerEmail = (document.getElementById("custEmail")?.value || "").trim();
-  const companyName = getCompanyValue(); // ✅ fixed helper above
+  const customerName = v("custName");
+  const customerEmail = v("custEmail");
 
-  // Follow up
-  const followUpTypes = (typeof getSelectedFollowUps === "function") ? getSelectedFollowUps() : [];
-  const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
-  const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
+  // ✅ Company name (use your existing helper if it works, otherwise fallback)
+  let companyName = "";
+  try {
+    companyName = (typeof getCompanyValue === "function") ? (getCompanyValue() || "") : "";
+  } catch {}
+  if (!companyName) companyName = (document.getElementById("custCompanyHidden")?.value || "").trim();
+  if (!companyName) companyName = (document.getElementById("custCompany")?.value || "").trim();
+  if (!companyName) companyName = (localStorage.getItem("custCompany") || "").trim();
 
-    // ✅ VISIT CHARGE + PO FLAGS (read directly from form)
-  const chargeRaw = (document.getElementById("visitCharge")?.value || "").trim();
-  const chargeNum = parseFloat(
-    chargeRaw
-      .replace(",", ".")
-      .replace(/[^\d.]/g, "")
-      .replace(/(\..*)\./g, "$1") // keep only first dot
-  );
-  const visitChargeAmount = isNaN(chargeNum) ? 0 : chargeNum;
+  // Follow-ups
+  const followUpTypes = (typeof getSelectedFollowUps === "function") ? (getSelectedFollowUps() || []) : [];
+  const followUpNotes = v("followUpNotes");
+  const followUpDueDate = v("followUpDue");
 
-  // Currency: prefer dropdown if you have it, otherwise prefix span
-  const curSel = document.getElementById("visitCurrency");
-  const curPre = document.getElementById("visitCurrencyPrefix");
-  const visitChargeCurrency =
-    (curSel ? (curSel.value === "EUR" ? "€" : "£") : (curPre?.textContent || "£")).trim();
-
+  // ✅ VISIT CHARGE + PO FLAGS (THIS is what your Reports Log + KPI need)
+  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0") || 0;
+  const visitChargeCurrency = (localStorage.getItem("visitChargeCurrency") || "£").trim();
   const poRequired = !!document.getElementById("poRequired")?.checked;
   const poReceived = !!document.getElementById("poReceived")?.checked;
+
   return {
     id: makeId("rep"),
     createdAt: new Date().toISOString(),
@@ -8788,6 +8785,29 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
 
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("custCompany");       // your Google place field
+  const hidden = document.getElementById("custCompanyHidden");
+  if (!el || !hidden) return;
+
+  function syncCompany() {
+    // some versions expose .value, others use getAttribute - we try both
+    const v = (el.value || el.getAttribute("value") || "").trim();
+    if (v) hidden.value = v;
+  }
+
+  // When a place is chosen (gmpx fires this)
+  el.addEventListener("gmpx-placechange", syncCompany);
+
+  // If typing updates value
+  el.addEventListener("input", syncCompany);
+
+  // Initial sync (handles prefilled values)
+  syncCompany();
+});
 </script>
 
 </body>
