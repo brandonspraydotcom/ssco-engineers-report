@@ -2118,10 +2118,11 @@ function readReportMetaFromForm() {
   };
 }
 
-
-
 function addReportToLog(meta) {
-  const reports = lsReadArray(LS_KEYS.reports);
+  const key = (window.LS_KEYS && window.LS_KEYS.reports) ? window.LS_KEYS.reports : "ssco_reports_log";
+  const reports = (typeof lsReadArray === "function")
+    ? lsReadArray(key)
+    : JSON.parse(localStorage.getItem(key) || "[]");
 
   const report = {
     id: meta.id,
@@ -2134,18 +2135,19 @@ function addReportToLog(meta) {
     projectNo: meta.projectNo,
     poNumber: meta.poNumber,
 
-    companyName: meta.companyName,
-    customerName: meta.customerName,
-    salesEngineer: meta.salesEngineer,
+    // ✅ Prefer company name (what you want shown)
+    companyName: (meta.companyName || "").trim(),
+    customerName: (meta.customerName || "").trim(),
+    salesEngineer: (meta.salesEngineer || "").trim(),
 
-    // ✅ follow-up
+    // follow-up
     followUpTypes: meta.followUpTypes || [],
     followUpNotes: meta.followUpNotes || "",
     followUpDueDate: meta.followUpDueDate || "",
 
     // ✅ visit charge + PO status (THIS is what KPI + UI need)
-    visitChargeAmount: meta.visitChargeAmount || 0,
-    visitChargeCurrency: meta.visitChargeCurrency || "£",
+    visitChargeAmount: Number(meta.visitChargeAmount || 0),
+    visitChargeCurrency: (meta.visitChargeCurrency || "£").trim(),
     poRequired: !!meta.poRequired,
     poReceived: !!meta.poReceived,
   };
@@ -2153,10 +2155,14 @@ function addReportToLog(meta) {
   // newest first
   reports.unshift(report);
 
-  // optional: cap log size
-  if (reports.length > 500) reports.length = 500;
+  // keep last 500
+  const trimmed = reports.slice(0, 500);
 
-  lsWriteArray(LS_KEYS.reports, reports);
+  if (typeof lsWriteArray === "function") {
+    lsWriteArray(key, trimmed);
+  } else {
+    localStorage.setItem(key, JSON.stringify(trimmed));
+  }
 
   return report;
 }
