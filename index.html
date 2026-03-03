@@ -2022,30 +2022,21 @@ function makeId(prefix) {
 
 // ---- Company helper (because gmpx-place-autocomplete isn't a normal input)
 function getCompanyValue() {
+  // 1) Hidden (preferred)
   const hidden = (document.getElementById("custCompanyHidden")?.value || "").trim();
   if (hidden) return hidden;
 
-  const ls = (localStorage.getItem("custCompany") || localStorage.getItem("companyName") || "").trim();
+  // 2) Visible field (Google places input)
+  const vis = (document.getElementById("custCompany")?.value || "").trim();
+  if (vis) return vis;
+
+  // 3) LocalStorage fallback
+  const ls = (localStorage.getItem("custCompany") || "").trim();
   if (ls) return ls;
-
-  const el = document.getElementById("custCompany");
-  if (!el) return "";
-
-  // gmpx sometimes exposes value, sometimes only attribute, sometimes only shadow input
-  const v1 = String(el.value || "").trim();
-  if (v1) return v1;
-
-  const v2 = String(el.getAttribute("value") || "").trim();
-  if (v2) return v2;
-
-  try {
-    const inp = el.shadowRoot?.querySelector("input");
-    const v3 = String(inp?.value || "").trim();
-    if (v3) return v3;
-  } catch {}
 
   return "";
 }
+
 
 
 
@@ -8907,6 +8898,50 @@ document.addEventListener("DOMContentLoaded", () => {
   // Safari/PWA safety net (covers cases where gmpx-placechange doesn’t fire)
   el.addEventListener("blur", syncCompany, true);
   setTimeout(syncCompany, 300); // one-time late sync after component renders
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const hidden = document.getElementById("custCompanyHidden");
+  const el     = document.getElementById("custCompany"); // might be input OR a wrapper div
+  if (!hidden || !el) return;
+
+  function getText() {
+    // Prefer .value when it exists, else fall back to textContent
+    const v = (typeof el.value === "string") ? el.value : (el.textContent || "");
+    return String(v || "").trim();
+  }
+
+  function setText(v) {
+    // Only set .value if it exists (input/textarea)
+    if (typeof el.value === "string") el.value = v;
+  }
+
+  function syncCompany(raw) {
+    const v = String(raw || "").trim();
+    hidden.value = v;
+
+    if (v) localStorage.setItem("custCompany", v);
+    else localStorage.removeItem("custCompany");
+  }
+
+  // Input-like events (works for inputs; harmless for wrappers)
+  el.addEventListener("input", () => syncCompany(getText()));
+  el.addEventListener("change", () => syncCompany(getText()));
+  el.addEventListener("blur", () => syncCompany(getText()));
+
+  // On load: hydrate from localStorage if UI is empty
+  const current = getText();
+  if (!current) {
+    const ls = (localStorage.getItem("custCompany") || "").trim();
+    if (ls) {
+      setText(ls);
+      syncCompany(ls);
+    }
+  } else {
+    syncCompany(current);
+  }
 });
 </script>
 
