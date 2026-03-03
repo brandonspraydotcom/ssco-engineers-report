@@ -2064,16 +2064,16 @@ function readReportMetaFromForm() {
 
   const customerName = (document.getElementById("custName")?.value || "").trim();
   const customerEmail = (document.getElementById("custEmail")?.value || "").trim();
-  const companyName = (typeof getCompanyValue === "function" ? getCompanyValue() : "").trim();
 
-  const followUpTypes = (typeof getSelectedFollowUps === "function" ? getSelectedFollowUps() : []) || [];
+  // ✅ company (NOW reliable)
+  const companyName = getCompanyValue();
+
+  const followUpTypes = getSelectedFollowUps();
   const followUpNotes = (document.getElementById("followUpNotes")?.value || "").trim();
   const followUpDueDate = (document.getElementById("followUpDue")?.value || "").trim();
 
-  // ✅ VISIT CHARGE + PO FLAGS (READ BEFORE RETURN)
-  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
-  const safeChargeAmount = isNaN(visitChargeAmount) ? 0 : visitChargeAmount;
-
+  // ✅ visit charge + PO flags (must be BEFORE return)
+  const visitChargeAmount = parseFloat(localStorage.getItem("visitChargeAmount") || "0") || 0;
   const visitChargeCurrency = (localStorage.getItem("visitChargeCurrency") || "£").trim();
   const poRequired = !!document.getElementById("poRequired")?.checked;
   const poReceived = !!document.getElementById("poReceived")?.checked;
@@ -2082,30 +2082,17 @@ function readReportMetaFromForm() {
     id: makeId("rep"),
     createdAt: new Date().toISOString(),
 
-    engineer,
-    date,
-    visitType,
+    engineer, date, visitType,
+    projectNo, poNumber, projectDesc,
 
-    projectNo,
-    poNumber,
-    projectDesc,
-
-    salesEngineer,
-    salesEmail,
-
-    customerName,
-    customerEmail,
+    salesEngineer, salesEmail,
+    customerName, customerEmail,
     companyName,
 
-    followUpTypes,
-    followUpNotes,
-    followUpDueDate,
+    followUpTypes, followUpNotes, followUpDueDate,
 
-    // ✅ these are what Reports Log + KPI need
-    visitChargeAmount: safeChargeAmount,
-    visitChargeCurrency,
-    poRequired,
-    poReceived,
+    visitChargeAmount, visitChargeCurrency,
+    poRequired, poReceived,
   };
 }
 
@@ -8870,32 +8857,23 @@ async function fetchReports() {
 </script>
 
 <script>
+function getCompanyValue() {
+  return (
+    (localStorage.getItem("custCompany") || "").trim() ||
+    (document.getElementById("custCompanyHidden")?.value || "").trim() ||
+    (document.getElementById("custCompanyFallback")?.value || "").trim() ||
+    ""
+  );
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  const hidden = document.getElementById("custCompanyHidden");
-  const el     = document.getElementById("custCompany"); // gmpx-place-autocomplete
-  if (!hidden || !el) return;
+  const gmpx   = document.getElementById("custCompany");        // <gmpx-place-autocomplete>
+  const hidden = document.getElementById("custCompanyHidden");  // hidden input
+  const fb     = document.getElementById("custCompanyFallback");// fallback input (optional)
 
-  function getCompanyText() {
-    try {
-      // 1) If component exposes string value
-      if (typeof el.value === "string") return el.value;
+  if (!hidden) return;
 
-      // 2) If component exposes a nested object with description/name
-      if (el.value && typeof el.value === "object") {
-        return el.value.description || el.value.name || "";
-      }
-
-      // 3) Fallback: try to read internal input if shadowRoot is open
-      const innerInput = el.shadowRoot?.querySelector("input");
-      if (innerInput && typeof innerInput.value === "string") return innerInput.value;
-
-      return "";
-    } catch {
-      return "";
-    }
-  }
-
-  function syncCompany(raw) {
+  function setCompany(raw) {
     const v = String(raw || "").trim();
     hidden.value = v;
 
@@ -8903,20 +8881,32 @@ document.addEventListener("DOMContentLoaded", () => {
     else localStorage.removeItem("custCompany");
   }
 
-  const syncNow = () => syncCompany(getCompanyText());
+  // 1) Preferred: when a place is selected in gmpx
+  if (gmpx) {
+    gmpx.addEventListener("gmpx-placechange", (e) => {
+      const place = e.detail?.place;
+      const name = String(place?.displayName || place?.name || "").trim();
+      if (name) setCompany(name);
+    });
 
-  // Try multiple events (gmpx differs by version)
-  el.addEventListener("input", syncNow);
-  el.addEventListener("change", syncNow);
-  el.addEventListener("placechange", syncNow);
-  el.addEventListener("gmpx-placechange", syncNow);
-  el.addEventListener("blur", syncNow, true);
+    // 2) Safety net: try to read the internal input if shadowRoot is open
+    try {
+      const inner = gmpx.shadowRoot?.querySelector("input");
+      if (inner) {
+        inner.addEventListener("input", () => setCompany(inner.value));
+        inner.addEventListener("blur",  () => setCompany(inner.value), true);
+      }
+    } catch {}
+  }
 
-  // On load: restore from LS if component currently empty
-  const ls = (localStorage.getItem("custCompany") || "").trim();
-  const current = getCompanyText().trim();
-  if (!current && ls) syncCompany(ls);
-  else syncCompany(current);
+  // 3) Manual fallback input (if you ever show it)
+  if (fb) {
+    fb.addEventListener("input", () => setCompany(fb.value));
+    fb.addEventListener("blur",  () => setCompany(fb.value));
+  }
+
+  // 4) Hydrate on load
+  setCompany(getCompanyValue());
 });
 </script>
 
