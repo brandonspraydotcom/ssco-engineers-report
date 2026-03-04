@@ -8708,11 +8708,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Admin-only visibility
   
-  const isAdmin = window.isCurrentAdmin?.() === true;
-  if (openBtn) openBtn.style.display = isAdmin ? "block" : "none";
-
-  // If not admin, don't wire anything else
-  if (!isAdmin) return;
+  // Everyone can open the reports log
+  if (openBtn) openBtn.style.display = "block";
 
   if (!modal || !box || !closeBtn || !listEl || !engSel || !refreshBtn) {
     console.warn("Reports Log wiring skipped: missing element(s)");
