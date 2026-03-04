@@ -7805,9 +7805,18 @@ document.addEventListener("click", async (e) => {
       return;
     }
 
-    // 🗑 DELETE
+    // 🗑 DELETE (ADMIN ONLY)
     if (delBtn) {
+      // ✅ Admin-only safety net
+      if (window.isCurrentAdmin?.() !== true) {
+        showToast?.("⛔ Admin only", "warning");
+        return;
+      }
+
       const id = delBtn.getAttribute("data-out-del-id");
+      if (!id) return;
+
+      if (!confirm("Delete this outstanding action?")) return;
 
       // 1) Update local immediately
       const actions = lsReadArray(LS_KEYS.actions);
