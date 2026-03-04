@@ -5634,12 +5634,24 @@ async function commitReportSave() {
   const report  = addReportToLog(meta);
   localStorage.setItem("lastSavedReport", JSON.stringify(report));
 
-  let actions = addOutstandingAction(meta);
-  if (!Array.isArray(actions)) actions = actions ? [actions] : [];
+  // 1) Get actions (await because it might be async / return promises)
+  let actions = await addOutstandingAction(meta);
 
-  // ✅ add PO-related action (if applicable)
+  // 2) Normalise into an array
+  if (!actions) actions = [];
+  if (!Array.isArray(actions)) actions = [actions];
+
+  // 3) Add PO-related action (if applicable)
   const poAction = buildPOOutstandingFromForm();
   if (poAction) actions.push(poAction);
+
+  // 4) Resolve any promises inside the array (this is the bug you’re hitting)
+  actions = await Promise.all(actions);
+
+  // 5) Ensure every action has an id and is a plain object
+  actions = actions
+    .map(ensureActionHasId)
+    .filter(a => a && typeof a === "object" && a.id);
 
   // ✅ Update UI immediately
   window.renderOutstandingActions?.();
@@ -5653,9 +5665,8 @@ async function commitReportSave() {
     await syncReportToCloud(report);
 
     // sync actions (multiple)
-    if (actions && actions.length) {
-      const safeActions = actions.map(ensureActionHasId);
-      await Promise.all(safeActions.map(a => syncActionToCloud(a)));
+    if (actions.length) {
+      await Promise.all(actions.map(a => syncActionToCloud(a)));
     }
 
     showToast?.("☁️ Synced to cloud", "success");
