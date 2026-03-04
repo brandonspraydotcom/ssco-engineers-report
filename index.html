@@ -5542,12 +5542,26 @@ function buildPOOutstandingFromForm() {
   };
 }
 
+function ensureActionHasId(a) {
+  if (!a) return a;
+
+  // already ok
+  if (a.id && String(a.id).trim()) return a;
+
+  // generate a safe id (use your existing id maker if present)
+  if (typeof makeId === "function") a.id = makeId("act");
+  else a.id = "act_" + Date.now() + "_" + Math.random().toString(16).slice(2);
+
+  return a;
+}
 
 // ===== CLOUD SYNC FUNCTIONS =====
 
 // send an outstanding action to the database
 async function syncActionToCloud(action) {
   if (!action) return;
+
+  ensureActionHasId(action);
 
   const res = await fetch(`${WORKER_BASE}/actions`, {
     method: "POST",
@@ -5640,7 +5654,8 @@ async function commitReportSave() {
 
     // sync actions (multiple)
     if (actions && actions.length) {
-      await Promise.all(actions.map(a => syncActionToCloud(a)));
+      const safeActions = actions.map(ensureActionHasId);
+      await Promise.all(safeActions.map(a => syncActionToCloud(a)));
     }
 
     showToast?.("☁️ Synced to cloud", "success");
