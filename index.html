@@ -8755,9 +8755,25 @@ async function deleteReportInCloud(id) {
 }
 
 function deleteReportLocally(id) {
-  const reports = lsReadArray(LS_KEYS.reports);
-  const next = reports.filter(r => r.id !== id);
-  lsWriteArray(LS_KEYS.reports, next);
+  // 1) Primary storage (new system)
+  try {
+    if (window.LS_KEYS?.reports) {
+      const reports = lsReadArray(window.LS_KEYS.reports);
+      const next = (reports || []).filter(r => (r?.id || "") !== id);
+      lsWriteArray(window.LS_KEYS.reports, next);
+    }
+  } catch (e) {
+    console.warn("deleteReportLocally: LS_KEYS.reports failed", e);
+  }
+
+  // 2) Legacy fallback storage (old system)
+  try {
+    const legacy = JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+    const nextLegacy = (legacy || []).filter(r => (r?.id || "") !== id);
+    localStorage.setItem("ssco_reports_log", JSON.stringify(nextLegacy));
+  } catch (e) {
+    console.warn("deleteReportLocally: ssco_reports_log failed", e);
+  }
 }
 
 async function fetchReports() {
