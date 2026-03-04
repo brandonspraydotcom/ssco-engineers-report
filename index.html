@@ -1653,6 +1653,31 @@ document.addEventListener("DOMContentLoaded", () => {
       <button id="closeReportsLog" class="btn ghost" type="button">✕</button>
     </div>
 
+    <div class="row" style="margin-top:10px; gap:10px; align-items:end;">
+      <div style="flex:1;">
+        <label>Date Range</label>
+        <select id="reportsDateRange">
+          <option value="all">All</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 3 months</option>
+          <option value="180">Last 6 months</option>
+          <option value="365">Last year</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+        <label>From</label>
+        <input id="reportsFromDate" type="date">
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+        <label>To</label>
+        <input id="reportsToDate" type="date">
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
       <select id="reportsEngineerFilter">
         <option value="__all__">All engineers</option>
@@ -8631,6 +8656,58 @@ document.addEventListener("DOMContentLoaded", () => {
     dst.value = unique.includes(current) ? current : "__all__";
   }
 
+  function isoDateOnly(d) {
+    // returns YYYY-MM-DD in local time
+    const x = new Date(d);
+    const yyyy = x.getFullYear();
+    const mm = String(x.getMonth() + 1).padStart(2, "0");
+    const dd = String(x.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function daysAgoISO(n) {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return isoDateOnly(d);
+  }
+
+  function applyReportsDateFilter(items) {
+    const mode = (document.getElementById("reportsDateRange")?.value || "all").trim();
+    const fromEl = document.getElementById("reportsFromDate");
+    const toEl   = document.getElementById("reportsToDate");
+
+    let from = "";
+    let to = "";
+
+    if (mode === "custom") {
+      from = (fromEl?.value || "").trim();
+      to   = (toEl?.value || "").trim();
+    } else if (mode !== "all") {
+      const days = parseInt(mode, 10);
+      if (!isNaN(days)) {
+        from = daysAgoISO(days);
+        to = isoDateOnly(new Date());
+        if (fromEl) fromEl.value = from;
+        if (toEl) toEl.value = to;
+      }
+    } else {
+      if (fromEl) fromEl.value = "";
+      if (toEl) toEl.value = "";
+    }
+
+    if (!from && !to) return items || [];
+
+    return (items || []).filter(r => {
+      // prefer the visit date field, fallback to createdAt
+      const d = (r.date || "").trim() || (r.createdAt ? isoDateOnly(r.createdAt) : "");
+      if (!d) return false;
+
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }
+
   
   function applyReportsClientFilters(items) {
     const eng   = (document.getElementById("reportsEngineerFilter")?.value || "__all__").trim();
@@ -8742,57 +8819,57 @@ document.addEventListener("DOMContentLoaded", () => {
     }).join("");
   }
 
-async function deleteReportInCloud(id) {
-  const res = await fetch(`${WORKER_BASE}/reports/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: dbHeaders()
-  });
+  async function deleteReportInCloud(id) {
+    const res = await fetch(`${WORKER_BASE}/reports/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: dbHeaders()
+    });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Report delete failed: ${res.status} ${text}`);
-  }
-}
-
-function deleteReportLocally(id) {
-  // 1) Primary storage (new system)
-  try {
-    if (window.LS_KEYS?.reports) {
-      const reports = lsReadArray(window.LS_KEYS.reports);
-      const next = (reports || []).filter(r => (r?.id || "") !== id);
-      lsWriteArray(window.LS_KEYS.reports, next);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Report delete failed: ${res.status} ${text}`);
     }
-  } catch (e) {
-    console.warn("deleteReportLocally: LS_KEYS.reports failed", e);
   }
 
-  // 2) Legacy fallback storage (old system)
-  try {
-    const legacy = JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
-    const nextLegacy = (legacy || []).filter(r => (r?.id || "") !== id);
-    localStorage.setItem("ssco_reports_log", JSON.stringify(nextLegacy));
-  } catch (e) {
-    console.warn("deleteReportLocally: ssco_reports_log failed", e);
+  function deleteReportLocally(id) {
+    // 1) Primary storage (new system)
+    try {
+      if (window.LS_KEYS?.reports) {
+        const reports = lsReadArray(window.LS_KEYS.reports);
+        const next = (reports || []).filter(r => (r?.id || "") !== id);
+        lsWriteArray(window.LS_KEYS.reports, next);
+      }
+    } catch (e) {
+      console.warn("deleteReportLocally: LS_KEYS.reports failed", e);
+    }
+
+    // 2) Legacy fallback storage (old system)
+    try {
+      const legacy = JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+      const nextLegacy = (legacy || []).filter(r => (r?.id || "") !== id);
+      localStorage.setItem("ssco_reports_log", JSON.stringify(nextLegacy));
+    } catch (e) {
+      console.warn("deleteReportLocally: ssco_reports_log failed", e);
+    }
   }
-}
 
-const LS_DELETED_REPORTS = "ssco_deleted_report_ids";
+  const LS_DELETED_REPORTS = "ssco_deleted_report_ids";
 
-function getDeletedReportIds() {
-  try { return JSON.parse(localStorage.getItem(LS_DELETED_REPORTS) || "[]"); }
-  catch { return []; }
-}
+  function getDeletedReportIds() {
+    try { return JSON.parse(localStorage.getItem(LS_DELETED_REPORTS) || "[]"); }
+    catch { return []; }
+  }
 
-function addDeletedReportId(id) {
-  const ids = new Set(getDeletedReportIds());
-  ids.add(String(id));
-  localStorage.setItem(LS_DELETED_REPORTS, JSON.stringify([...ids]));
-}
+  function addDeletedReportId(id) {
+    const ids = new Set(getDeletedReportIds());
+    ids.add(String(id));
+    localStorage.setItem(LS_DELETED_REPORTS, JSON.stringify([...ids]));
+  }
 
-function filterOutDeletedReports(items) {
-  const ids = new Set(getDeletedReportIds());
-  return (items || []).filter(r => r && r.id && !ids.has(String(r.id)));
-}
+  function filterOutDeletedReports(items) {
+    const ids = new Set(getDeletedReportIds());
+    return (items || []).filter(r => r && r.id && !ids.has(String(r.id)));
+  }
 
 async function fetchReports() {
   listEl.innerHTML = `
@@ -8868,22 +8945,33 @@ async function fetchReports() {
     const merged = mergeReportsPreferRicher(cloudItems, localItems);
 
     const visible = filterOutDeletedReports(merged);
-    const filtered = applyReportsClientFilters(visible);
-    renderReports(filtered);
-    calculateKPI(filtered);
+    const filtered1 = applyReportsClientFilters(visible);
+    const filtered2 = applyReportsDateFilter(filtered1);
+    renderReports(filtered2);
+    calculateKPI(filtered2);
   } catch (e) {
     console.warn("Reports fetch failed:", e);
-
+    const localItems = readLocalReports();
     const visible = filterOutDeletedReports(localItems);
-    const filtered = applyReportsClientFilters(visible);
-    renderReports(filtered);
-    calculateKPI(filtered);
+    const filtered1 = applyReportsClientFilters(visible);
+    const filtered2 = applyReportsDateFilter(filtered1);
+    renderReports(filtered2);
+    calculateKPI(filtered2);
   }
 }
 
   function openReportsLog() {
     populateEngineerFilterFromEngineerSelect();
     populateReportsSalesFilterFromSalesSelect();
+
+    // date range UI enable/disable
+    const mode = document.getElementById("reportsDateRange")?.value || "all";
+    const custom = mode === "custom";
+    const from = document.getElementById("reportsFromDate");
+    const to   = document.getElementById("reportsToDate");
+    if (from) from.disabled = !custom;
+    if (to)   to.disabled = !custom;
+
     fetchReports();
 
     modal.style.display = "flex";
@@ -8965,6 +9053,9 @@ async function fetchReports() {
       fetchReports();
     });
 
+  document.getElementById("reportsFromDate")?.addEventListener("change", fetchReports);
+  document.getElementById("reportsToDate")?.addEventListener("change", fetchReports);
+
     closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closeReportsLog(); });
     modal.addEventListener("click", (e) => { if (e.target === modal) closeReportsLog(); });
     document.addEventListener("keydown", (e) => {
@@ -8979,10 +9070,26 @@ async function fetchReports() {
     document.getElementById("reportsCustomerFilter")?.addEventListener("input", () => {
       clearTimeout(window.__reportsSearchT);
       window.__reportsSearchT = setTimeout(fetchReports, 150);
-  });
+    });
+
+  // Date range selector
+  document.getElementById("reportsDateRange")?.addEventListener("change", () => {
+     const mode = document.getElementById("reportsDateRange")?.value || "all";
+     const from = document.getElementById("reportsFromDate");
+     const to   = document.getElementById("reportsToDate");
+
+     const custom = mode === "custom";
+     if (from) from.disabled = !custom;
+     if (to)   to.disabled = !custom;
+
+     fetchReports();
+   });
+
+   // Custom From/To
+   document.getElementById("reportsFromDate")?.addEventListener("change", fetchReports);
+   document.getElementById("reportsToDate")?.addEventListener("change", fetchReports);
 
   });
-
 
 </script>
 
