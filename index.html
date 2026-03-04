@@ -8776,6 +8776,24 @@ function deleteReportLocally(id) {
   }
 }
 
+const LS_DELETED_REPORTS = "ssco_deleted_report_ids";
+
+function getDeletedReportIds() {
+  try { return JSON.parse(localStorage.getItem(LS_DELETED_REPORTS) || "[]"); }
+  catch { return []; }
+}
+
+function addDeletedReportId(id) {
+  const ids = new Set(getDeletedReportIds());
+  ids.add(String(id));
+  localStorage.setItem(LS_DELETED_REPORTS, JSON.stringify([...ids]));
+}
+
+function filterOutDeletedReports(items) {
+  const ids = new Set(getDeletedReportIds());
+  return (items || []).filter(r => r && r.id && !ids.has(String(r.id)));
+}
+
 async function fetchReports() {
   listEl.innerHTML = `
     <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
@@ -8849,14 +8867,15 @@ async function fetchReports() {
     // ✅ this is the key line
     const merged = mergeReportsPreferRicher(cloudItems, localItems);
 
-    const filtered = applyReportsClientFilters(merged);
+    const visible = filterOutDeletedReports(merged);
+    const filtered = applyReportsClientFilters(visible);
     renderReports(filtered);
     calculateKPI(filtered);
   } catch (e) {
     console.warn("Reports fetch failed:", e);
 
-    const localItems = readLocalReports();
-    const filtered = applyReportsClientFilters(localItems);
+    const visible = filterOutDeletedReports(localItems);
+    const filtered = applyReportsClientFilters(visible);
     renderReports(filtered);
     calculateKPI(filtered);
   }
@@ -8917,7 +8936,6 @@ async function fetchReports() {
       const btn = e.target.closest("[data-rep-del-id]");
       if (!btn) return;
 
-      // admin-only safety
       if (window.isCurrentAdmin?.() !== true) {
         showToast?.("⛔ Admin only", "warning");
         return;
@@ -8926,24 +8944,25 @@ async function fetchReports() {
       const id = btn.getAttribute("data-rep-del-id");
       if (!id) return;
 
-      // Optional: confirm
-      const ok = confirm("Delete this report log entry?");
-      if (!ok) return;
+      if (!confirm("Delete this report log entry?")) return;
+
+      // 0) tombstone immediately (prevents re-appearing from cloud)
+      addDeletedReportId(id);
 
       // 1) delete local immediately
       deleteReportLocally(id);
 
-      // refresh UI immediately
-      fetchReports();
-      showToast?.("Report deleted", "success");
-
-      // 2) attempt cloud delete
+      // 2) try cloud delete
       try {
         await deleteReportInCloud(id);
+        showToast?.("Report deleted", "success");
       } catch (err) {
         console.warn("Cloud report delete failed:", err);
         showToast?.("⚠️ Deleted locally only", "warning");
       }
+
+      // 3) refresh view (won’t show tombstoned IDs)
+      fetchReports();
     });
 
     closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closeReportsLog(); });
