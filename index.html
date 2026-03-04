@@ -5580,6 +5580,68 @@ function ensureActionHasId(a) {
   return a;
 }
 
+// --- REPORT PATCH (cloud) ---
+async function patchReportInCloud(id, patch) {
+  const res = await fetch(`${WORKER_BASE}/reports/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: dbHeadersJson(),
+    body: JSON.stringify(patch)
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("Report patch failed: " + res.status + " " + text);
+  }
+}
+
+// --- Find & update report locally ---
+function markLocalReportPOReceived(action) {
+  // action may contain projectNo / companyName / date depending on how you store it
+  const proj = (action.projectNo || action.project || "").trim();
+  const comp = (action.companyName || action.custCompany || "").trim();
+  const date = (action.date || action.visitDate || "").trim(); // optional
+
+  const key = window.LS_KEYS?.reports || "ssco_reports_log";
+  const reports = lsReadArray(key) || [];
+
+  // Try match order: by reportId (best), else by project+company, else by project only
+  const reportId = (action.reportId || "").trim();
+
+  let idx = -1;
+
+  if (reportId) {
+    idx = reports.findIndex(r => (r.id || "") === reportId);
+  }
+
+  if (idx < 0 && proj && comp) {
+    idx = reports.findIndex(r =>
+      String(r.projectNo || "").trim() === proj &&
+      String(r.companyName || "").trim() === comp &&
+      (!date || String(r.date || "").trim() === date)
+    );
+  }
+
+  if (idx < 0 && proj) {
+    idx = reports.findIndex(r =>
+      String(r.projectNo || "").trim() === proj &&
+      (!date || String(r.date || "").trim() === date)
+    );
+  }
+
+  if (idx < 0) return { ok: false, report: null };
+
+  // ✅ Update the report flags
+  reports[idx].poReceived = true;
+  reports[idx].poRequired = false;
+
+  // Optional: also persist visit charge fields if action has them
+  if (action.visitChargeAmount != null) reports[idx].visitChargeAmount = action.visitChargeAmount;
+  if (action.visitChargeCurrency) reports[idx].visitChargeCurrency = action.visitChargeCurrency;
+
+  lsWriteArray(key, reports);
+  return { ok: true, report: reports[idx] };
+}
+
 // ===== CLOUD SYNC FUNCTIONS =====
 
 // send an outstanding action to the database
@@ -7521,6 +7583,7 @@ window.hideSimpleModal = function(modalId, boxId) {
 </script>
 
 <script>
+
 document.addEventListener("DOMContentLoaded", () => {
   const openBtn  = document.getElementById("openOutstandingBtn");
   const modal    = document.getElementById("outstandingModal");
@@ -7795,13 +7858,42 @@ document.addEventListener("click", async (e) => {
         showToast?.("Marked as done", "success");
       }
 
-      // 2) Sync to cloud
+      // ✅ If this DONE action was "PO_REQUIRED", mark the report as PO Received
+      try {
+        const a = actions[idx];
+
+        const isPORequired =
+          (a?.followUpType === "PO_REQUIRED") ||
+          (a?.poRequired === true) ||
+          (String(a?.followUpType || "").toUpperCase() === "PO_REQUIRED");
+
+        if (isPORequired) {
+          const updated = markLocalReportPOReceived(a);
+
+          // refresh reports UI/KPIs
+          window.fetchReports?.();
+
+          // patch cloud report (optional, if your worker supports PATCH)
+          if (updated.ok && updated.report?.id) {
+            try {
+              await patchReportInCloud(updated.report.id, { poReceived: true, poRequired: false });
+            } catch (e) {
+              console.warn("Report PO patch failed (cloud):", e);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("PO->Report update failed:", e);
+      }
+
+      // 2) Sync to cloud (action)
       try {
         await patchActionInCloud(id, { status: "done" });
       } catch (err) {
         console.warn("Cloud patch failed:", err);
         showToast?.("⚠️ Done saved locally only", "warning");
       }
+
       return;
     }
 
@@ -8968,6 +9060,8 @@ async function fetchReports() {
     calculateKPI(filtered2);
   }
 }
+
+window.fetchReports = fetchReports;
 
   function openReportsLog() {
     populateEngineerFilterFromEngineerSelect();
