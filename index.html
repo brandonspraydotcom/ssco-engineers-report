@@ -1757,6 +1757,10 @@ document.addEventListener("DOMContentLoaded", () => {
     <div id="addUserError"
          style="color:#ff5555;font-size:13px;opacity:0;
                 transition:opacity .3s ease;margin-bottom:6px;"></div>
+    <label style="display:flex;gap:10px;align-items:center;margin-top:10px;color:#ddd;">
+      <input type="checkbox" id="newUserIsAdmin" />
+      Make this user an admin
+    </label>
     <button id="saveUserBtn" class="btn green" style="width:100%;">Save User</button>
     <button id="cancelAddUser" class="btn remove" style="width:100%;margin-top:8px;">Cancel</button>
   </div>
@@ -1898,46 +1902,46 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+// put this near the top (before any modal code uses it)
+window.lockScroll = () => {
+  document.body.style.overflow = "hidden";
+  document.body.style.touchAction = "none";
+};
+
+window.unlockScroll = () => {
+  document.body.style.overflow = "";
+  document.body.style.touchAction = "";
+};
+</script>
+
+<script>
+window.isAdminUserNow = () => window.isCurrentAdmin?.() === true;
 // ===============================
 // ADMIN: single source of truth
 // ===============================
 window.isCurrentAdmin = function () {
-  // 1) stored flag (set on login)
-  if (localStorage.getItem("isAdmin") === "true") return true;
-
-  // 2) fallback: name match (covers edge cases)
-  const u = (localStorage.getItem("username") || "").trim().toLowerCase();
-  return u === "brandon phelps";
+  return localStorage.getItem("isAdmin") === "true";
 };
 
 // ===============================
 // ADMIN UI visibility
 // ===============================
-window.updateAdminUI = function () {
+window.updateAdminButtons = function () {
   const admin = window.isCurrentAdmin();
 
-  const ids = [
-    "openPresenceBtn",
-    "openReportsLogBtn",
+  const presenceBtn = document.getElementById("openPresenceBtn");
+  const reportsBtn  = document.getElementById("openReportsLogBtn");
 
-    // admin panel buttons (exist only after showMenu builds them)
-    "adminAddEngineerBtn",
-    "adminAddSalesBtn",
-    "adminAddUserBtn",
-    "adminManageEngineersBtn",
-    "adminManageSalesBtn",
-    "adminManageUsersBtn",
-  ];
+  // Presence = admin only
+  if (presenceBtn) presenceBtn.style.display = admin ? "block" : "none";
 
-  ids.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = admin ? "block" : "none";
-  });
-
-  // Optional: also hide entire adminPanel wrapper if it exists
-  const panel = document.getElementById("adminPanel");
-  if (panel) panel.style.display = admin ? "block" : "none";
+  // Reports log = everyone
+  if (reportsBtn) reportsBtn.style.display = "block";
 };
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.updateAdminButtons?.();
+});
 </script>
 
 <script>
@@ -1999,6 +2003,37 @@ window.loadUsers = async function() {
     console.error("Failed loading users", err);
     window.validLogins = [];
     window.usersLoaded = true;
+  }
+  
+  function enforceAdminRules(users) {
+    const map = new Map();
+
+    for (const u of (users || [])) {
+      const f = u.first || (u.user ? String(u.user).split(" ")[0] : "");
+      const l = u.last  || (u.user ? String(u.user).split(" ").slice(1).join(" ") : "");
+      const k = userKey(f, l);
+      if (!k || k === "|") continue;
+
+      const fixed = {
+        first: titleCaseName(f),
+        last:  titleCaseName(l),
+        pass:  u.pass || "",
+        isAdmin: !!u.isAdmin
+      };
+
+      // if duplicates exist, keep the first one that has a password
+      if (!map.has(k) || (map.get(k).pass === "" && fixed.pass)) {
+        map.set(k, fixed);
+      }
+    }
+
+    // ✅ enforce ONLY Brandon Phelps as admin
+    for (const [k, u] of map.entries()) {
+      const isBrandon = (norm(u.first) === "brandon" && norm(u.last) === "phelps");
+      u.isAdmin = isBrandon; // everyone else forced false
+    }
+
+    return Array.from(map.values());
   }
 };
 
@@ -6718,31 +6753,63 @@ function showCredentialsToast(msg, duration = 2500) {
   setTimeout(() => toast.classList.remove("show"), duration);
 }
 
- async function saveUserToCloud(first, last, passPlain) {
-  try {
-    const newUser = { first, last, pass: btoa(passPlain) };
+ async function saveUserToCloud(first, last, passPlain, isAdmin=false) {
+   try {
+     const firstN = titleCaseName(first);
+     const lastN  = titleCaseName(last);
 
-    const res = await fetch(JSONBIN_URL, {
-      headers: { "X-Master-Key": JSONBIN_KEY }
-    });
-    const data = await res.json();
-    const users = [...(data.record.users || []), newUser];
+     const newUser = {
+       first: firstN,
+       last: lastN,
+       pass: btoa(passPlain),
+       isAdmin: !!isAdmin
+     };
 
-    await fetch(JSONBIN_WRITE_URL, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": JSONBIN_KEY
-      },
-      body: JSON.stringify({ ...data.record, users }) // preserve other keys if you add later
-    });
+     const res = await fetch(JSONBIN_URL, { headers: { "X-Master-Key": JSONBIN_KEY } });
+     const data = await res.json();
 
-    showToast("✅ User added globally");
-    await window.loadUsers(true);
-  } catch (err) {
-    console.error("Failed to update global users:", err);
-    showToast("⚠️ Failed to save user");
-  }
+     const existing = Array.isArray(data?.record?.users) ? data.record.users : [];
+
+     // Build a map keyed by normalized identity (case-insensitive)
+     const map = new Map();
+     for (const u of existing) {
+       const f = u.first || (u.user ? String(u.user).split(" ")[0] : "");
+       const l = u.last  || (u.user ? String(u.user).split(" ").slice(1).join(" ") : "");
+       const k = userKey(f, l);
+       if (!k || k === "|") continue;
+
+       // keep existing, but normalize shape
+       const fixed = {
+         first: titleCaseName(f),
+         last:  titleCaseName(l),
+         pass:  u.pass || "",
+         isAdmin: !!u.isAdmin
+       };
+       map.set(k, fixed);
+     }
+
+     const kNew = userKey(firstN, lastN);
+     if (map.has(kNew)) {
+       showToast?.("⚠️ User already exists (case-insensitive)", "warning");
+       return;
+     }
+
+     map.set(kNew, newUser);
+
+     const users = Array.from(map.values());
+
+     await fetch(JSONBIN_WRITE_URL, {
+       method: "PUT",
+       headers: { "Content-Type": "application/json", "X-Master-Key": JSONBIN_KEY },
+       body: JSON.stringify({ ...data.record, users })
+     });
+
+     showToast?.("✅ User added globally", "success");
+     await window.loadUsers(true);
+   } catch (err) {
+     console.error("Failed to update global users:", err);
+     showToast?.("⚠️ Failed to save user", "warning");
+   }
  }
 
   await window.loadUsers(true);
@@ -6770,27 +6837,49 @@ function normalizeName(s) {
   return String(s || "").trim().toLowerCase();
 }
 
-function checkLogin(first, last, pass) {
-  const firstN = normalizeName(first);
-  const lastN  = normalizeName(last);
-  const fullN  = normalizeName(`${first} ${last}`);
+function norm(s) { return String(s || "").trim().toLowerCase(); }
 
-  return (window.validLogins || []).some(acc => {
-    const decoded = (acc?.pass ? atob(acc.pass) : "");
-    if (decoded !== pass) return false;
+// canonical key used for identity (case-insensitive)
+function userKey(first, last) { return `${norm(first)}|${norm(last)}`; }
 
-    // NEW format
-    if (acc.first && acc.last) {
-      return normalizeName(acc.first) === firstN && normalizeName(acc.last) === lastN;
+// how you want it displayed everywhere (Title Case)
+function titleCaseName(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatFullName(first, last) {
+  return `${titleCaseName(first)} ${titleCaseName(last)}`.trim();
+}
+
+function findUserForLogin(first, last, pass) {
+  const firstN = norm(first);
+  const lastN  = norm(last);
+
+  const users = Array.isArray(window.validLogins) ? window.validLogins : [];
+
+  for (const u of users) {
+    const decoded = (u?.pass ? atob(u.pass) : "");
+    if (decoded !== pass) continue;
+
+    const uf = norm(u.first);
+    const ul = norm(u.last);
+
+    // NEW format match
+    if (u.first && u.last) {
+      if (uf === firstN && ul === lastN) return u;
     }
 
-    // OLD format
-    if (acc.user) {
-      return normalizeName(acc.user) === fullN;
+    // OLD format match
+    if (u.user) {
+      const fullN = norm(`${first} ${last}`);
+      if (norm(u.user) === fullN) return u;
     }
+  }
 
-    return false;
-  });
+  return null;
 }
 
 loginSubmit?.addEventListener("click", () => {
@@ -6802,11 +6891,9 @@ loginSubmit?.addEventListener("click", () => {
   const first = (loginFirst?.value || "").trim();
   const last  = (loginLast?.value  || "").trim();
   const pass  = (loginPass?.value  || "").trim();
-  const fullName = window.normalizeFullName(`${first} ${last}`);
 
-  const ok = checkLogin(first, last, pass);
-
-  if (!ok) {
+  const u = findUserForLogin(first, last, pass);
+  if (!u) {
     loginError.textContent = "Invalid name or password";
     loginError.style.opacity = "1";
     if (loginPass) loginPass.value = "";
@@ -6815,7 +6902,8 @@ loginSubmit?.addEventListener("click", () => {
 
   loginError.style.opacity = "0";
 
-  const admin = window.isAdminUserNow(first, last);
+  const fullName = formatFullName(first, last);
+  const admin = u.isAdmin === true;
 
   localStorage.setItem("loggedIn", "true");
   localStorage.setItem("username", fullName);
@@ -6831,12 +6919,6 @@ loginSubmit?.addEventListener("click", () => {
   window.updateAdminButtons?.();
   showToast?.(`👋 Welcome, ${fullName}`, "success");
 });
-
-// ---------- ADMIN RULE ----------
-function isAdminUser(first, last) {
-  return (first || "").toLowerCase() === "brandon"
-      && (last  || "").toLowerCase() === "phelps";
-}
 
 // ---------- PASSWORD TOGGLE ----------
 if (togglePass && loginPass) {
@@ -7300,7 +7382,8 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", () =>
     return;
   }
 
-  await saveUserToCloud(first, last, p);
+  const isAdmin = document.getElementById("newUserIsAdmin")?.checked === true;
+  await saveUserToCloud(first, last, p, isAdmin);
 
   addUserError.style.opacity = "0";
   newUserFirst.value = "";
@@ -7427,14 +7510,6 @@ function populateSalesFilterFromSalesSelect() {
 </script>
 
 <script>
-window.isCurrentUser = function () {
-  return window.isAdminUserNow();
-};
-
-window.isAdminUser = function () {
-  return window.isAdminUserNow();
-};
-
 /* =====================================================
    ADMIN DELETE HANDLER (Engineers / Sales / Users)
    ===================================================== */
@@ -7444,16 +7519,14 @@ document.addEventListener("click", async (e) => {
 
   // ----------- ENGINEERS -----------
   if (t.dataset.delEngineer) {
-
-    if (!window.isAdminUserNow()) {
+    if (window.isCurrentAdmin?.() !== true) {
       showToast?.("⛔ Admin only", "warning");
       return;
     }
 
     const name = decodeURIComponent(t.dataset.delEngineer);
 
-    // 🔒 PROTECT BRANDON
-    if (window.isProtectedPerson(name)) {
+    if (window.isProtectedPerson?.(name)) {
       showToast?.("🔒 This account is protected", "warning");
       return;
     }
@@ -7462,22 +7535,22 @@ document.addEventListener("click", async (e) => {
     list = list.filter(n => n !== name);
     window.setList(LS_ENGINEERS, list);
 
-    window.refreshPeopleDropdowns();
-    window.renderEngineerManager();
+    window.refreshPeopleDropdowns?.();
+    window.renderEngineerManager?.();
     showToast?.("Engineer removed", "success");
+    return;
   }
 
   // ----------- SALES ENGINEERS -----------
   if (t.dataset.delSales) {
-
-    if (!window.isAdminUserNow()) {
+    if (window.isCurrentAdmin?.() !== true) {
       showToast?.("⛔ Admin only", "warning");
       return;
     }
 
     const name = decodeURIComponent(t.dataset.delSales);
 
-    if (window.isProtectedPerson(name)) {
+    if (window.isProtectedPerson?.(name)) {
       showToast?.("🔒 This account is protected", "warning");
       return;
     }
@@ -7486,61 +7559,61 @@ document.addEventListener("click", async (e) => {
     list = list.filter(n => n !== name);
     window.setList(LS_SALES, list);
 
-    window.refreshPeopleDropdowns();
-    window.renderSalesManager();
+    window.refreshPeopleDropdowns?.();
+    window.renderSalesManager?.();
     showToast?.("Sales engineer removed", "success");
-  }
-
-// ----------- USERS (JSONBIN) -----------
-if (t.dataset.delUserIndex != null) {
-
-  if (!window.isAdminUserNow()) {
-    showToast?.("⛔ Admin only", "warning");
     return;
   }
 
-  const idx = Number(t.dataset.delUserIndex);
-  const users = Array.isArray(window.validLogins) ? [...window.validLogins] : [];
+  // ----------- USERS (JSONBIN) -----------
+  if (t.dataset.delUserIndex != null) {
+    if (window.isCurrentAdmin?.() !== true) {
+      showToast?.("⛔ Admin only", "warning");
+      return;
+    }
 
-  const getDisplayName = (u) =>
-    (u.first && u.last)
-      ? `${u.first} ${u.last}`.trim()
-      : (u.user || "");
+    try {
+      const idx = Number(t.dataset.delUserIndex);
+      const users = Array.isArray(window.validLogins) ? [...window.validLogins] : [];
 
-  const name = getDisplayName(users[idx]);
+      const getDisplayName = (u) =>
+        (u?.first && u?.last) ? `${u.first} ${u.last}`.trim() : (u?.user || "");
 
-  // 🔒 PROTECT BRANDON LOGIN ACCOUNT
-  if (window.isProtectedPerson(name)) {
-    showToast?.("🔒 This account cannot be deleted", "warning");
+      const name = getDisplayName(users[idx]);
+
+      if (window.isProtectedPerson?.(name)) {
+        showToast?.("🔒 This account cannot be deleted", "warning");
+        return;
+      }
+
+      users.splice(idx, 1);
+
+      const res = await fetch(window.JSONBIN_URL, {
+        headers: { "X-Master-Key": window.JSONBIN_KEY }
+      });
+      const data = await res.json();
+
+      await fetch(window.JSONBIN_WRITE_URL, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Master-Key": window.JSONBIN_KEY
+        },
+        body: JSON.stringify({ ...(data.record || {}), users })
+      });
+
+      window.validLogins = users;
+      window.renderUsersManager?.();
+      showToast?.("User deleted", "success");
+    } catch (err) {
+      console.error(err);
+      showToast?.("Delete failed", "error");
+    }
+
     return;
   }
-
-  users.splice(idx, 1);
-
-  try {
-    await fetch(window.JSONBIN_WRITE_URL, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Master-Key": window.JSONBIN_KEY
-      },
-      body: JSON.stringify({ users })
-    });
-
-    // ✅ update global cache
-    window.validLogins = users;
-
-    renderUsersManager();
-    showToast?.("User deleted", "success");
-
-  } catch (err) {
-    console.error(err);
-    showToast?.("Delete failed", "error");
-  }
-}
 });
 </script>
-
 <div id="credentialsToast"></div>
 
 <script>
@@ -8449,29 +8522,51 @@ window._dbg = (msg) => {
 </script>
 
 <script>
-  // ✅ Single admin rule (Brandon Phelps only)
-  window.isCurrentAdmin = function () {
-    const flag = localStorage.getItem("isAdmin");
-    if (flag === "true") return true;
+// ===============================
+// ADMIN: single source of truth
+// ===============================
+window.isCurrentAdmin = function () {
+  const username = (localStorage.getItem("username") || "").trim().toLowerCase();
 
-    // fallback: derive from username if needed
-    const u = (localStorage.getItem("username") || "").trim().toLowerCase();
-    return u === "brandon phelps";
-  };
+  // Primary admin (case-insensitive)
+  if (username === "brandon phelps") return true;
 
-  // ✅ Always call this after login/logout and on load
-  window.updateAdminButtons = function () {
-    const admin = window.isCurrentAdmin();
+  // Optional: allow role-based admins later
+  const role = (localStorage.getItem("userRole") || "").trim().toLowerCase();
+  return role === "admin";
+};
 
-    const presenceBtn = document.getElementById("openPresenceBtn");
-    const reportsBtn  = document.getElementById("openReportsLogBtn");
 
-    if (presenceBtn) presenceBtn.style.display = admin ? "block" : "none";
-    if (reportsBtn)  reportsBtn.style.display  = admin ? "block" : "none";
-  };
+// ===============================
+// ADMIN UI visibility
+// ===============================
+window.updateAdminButtons = function () {
+  const admin = window.isCurrentAdmin();
+
+  const presenceBtn = document.getElementById("openPresenceBtn");
+  const reportsBtn  = document.getElementById("openReportsLogBtn");
+
+  // Presence = admin only
+  if (presenceBtn) presenceBtn.style.display = admin ? "block" : "none";
+
+  // Reports log = everyone
+  if (reportsBtn) reportsBtn.style.display = "block";
+};
+
+
+// ===============================
+// Run once on page load
+// ===============================
+document.addEventListener("DOMContentLoaded", () => {
+  window.updateAdminButtons?.();
+});
 </script>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+  window.updateAdminButtons?.();
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   const openBtn  = document.getElementById("openPresenceBtn");
   const accountModal= document.getElementById("accountModal");
@@ -8707,7 +8802,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const openBtn    = document.getElementById("openReportsLogBtn");
 
   // Admin-only visibility
-  
+  const isAdmin = window.isCurrentAdmin?.() === true;
   // Everyone can open the reports log
   if (openBtn) openBtn.style.display = "block";
 
