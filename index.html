@@ -1902,6 +1902,25 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+
+// ===============================
+// USER NAME HELPERS
+// ===============================
+
+function norm(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function userKey(first, last) {
+  return `${norm(first)}|${norm(last)}`;
+}
+
+function titleCaseName(v) {
+  const s = String(v || "").trim().toLowerCase();
+  if (!s) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 // put this near the top (before any modal code uses it)
 window.lockScroll = () => {
   document.body.style.overflow = "hidden";
