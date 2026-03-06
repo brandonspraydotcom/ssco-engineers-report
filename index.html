@@ -8542,46 +8542,7 @@ window._dbg = (msg) => {
 };
 </script>
 
-<script>
-// ===============================
-// ADMIN: single source of truth
-// ===============================
-window.isCurrentAdmin = function () {
-  const username = (localStorage.getItem("username") || "").trim().toLowerCase();
 
-  // Primary admin (case-insensitive)
-  if (username === "brandon phelps") return true;
-
-  // Optional: allow role-based admins later
-  const role = (localStorage.getItem("userRole") || "").trim().toLowerCase();
-  return role === "admin";
-};
-
-
-// ===============================
-// ADMIN UI visibility
-// ===============================
-window.updateAdminButtons = function () {
-  const admin = window.isCurrentAdmin();
-
-  const presenceBtn = document.getElementById("openPresenceBtn");
-  const reportsBtn  = document.getElementById("openReportsLogBtn");
-
-  // Presence = admin only
-  if (presenceBtn) presenceBtn.style.display = admin ? "block" : "none";
-
-  // Reports log = everyone
-  if (reportsBtn) reportsBtn.style.display = "block";
-};
-
-
-// ===============================
-// Run once on page load
-// ===============================
-document.addEventListener("DOMContentLoaded", () => {
-  window.updateAdminButtons?.();
-});
-</script>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
