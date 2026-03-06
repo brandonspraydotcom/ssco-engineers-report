@@ -1935,6 +1935,7 @@ window.unlockScroll = () => {
 
 <script>
 window.isAdminUserNow = () => window.isCurrentAdmin?.() === true;
+
 // ===============================
 // ADMIN: single source of truth
 // ===============================
@@ -2038,11 +2039,9 @@ window.loadUsers = async function () {
 // USER NORMALISATION + ADMIN RULES
 // ===============================
 function enforceAdminRules(users) {
-
   const map = new Map();
 
   for (const u of (users || [])) {
-
     const f = u.first || "";
     const l = u.last  || "";
 
@@ -2060,16 +2059,6 @@ function enforceAdminRules(users) {
     if (!map.has(k) || (map.get(k).pass === "" && fixed.pass)) {
       map.set(k, fixed);
     }
-  }
-
-  // ✅ enforce ONLY Brandon Phelps as admin
-  for (const [k, u] of map.entries()) {
-
-    const isBrandon =
-      norm(u.first) === "brandon" &&
-      norm(u.last) === "phelps";
-
-    u.isAdmin = isBrandon;
   }
 
   return Array.from(map.values());
@@ -5460,6 +5449,7 @@ function startPresenceHeartbeat() {
 
 
 const WORKER_BASE = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev";
+window.USERS_API = `${window.WORKER_BASE || WORKER_BASE}/users`;
 
 function dbHeadersJson() {
   return {
@@ -6738,7 +6728,6 @@ document.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("DOMContentLoaded", async () => {
 
 // === 🌐 GLOBAL USER STORAGE (Worker API) ===
-const USERS_API = `${WORKER_BASE}/users`;
 
 window.validLogins = [];
 window.usersLoaded = false;
@@ -6810,7 +6799,7 @@ function showCredentialsToast(msg, duration = 2500) {
      }
 
      // create in Worker/D1
-     const res = await fetch(USERS_API, {
+     const res = await fetch(window.USERS_API, {
        method: "POST",
        headers: dbHeadersJson(),
        body: JSON.stringify(newUser)
@@ -7610,7 +7599,7 @@ document.addEventListener("click", async (e) => {
         return;
       }
 
-      const res = await fetch(`${USERS_API}/${encodeURIComponent(user.id)}`, {
+      const res = await fetch(`${window.USERS_API}/${encodeURIComponent(user.id)}`, {
         method: "DELETE",
         headers: dbHeaders()
       });
