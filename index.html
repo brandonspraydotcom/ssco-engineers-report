@@ -1982,60 +1982,79 @@ window.isAdminUserNow = function (first, last) {
 };
 
 // ===============================
-// GLOBAL USER STORE
+// GLOBAL USER STORE (Worker API)
 // ===============================
 window.validLogins = [];
 window.usersLoaded = false;
 
-window.loadUsers = async function() {
+window.loadUsers = async function () {
   try {
-    const res = await fetch(window.JSONBIN_READ_URL, {
-      headers: { "X-Master-Key": window.JSONBIN_KEY }
+
+    const res = await fetch(`${WORKER_BASE}/users`, {
+      headers: dbHeaders()
     });
 
     const data = await res.json();
-    window.validLogins = data?.record?.users || [];
+
+    let users = data?.users || [];
+
+    users = enforceAdminRules(users);
+
+    window.validLogins = users;
     window.usersLoaded = true;
 
-    console.log("Users loaded:", window.validLogins);
+    console.log("Users loaded:", users);
 
   } catch (err) {
+
     console.error("Failed loading users", err);
     window.validLogins = [];
     window.usersLoaded = true;
-  }
-  
-  function enforceAdminRules(users) {
-    const map = new Map();
 
-    for (const u of (users || [])) {
-      const f = u.first || (u.user ? String(u.user).split(" ")[0] : "");
-      const l = u.last  || (u.user ? String(u.user).split(" ").slice(1).join(" ") : "");
-      const k = userKey(f, l);
-      if (!k || k === "|") continue;
-
-      const fixed = {
-        first: titleCaseName(f),
-        last:  titleCaseName(l),
-        pass:  u.pass || "",
-        isAdmin: !!u.isAdmin
-      };
-
-      // if duplicates exist, keep the first one that has a password
-      if (!map.has(k) || (map.get(k).pass === "" && fixed.pass)) {
-        map.set(k, fixed);
-      }
-    }
-
-    // ✅ enforce ONLY Brandon Phelps as admin
-    for (const [k, u] of map.entries()) {
-      const isBrandon = (norm(u.first) === "brandon" && norm(u.last) === "phelps");
-      u.isAdmin = isBrandon; // everyone else forced false
-    }
-
-    return Array.from(map.values());
   }
 };
+
+
+// ===============================
+// USER NORMALISATION + ADMIN RULES
+// ===============================
+function enforceAdminRules(users) {
+
+  const map = new Map();
+
+  for (const u of (users || [])) {
+
+    const f = u.first || "";
+    const l = u.last  || "";
+
+    const k = userKey(f, l);
+    if (!k || k === "|") continue;
+
+    const fixed = {
+      id: u.id,
+      first: titleCaseName(f),
+      last: titleCaseName(l),
+      pass: u.pass || "",
+      isAdmin: !!u.isAdmin
+    };
+
+    if (!map.has(k) || (map.get(k).pass === "" && fixed.pass)) {
+      map.set(k, fixed);
+    }
+  }
+
+  // ✅ enforce ONLY Brandon Phelps as admin
+  for (const [k, u] of map.entries()) {
+
+    const isBrandon =
+      norm(u.first) === "brandon" &&
+      norm(u.last) === "phelps";
+
+    u.isAdmin = isBrandon;
+  }
+
+  return Array.from(map.values());
+}
 
 // === Track PDF save status ===
 function markPdfSaved() {
@@ -6699,18 +6718,11 @@ document.addEventListener("DOMContentLoaded", () => {
 <script>
 document.addEventListener("DOMContentLoaded", async () => {
 
-  // === 🌐 GLOBAL USER STORAGE (JSONBin.io) ===
-  const JSONBIN_URL = "https://api.jsonbin.io/v3/b/68f5386043b1c97be971a853/latest";
-  const JSONBIN_WRITE_URL = "https://api.jsonbin.io/v3/b/68f5386043b1c97be971a853";
-  const JSONBIN_KEY = "$2a$10$2gZj6smFExW8GSSTuR9iherTpDIOMZ5Z0LPk43JBztbNqcSFaaLD6";
+// === 🌐 GLOBAL USER STORAGE (Worker API) ===
+const USERS_API = `${WORKER_BASE}/users`;
 
-window.JSONBIN_URL = JSONBIN_URL;
-window.JSONBIN_WRITE_URL = JSONBIN_WRITE_URL;
-window.JSONBIN_KEY = JSONBIN_KEY;
-window.JSONBIN_READ_URL = window.JSONBIN_URL; // ✅ alias for anything that expects READ_URL
-
-  window.validLogins = [];
-  let lastFetch = 0;
+window.validLogins = [];
+window.usersLoaded = false;
 
 // === 🍞 Credentials Toast Notification ===
 let toast = document.getElementById("credentialsToast");
@@ -6753,7 +6765,7 @@ function showCredentialsToast(msg, duration = 2500) {
   setTimeout(() => toast.classList.remove("show"), duration);
 }
 
- async function saveUserToCloud(first, last, passPlain, isAdmin=false) {
+ async function saveUserToCloud(first, last, passPlain, isAdmin = false) {
    try {
      const firstN = titleCaseName(first);
      const lastN  = titleCaseName(last);
@@ -6765,55 +6777,42 @@ function showCredentialsToast(msg, duration = 2500) {
        isAdmin: !!isAdmin
      };
 
-     const res = await fetch(JSONBIN_URL, { headers: { "X-Master-Key": JSONBIN_KEY } });
-     const data = await res.json();
+     // load current users from Worker
+     await window.loadUsers();
+     const existing = Array.isArray(window.validLogins) ? window.validLogins : [];
 
-     const existing = Array.isArray(data?.record?.users) ? data.record.users : [];
-
-     // Build a map keyed by normalized identity (case-insensitive)
-     const map = new Map();
-     for (const u of existing) {
-       const f = u.first || (u.user ? String(u.user).split(" ")[0] : "");
-       const l = u.last  || (u.user ? String(u.user).split(" ").slice(1).join(" ") : "");
-       const k = userKey(f, l);
-       if (!k || k === "|") continue;
-
-       // keep existing, but normalize shape
-       const fixed = {
-         first: titleCaseName(f),
-         last:  titleCaseName(l),
-         pass:  u.pass || "",
-         isAdmin: !!u.isAdmin
-       };
-       map.set(k, fixed);
-     }
-
+     // case-insensitive duplicate check
      const kNew = userKey(firstN, lastN);
-     if (map.has(kNew)) {
+     const alreadyExists = existing.some(u => userKey(u.first, u.last) === kNew);
+
+     if (alreadyExists) {
        showToast?.("⚠️ User already exists (case-insensitive)", "warning");
        return;
      }
 
-     map.set(kNew, newUser);
-
-     const users = Array.from(map.values());
-
-     await fetch(JSONBIN_WRITE_URL, {
-       method: "PUT",
-       headers: { "Content-Type": "application/json", "X-Master-Key": JSONBIN_KEY },
-       body: JSON.stringify({ ...data.record, users })
+     // create in Worker/D1
+     const res = await fetch(USERS_API, {
+       method: "POST",
+       headers: dbHeadersJson(),
+       body: JSON.stringify(newUser)
      });
 
+     const data = await res.json().catch(() => ({}));
+     if (!res.ok || !data.ok) {
+       throw new Error(data?.error || "User save failed");
+     }
+
      showToast?.("✅ User added globally", "success");
-     await window.loadUsers(true);
+     await window.loadUsers();
+
    } catch (err) {
      console.error("Failed to update global users:", err);
      showToast?.("⚠️ Failed to save user", "warning");
    }
  }
 
-  await window.loadUsers(true);
-  setInterval(() => window.loadUsers(true), 60000); // auto-refresh every 60s
+  await window.loadUsers();
+  setInterval(() => window.loadUsers(), 60000); // auto-refresh every 60s
 
 
 // === 🟢 LOGIN LOGIC ===
@@ -7079,7 +7078,7 @@ function renderUsersManager() {
           <div style="font-weight:600;color:#eee">${name}</div>
           ${locked ? `<div style="font-size:12px;color:#7CFC00;margin-top:2px;">🔒 Protected</div>` : ``}
         </div>
-        <button type="button" class="btn remove" data-del-user-index="${idx}"
+        <button type="button" class="btn remove" data-del-user-id="${idx}"
                 style="padding:8px 10px;${locked ? "opacity:.35;pointer-events:none;" : ""}">
           🗑
         </button>
@@ -7565,46 +7564,48 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
-  // ----------- USERS (JSONBIN) -----------
-  if (t.dataset.delUserIndex != null) {
+  // ----------- USERS (Worker / D1) -----------
+  if (t.dataset.delUserId != null) {
     if (window.isCurrentAdmin?.() !== true) {
       showToast?.("⛔ Admin only", "warning");
       return;
     }
 
     try {
-      const idx = Number(t.dataset.delUserIndex);
+      const idx = Number(t.dataset.delUserId);
       const users = Array.isArray(window.validLogins) ? [...window.validLogins] : [];
+      const user = users[idx];
+
+      if (!user?.id) {
+        showToast?.("⚠️ User id missing", "warning");
+        return;
+      }
 
       const getDisplayName = (u) =>
         (u?.first && u?.last) ? `${u.first} ${u.last}`.trim() : (u?.user || "");
 
-      const name = getDisplayName(users[idx]);
+      const name = getDisplayName(user);
 
       if (window.isProtectedPerson?.(name)) {
         showToast?.("🔒 This account cannot be deleted", "warning");
         return;
       }
 
-      users.splice(idx, 1);
-
-      const res = await fetch(window.JSONBIN_URL, {
-        headers: { "X-Master-Key": window.JSONBIN_KEY }
-      });
-      const data = await res.json();
-
-      await fetch(window.JSONBIN_WRITE_URL, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Master-Key": window.JSONBIN_KEY
-        },
-        body: JSON.stringify({ ...(data.record || {}), users })
+      const res = await fetch(`${USERS_API}/${encodeURIComponent(user.id)}`, {
+        method: "DELETE",
+        headers: dbHeaders()
       });
 
-      window.validLogins = users;
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Delete failed");
+      }
+
+      await window.loadUsers();
       window.renderUsersManager?.();
       showToast?.("User deleted", "success");
+
     } catch (err) {
       console.error(err);
       showToast?.("Delete failed", "error");
@@ -7614,6 +7615,7 @@ document.addEventListener("click", async (e) => {
   }
 });
 </script>
+
 <div id="credentialsToast"></div>
 
 <script>
