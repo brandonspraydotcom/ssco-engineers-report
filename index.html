@@ -1601,6 +1601,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <label style="display:block;font-size:12px;color:#aaa;margin-bottom:6px;">Status</label>
         <select id="actionsStatusFilter" style="width:100%;height:48px;border-radius:10px;">
           <option value="open">Open</option>
+          <option value="done">Completed</option>
           <option value="all">All</option>
         </select>
       </div>
@@ -1666,13 +1667,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <option value="custom">Custom</option>
         </select>
       </div>
+    </div>
 
-      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+    <div class="row" style="margin-top:10px; gap:10px; align-items:end;">
+      <div style="flex:1; max-width: 80%;">
         <label>From</label>
         <input id="reportsFromDate" type="date">
-      </div>
+      
 
-      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;">
+      
         <label>To</label>
         <input id="reportsToDate" type="date">
       </div>
@@ -5617,7 +5620,7 @@ function buildPOOutstandingFromForm() {
     salesEngineer: inputs.salesName || "",
     projectNo: inputs.project || "",
 
-    companyName: inputs.custCompany || "",
+    companyName: getCompanyValue?.() || inputs.custCompany || "",
     customerName: inputs.custName || "",
     visitType: inputs.visitType || "",
 
@@ -7729,6 +7732,14 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderOutstanding() {
     let items = lsReadArray(LS_KEYS.actions); // "ssco_outstanding_actions"
 
+    // 👤 current user
+    const currentUser = (localStorage.getItem("username") || "").trim();
+
+    // 🔐 non-admins only see their own actions
+    if (!window.isCurrentAdmin?.()) {
+      items = items.filter(a => (a.engineer || "").trim() === currentUser);
+    }
+
     // status filter (optional)
     const statusMode = document.getElementById("actionsStatusFilter")?.value || "open";
 
@@ -7760,11 +7771,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const due = rawDue
         ? new Date(rawDue + "T00:00:00").toLocaleDateString("en-GB")
         : "—";
-      const type  = a.followUpType || "FOLLOW_UP";
+      const isDone = (a.status || "open") === "done";
+      const type = a.followUpType || "FOLLOW_UP";
+
       const badge =
-        (a.followUpType === "PO_REQUIRED") ? "🧾 PO Required" :
-        (a.followUpType === "PO_RECEIVED") ? "✅ PO Received" :
-        "";
+        isDone && type === "PO_RECEIVED" ? "✅ PO Received" :
+        isDone ? "✅ Completed" :
+        type === "PO_REQUIRED" ? "🧾 PO Required" :
+        "📌 Open";
       const title = a.companyName || a.customerName || a.projectNo || "Outstanding item";
       const notes = a.followUpNotes ? String(a.followUpNotes) : "";
 
@@ -7775,7 +7789,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <div style="font-weight:700;color:#eee;">${window.escapeHtml(title)}</div>
 
               <div style="font-size:13px;color:#aaa;margin-top:2px;">
-                Type: <span style="color:#7CFC00">${window.escapeHtml(type)}</span>
+                Type: <span style="color:#7CFC00">${window.escapeHtml(String(type).replace(/_/g, " "))}</span>
                 • Due: <span style="color:#fff">${window.escapeHtml(due)}</span>
                 ${badge ? ` • <span style="color:#ffcc66">${window.escapeHtml(badge)}</span>` : ``}
               </div>
@@ -7823,7 +7837,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const qs = new URLSearchParams();
       qs.set("status", status);
-      if (who !== "__all__") qs.set("engineer", who);
+
+      // 👤 logged-in user
+      const currentUser = (localStorage.getItem("username") || "").trim();
+
+      // 🔐 non-admin users always filter by themselves
+      if (!window.isCurrentAdmin?.()) {
+        qs.set("engineer", currentUser);
+      } else {
+        if (who !== "__all__") qs.set("engineer", who);
+      }
+
       if (sales !== "__all__") qs.set("sales", sales);
 
       const res = await fetch(`${WORKER_BASE}/actions?${qs.toString()}`, {
@@ -7936,12 +7960,16 @@ document.addEventListener("click", async (e) => {
       // 1) Update local immediately
       const actions = lsReadArray(LS_KEYS.actions);
       const idx = actions.findIndex(a => a.id === id);
+
       if (idx >= 0) {
+
+        const originalType = String(actions[idx].followUpType || "").toUpperCase();
+
         actions[idx].status = "done";
         actions[idx].doneAt = new Date().toISOString();
 
         // ✅ If PO item completed, convert it from PO_REQUIRED -> PO_RECEIVED
-        if (String(actions[idx].followUpType || "").toUpperCase() === "PO_REQUIRED") {
+        if (originalType === "PO_REQUIRED") {
           actions[idx].followUpType = "PO_RECEIVED";
           actions[idx].poReceived = true;
           actions[idx].poRequired = false;
@@ -7952,52 +7980,51 @@ document.addEventListener("click", async (e) => {
         lsWriteArray(LS_KEYS.actions, actions);
         renderOutstanding();
         showToast?.("Marked as done", "success");
-      }
 
-      // ✅ If this DONE action was "PO_REQUIRED", mark the report as PO Received
-      try {
-        const a = actions[idx];
+        // ✅ If this DONE action was originally PO_REQUIRED, update report
+        try {
 
-        const isPORequired =
-          (a?.followUpType === "PO_REQUIRED") ||
-          (a?.poRequired === true) ||
-          (String(a?.followUpType || "").toUpperCase() === "PO_REQUIRED");
+          if (originalType === "PO_REQUIRED") {
 
-        if (isPORequired) {
-          const updated = markLocalReportPOReceived(a);
+            const updated = markLocalReportPOReceived(actions[idx]);
 
-          // refresh reports UI/KPIs
-          window.fetchReports?.();
+            // refresh reports UI/KPIs
+            window.fetchReports?.();
 
-          // patch cloud report (optional, if your worker supports PATCH)
-          if (updated.ok && updated.report?.id) {
-            try {
-              await patchReportInCloud(updated.report.id, { poReceived: true, poRequired: false });
-            } catch (e) {
-              console.warn("Report PO patch failed (cloud):", e);
+            // patch cloud report
+            if (updated.ok && updated.report?.id) {
+              try {
+                await patchReportInCloud(updated.report.id, {
+                  poReceived: true,
+                  poRequired: false
+                });
+              } catch (e) {
+                console.warn("Report PO patch failed (cloud):", e);
+              }
             }
           }
-        }
-      } catch (e) {
-        console.warn("PO->Report update failed:", e);
-      }
 
-      // 2) Sync to cloud (action)
-      try {
-        const patch = {
-          status: "done"
-        };
-
-        if (idx >= 0 && String(actions[idx].followUpType || "").toUpperCase() === "PO_RECEIVED") {
-          patch.followUpType = "PO_RECEIVED";
-          patch.poReceived = true;
-          patch.poRequired = false;
+        } catch (e) {
+          console.warn("PO->Report update failed:", e);
         }
 
-        await patchActionInCloud(id, patch);
-      } catch (err) {
-        console.warn("Cloud patch failed:", err);
-        showToast?.("⚠️ Done saved locally only", "warning");
+        // 2) Sync to cloud (action)
+        try {
+
+          const patch = { status: "done" };
+
+          if (originalType === "PO_REQUIRED") {
+            patch.followUpType = "PO_RECEIVED";
+            patch.poReceived = true;
+            patch.poRequired = false;
+          }
+
+          await patchActionInCloud(id, patch);
+
+        } catch (err) {
+          console.warn("Cloud patch failed:", err);
+          showToast?.("⚠️ Done saved locally only", "warning");
+        }
       }
 
       return;
@@ -9064,6 +9091,11 @@ async function fetchReports() {
       Loading…
     </div>`;
 
+  if (!window.isCurrentAdmin?.()) {
+    const engFilter = document.getElementById("reportsEngineerFilter");
+    if (engFilter) engFilter.style.display = "none";
+  }
+
   function readLocalReports() {
     try {
       if (window.LS_KEYS?.reports) return lsReadArray(window.LS_KEYS.reports);
@@ -9115,7 +9147,16 @@ async function fetchReports() {
     const who = engSel.value || "__all__";
     const qs = new URLSearchParams();
     qs.set("limit", "200");
-    if (who !== "__all__") qs.set("engineer", who);
+
+    // 👤 logged-in user
+    const currentUser = (localStorage.getItem("username") || "").trim();
+
+    // 🔐 Non-admin users only see their own reports
+    if (!window.isCurrentAdmin?.()) {
+      qs.set("engineer", currentUser);
+    } else {
+      if (who !== "__all__") qs.set("engineer", who);
+    }
 
     const res = await fetch(`${WORKER_BASE}/reports?${qs.toString()}`, {
       method: "GET",
