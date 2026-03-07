@@ -7731,7 +7731,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // status filter (optional)
     const statusMode = document.getElementById("actionsStatusFilter")?.value || "open";
-    if (statusMode === "open") items = items.filter(a => (a.status || "open") === "open");
+
+    if (statusMode !== "all") {
+      items = items.filter(a => (a.status || "open") === statusMode);
+    }
 
     // engineer filter
     const who = document.getElementById("actionsEngineerFilter")?.value || "__all__";
@@ -7936,6 +7939,16 @@ document.addEventListener("click", async (e) => {
       if (idx >= 0) {
         actions[idx].status = "done";
         actions[idx].doneAt = new Date().toISOString();
+
+        // ✅ If PO item completed, convert it from PO_REQUIRED -> PO_RECEIVED
+        if (String(actions[idx].followUpType || "").toUpperCase() === "PO_REQUIRED") {
+          actions[idx].followUpType = "PO_RECEIVED";
+          actions[idx].poReceived = true;
+          actions[idx].poRequired = false;
+          actions[idx].followUpNotes =
+            actions[idx].followUpNotes || "Purchase order received. Please invoice ASAP.";
+        }
+
         lsWriteArray(LS_KEYS.actions, actions);
         renderOutstanding();
         showToast?.("Marked as done", "success");
@@ -7971,7 +7984,17 @@ document.addEventListener("click", async (e) => {
 
       // 2) Sync to cloud (action)
       try {
-        await patchActionInCloud(id, { status: "done" });
+        const patch = {
+          status: "done"
+        };
+
+        if (idx >= 0 && String(actions[idx].followUpType || "").toUpperCase() === "PO_RECEIVED") {
+          patch.followUpType = "PO_RECEIVED";
+          patch.poReceived = true;
+          patch.poRequired = false;
+        }
+
+        await patchActionInCloud(id, patch);
       } catch (err) {
         console.warn("Cloud patch failed:", err);
         showToast?.("⚠️ Done saved locally only", "warning");
