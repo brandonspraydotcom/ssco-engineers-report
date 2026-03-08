@@ -1786,6 +1786,9 @@ document.addEventListener("DOMContentLoaded", () => {
            style="width:100%;margin-bottom:10px;padding:10px;
                   border-radius:8px;border:none;text-align:center;">
 
+    <input id="newEngineerEmail" type="email" placeholder="Engineer email"
+           style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;margin-top:10px;text-align:center;">
+
     <div id="addEngineerError"
          style="color:#ff5555;font-size:13px;opacity:0;
                 transition:opacity .3s ease;margin-bottom:6px;"></div>
@@ -1811,6 +1814,9 @@ document.addEventListener("DOMContentLoaded", () => {
     <input id="newSalesEngineerName" type="text" placeholder="Sales engineer name"
            style="width:100%;margin-bottom:10px;padding:10px;
                   border-radius:8px;border:none;text-align:center;">
+
+    <input id="newSalesEngineerEmail" type="email" placeholder="Sales engineer email"
+           style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;margin-top:10px;text-align:center;">
 
     <div id="addSalesEngineerError"
          style="color:#ff5555;font-size:13px;opacity:0;
@@ -7079,10 +7085,12 @@ document.getElementById("manageListModal")?.addEventListener("click", (e) => {
 
 // Engineers manager
 function renderEngineerManager() {
-  const list = getList(LS_ENGINEERS, DEFAULT_ENGINEERS);
+  const list = Array.isArray(window.globalEngineers) ? window.globalEngineers : [];
 
-  const html = list.map(name => {
+  const html = list.map(item => {
+    const name = String(item.name || "").trim();
     const locked = window.isProtectedPerson(name);
+
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;
                   padding:10px;border-radius:12px;background:rgba(255,255,255,0.04);">
@@ -7090,8 +7098,11 @@ function renderEngineerManager() {
           <div style="font-weight:600;color:#eee">${name}</div>
           ${locked ? `<div style="font-size:12px;color:#7CFC00;margin-top:2px;">🔒 Protected</div>` : ``}
         </div>
-        <button type="button" class="btn remove" data-del-engineer="${encodeURIComponent(name)}"
-                style="padding:8px 10px;${locked ? "opacity:.35;pointer-events:none;" : ""}">
+        <button type="button"
+          class="btn remove"
+          data-del-engineer="${encodeURIComponent(name)}"
+          data-del-engineer-id="${encodeURIComponent(item.id)}"
+          style="padding:8px 10px;${locked ? "opacity:.35;pointer-events:none;" : ""}">
           🗑
         </button>
       </div>
@@ -7103,16 +7114,29 @@ function renderEngineerManager() {
 
 // Sales manager
 function renderSalesManager() {
-  const list = getList(LS_SALES, DEFAULT_SALES);
+  const list = Array.isArray(window.globalSalesEngineers) ? window.globalSalesEngineers : [];
 
-  const html = list.map(name => `
-    <div style="display:flex;align-items:center;justify-content:space-between;
-                padding:10px;border-radius:12px;background:rgba(255,255,255,0.04);">
-      <div style="font-weight:600;color:#eee">${name}</div>
-      <button type="button" class="btn remove" data-del-sales="${encodeURIComponent(name)}"
-              style="padding:8px 10px;">🗑</button>
-    </div>
-  `).join("");
+  const html = list.map(item => {
+    const name = String(item.name || "").trim();
+    const locked = window.isProtectedPerson(name);
+
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:10px;border-radius:12px;background:rgba(255,255,255,0.04);">
+        <div>
+          <div style="font-weight:600;color:#eee">${name}</div>
+          ${locked ? `<div style="font-size:12px;color:#7CFC00;margin-top:2px;">🔒 Protected</div>` : ``}
+        </div>
+        <button type="button"
+          class="btn remove"
+          data-del-sales="${encodeURIComponent(name)}"
+          data-del-sales-id="${encodeURIComponent(item.id)}"
+          style="padding:8px 10px;${locked ? "opacity:.35;pointer-events:none;" : ""}">
+          🗑
+        </button>
+      </div>
+    `;
+  }).join("");
 
   openManageModal("🗑 Manage Sales Engineers", html);
 }
@@ -7310,24 +7334,58 @@ async function refreshPeopleDropdowns() {
 }
 
 // Wire up Save Engineer modal
-document.getElementById("saveEngineerBtn")?.addEventListener("click", () => {
+document.getElementById("saveEngineerBtn")?.addEventListener("click", async () => {
   const input = document.getElementById("newEngineerName");
-  const name = (input?.value || "").trim();
+  const emailInput = document.getElementById("newEngineerEmail");
   const err = document.getElementById("addEngineerError");
 
+  const name = (input?.value || "").trim();
+  let email = (emailInput?.value || "").trim().toLowerCase();
+
   if (!name) {
-    if (err) { err.textContent = "Please enter a name."; err.style.opacity = "1"; }
+    if (err) {
+      err.textContent = "Please enter a name.";
+      err.style.opacity = "1";
+    }
     return;
   }
-  if (err) err.style.opacity = "0";
 
-  const list = getList(LS_ENGINEERS, DEFAULT_ENGINEERS);
-  setList(LS_ENGINEERS, [...list, name]);
+  if (!email) {
+    email = `${name.toLowerCase().replace(/\s+/g, ".")}@spray.com`;
+  }
 
-  refreshPeopleDropdowns();
-  input.value = "";
-  hideSimpleModal("addEngineerModal", "addEngineerBox");
+  try {
+    const res = await fetch(`${WORKER_BASE}/engineers`, {
+      method: "POST",
+      headers: dbHeadersJson(),
+      body: JSON.stringify({ name, email })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "Failed to add engineer");
+    }
+
+    if (err) err.style.opacity = "0";
+
+    await window.loadEngineers?.();
+    await window.refreshPeopleDropdowns?.();
+
+    if (input) input.value = "";
+    if (emailInput) emailInput.value = "";
+
+    hideSimpleModal("addEngineerModal", "addEngineerBox");
+    showToast?.("Engineer added globally", "success");
+  } catch (e) {
+    console.error(e);
+    if (err) {
+      err.textContent = "Failed to add engineer.";
+      err.style.opacity = "1";
+    }
+    showToast?.("⚠️ Failed to add engineer", "warning");
+  }
 });
+
 
 // ✅ EXPOSE ADMIN FUNCTIONS GLOBALLY (needed by delete handler)
 window.getList = getList;
@@ -7344,24 +7402,58 @@ window.DEFAULT_ENGINEERS = DEFAULT_ENGINEERS;
 window.DEFAULT_SALES = DEFAULT_SALES;
 
 // Wire up Save Sales Engineer modal
-document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", () => {
+document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", async () => {
   const input = document.getElementById("newSalesEngineerName");
-  const name = (input?.value || "").trim();
+  const emailInput = document.getElementById("newSalesEngineerEmail");
   const err = document.getElementById("addSalesEngineerError");
 
+  const name = (input?.value || "").trim();
+  let email = (emailInput?.value || "").trim().toLowerCase();
+
   if (!name) {
-    if (err) { err.textContent = "Please enter a name."; err.style.opacity = "1"; }
+    if (err) {
+      err.textContent = "Please enter a name.";
+      err.style.opacity = "1";
+    }
     return;
   }
-  if (err) err.style.opacity = "0";
 
-  const list = getList(LS_SALES, DEFAULT_SALES);
-  setList(LS_SALES, [...list, name]);
+  if (!email) {
+    email = `${name.toLowerCase().replace(/\s+/g, ".")}@spray.com`;
+  }
 
-  refreshPeopleDropdowns();
-  input.value = "";
-  hideSimpleModal("addSalesEngineerModal", "addSalesEngineerBox");
+  try {
+    const res = await fetch(`${WORKER_BASE}/sales-engineers`, {
+      method: "POST",
+      headers: dbHeadersJson(),
+      body: JSON.stringify({ name, email })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "Failed to add sales engineer");
+    }
+
+    if (err) err.style.opacity = "0";
+
+    await window.loadSalesEngineers?.();
+    await window.refreshPeopleDropdowns?.();
+
+    if (input) input.value = "";
+    if (emailInput) emailInput.value = "";
+
+    hideSimpleModal("addSalesEngineerModal", "addSalesEngineerBox");
+    showToast?.("Sales engineer added globally", "success");
+  } catch (e) {
+    console.error(e);
+    if (err) {
+      err.textContent = "Failed to add sales engineer.";
+      err.style.opacity = "1";
+    }
+    showToast?.("⚠️ Failed to add sales engineer", "warning");
+  }
 });
+
 
   // === 📜 Menu visibility ===
   window.addEventListener("scroll", () => {
@@ -7596,20 +7688,34 @@ document.addEventListener("click", async (e) => {
       return;
     }
 
-    const name = decodeURIComponent(t.dataset.delEngineer);
+    const id = decodeURIComponent(t.dataset.delEngineerId || "");
+    const name = decodeURIComponent(t.dataset.delEngineer || "");
 
     if (window.isProtectedPerson?.(name)) {
       showToast?.("🔒 This account is protected", "warning");
       return;
     }
 
-    let list = window.getList(LS_ENGINEERS, DEFAULT_ENGINEERS);
-    list = list.filter(n => n !== name);
-    window.setList(LS_ENGINEERS, list);
+    try {
+      const res = await fetch(`${WORKER_BASE}/engineers/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: dbHeaders()
+      });
 
-    window.refreshPeopleDropdowns?.();
-    window.renderEngineerManager?.();
-    showToast?.("Engineer removed", "success");
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Failed to remove engineer");
+      }
+
+      await window.refreshPeopleDropdowns?.();
+      window.renderEngineerManager?.();
+      showToast?.("Engineer removed globally", "success");
+    } catch (err) {
+      console.error(err);
+      showToast?.("⚠️ Failed to remove engineer", "warning");
+    }
+
     return;
   }
 
@@ -7620,20 +7726,34 @@ document.addEventListener("click", async (e) => {
       return;
     }
 
-    const name = decodeURIComponent(t.dataset.delSales);
+    const id = decodeURIComponent(t.dataset.delSalesId || "");
+    const name = decodeURIComponent(t.dataset.delSales || "");
 
     if (window.isProtectedPerson?.(name)) {
       showToast?.("🔒 This account is protected", "warning");
       return;
     }
 
-    let list = window.getList(LS_SALES, DEFAULT_SALES);
-    list = list.filter(n => n !== name);
-    window.setList(LS_SALES, list);
+    try {
+      const res = await fetch(`${WORKER_BASE}/sales-engineers/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: dbHeaders()
+      });
 
-    window.refreshPeopleDropdowns?.();
-    window.renderSalesManager?.();
-    showToast?.("Sales engineer removed", "success");
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Failed to remove sales engineer");
+      }
+
+      await window.refreshPeopleDropdowns?.();
+      window.renderSalesManager?.();
+      showToast?.("Sales engineer removed globally", "success");
+    } catch (err) {
+      console.error(err);
+      showToast?.("⚠️ Failed to remove sales engineer", "warning");
+    }
+
     return;
   }
 
