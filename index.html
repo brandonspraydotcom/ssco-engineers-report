@@ -1567,6 +1567,10 @@ document.addEventListener("DOMContentLoaded", () => {
       🧾 Reports Log
     </button>
 
+    <button type="button" id="changePasswordBtn" class="btn silver" style="width:100%;margin-bottom:10px;">
+      🔑 Change Password
+    </button>
+
     <button id="logoutNow" class="btn remove" style="width:100%;margin-bottom:12px;">Logout</button>
     <div style="font-size:13px;color:#888;">v1.0.0 • SSCo Engineers Report</div>
   </div>
@@ -1782,7 +1786,7 @@ document.addEventListener("DOMContentLoaded", () => {
               transform:scale(0.85);opacity:0;transition:all .25s ease;">
     <div style="font-size:20px;margin-bottom:10px;">🧑‍🔧 Add Engineer</div>
 
-    <input id="newEngineerName" type="text" placeholder="Engineer name"
+    <input id="newEngineerName" type="text" placeholder="Engineer name" autocomplete="email"
            style="width:100%;margin-bottom:10px;padding:10px;
                   border-radius:8px;border:none;text-align:center;">
 
@@ -1815,7 +1819,7 @@ document.addEventListener("DOMContentLoaded", () => {
            style="width:100%;margin-bottom:10px;padding:10px;
                   border-radius:8px;border:none;text-align:center;">
 
-    <input id="newSalesEngineerEmail" type="email" placeholder="Sales engineer email"
+    <input id="newSalesEngineerEmail" type="email" placeholder="Sales engineer email" autocomplete="email"
            style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;margin-top:10px;text-align:center;">
 
     <div id="addSalesEngineerError"
@@ -4126,6 +4130,51 @@ window.addEventListener("DOMContentLoaded", () => {
     <div style="display:flex;justify-content:center;gap:10px;">
       <button id="emailCancel" class="btn ghost">Cancel</button>
       <button id="emailOk" class="btn green">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- 🔑 Change Password Modal -->
+<div id="changePasswordModal" style="
+  position:fixed;inset:0;z-index:6000;
+  background:rgba(0,0,0,.45);
+  backdrop-filter:blur(5px);
+  display:none;align-items:center;justify-content:center;">
+
+  <div id="changePasswordBox" style="
+    background:#1b1b1b;
+    border-radius:18px;
+    padding:22px;
+    width:320px;
+    text-align:left;
+    box-shadow:0 20px 60px rgba(0,0,0,.7);
+    transform:scale(0.85);
+    opacity:0;
+    transition:all .25s ease;">
+
+    <div style="font-size:18px;margin-bottom:14px;font-weight:600;text-align:center">
+      Change Password
+    </div>
+
+    <input
+      id="changePasswordNew"
+      type="password"
+      placeholder="New password"
+      style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;margin-bottom:10px;"
+    />
+
+    <input
+      id="changePasswordConfirm"
+      type="password"
+      placeholder="Confirm new password"
+      style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;"
+    />
+
+    <div id="changePasswordError" style="color:#ff6b6b;font-size:13px;opacity:0;margin-top:10px;"></div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button id="saveChangedPasswordBtn" class="btn green" style="flex:1">Save</button>
+      <button id="cancelChangePasswordBtn" class="btn remove" style="flex:1">Cancel</button>
     </div>
   </div>
 </div>
@@ -7629,6 +7678,124 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", async
   }
 });
 
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const openBtn = document.getElementById("changePasswordBtn");
+  const modal = document.getElementById("changePasswordModal");
+  const box = document.getElementById("changePasswordBox");
+  const cancelBtn = document.getElementById("cancelChangePasswordBtn");
+  const saveBtn = document.getElementById("saveChangedPasswordBtn");
+  const err = document.getElementById("changePasswordError");
+  const newPassEl = document.getElementById("changePasswordNew");
+  const confirmEl = document.getElementById("changePasswordConfirm");
+
+  function openModal() {
+    if (!modal || !box) return;
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.opacity = "1";
+      box.style.transform = "scale(1)";
+    });
+  }
+
+  function closeModal() {
+    if (!modal || !box) return;
+    modal.style.opacity = "0";
+    box.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    setTimeout(() => {
+      modal.style.display = "none";
+      if (newPassEl) newPassEl.value = "";
+      if (confirmEl) confirmEl.value = "";
+      if (err) {
+        err.textContent = "";
+        err.style.opacity = "0";
+      }
+    }, 250);
+  }
+
+  openBtn?.addEventListener("click", () => {
+    const accountModal = document.getElementById("accountModal");
+    const accountBox = document.getElementById("accountBox");
+
+    if (accountModal) {
+      accountModal.style.opacity = "0";
+      if (accountBox) {
+        accountBox.style.transform = "scale(0.85)";
+        accountBox.style.opacity = "0";
+      }
+      setTimeout(() => {
+        accountModal.style.display = "none";
+        openModal();
+      }, 260);
+    } else {
+      openModal();
+    }
+  });
+
+  cancelBtn?.addEventListener("click", closeModal);
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  saveBtn?.addEventListener("click", async () => {
+    const newPass = (newPassEl?.value || "").trim();
+    const confirmPass = (confirmEl?.value || "").trim();
+
+    if (!newPass || !confirmPass) {
+      err.textContent = "Please complete both fields.";
+      err.style.opacity = "1";
+      return;
+    }
+
+    if (newPass !== confirmPass) {
+      err.textContent = "Passwords do not match.";
+      err.style.opacity = "1";
+      return;
+    }
+
+    if (newPass.length < 4) {
+      err.textContent = "Password is too short.";
+      err.style.opacity = "1";
+      return;
+    }
+
+    try {
+      const username = (localStorage.getItem("username") || "").trim();
+      const users = Array.isArray(window.validLogins) ? window.validLogins : [];
+      const user = users.find(u => `${u.first || ""} ${u.last || ""}`.trim().toLowerCase() === username.toLowerCase());
+
+      if (!user?.id) {
+        throw new Error("Current user not found");
+      }
+
+      const res = await fetch(`${window.USERS_API}/${encodeURIComponent(user.id)}`, {
+        method: "PATCH",
+        headers: dbHeadersJson(),
+        body: JSON.stringify({
+          pass: btoa(newPass)
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Password update failed");
+      }
+
+      await window.loadUsers?.();
+      showToast?.("✅ Password changed successfully", "success");
+      closeModal();
+    } catch (e) {
+      console.error(e);
+      err.textContent = "Failed to change password.";
+      err.style.opacity = "1";
+      showToast?.("⚠️ Failed to change password", "warning");
+    }
+  });
+});
 </script>
 
 <script>
