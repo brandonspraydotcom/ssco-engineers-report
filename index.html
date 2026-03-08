@@ -1905,6 +1905,10 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+window.WORKER_BASE = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev";
+</script>
+
+<script>
 
 // ===============================
 // USER NAME HELPERS
@@ -9157,6 +9161,10 @@ async function fetchReports() {
     } else {
       if (who !== "__all__") qs.set("engineer", who);
     }
+
+    console.log("WORKER_BASE =", WORKER_BASE);
+    console.log("reports url =", `${WORKER_BASE}/reports?${qs.toString()}`);
+    console.log("reports headers =", dbHeaders());
 
     const res = await fetch(`${WORKER_BASE}/reports?${qs.toString()}`, {
       method: "GET",
