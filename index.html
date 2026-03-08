@@ -1941,6 +1941,48 @@ window.unlockScroll = () => {
 </script>
 
 <script>
+window.loadEngineers = async function () {
+  try {
+    const res = await fetch(`${WORKER_BASE}/engineers`, {
+      headers: dbHeaders()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) {
+      throw new Error(data?.error || "Failed to load engineers");
+    }
+
+    window.globalEngineers = data.items || [];
+    return window.globalEngineers;
+  } catch (err) {
+    console.error("Failed loading engineers:", err);
+    window.globalEngineers = [];
+    return [];
+  }
+};
+
+window.loadSalesEngineers = async function () {
+  try {
+    const res = await fetch(`${WORKER_BASE}/sales-engineers`, {
+      headers: dbHeaders()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || !Array.isArray(data.items)) {
+      throw new Error(data?.error || "Failed to load sales engineers");
+    }
+
+    window.globalSalesEngineers = data.items || [];
+    return window.globalSalesEngineers;
+  } catch (err) {
+    console.error("Failed loading sales engineers:", err);
+    window.globalSalesEngineers = [];
+    return [];
+  }
+};
+</script>
+
+<script>
 window.isAdminUserNow = () => window.isCurrentAdmin?.() === true;
 
 // ===============================
@@ -7220,34 +7262,50 @@ function syncEngineerToSigPrint() {
 }
 
 // Call this after login AND after adding people
-function refreshPeopleDropdowns() {
-  const engineers = getList(LS_ENGINEERS, DEFAULT_ENGINEERS);
-  if (!engineers.some(n => window.isProtectedPerson(n))) {
-  setList(LS_ENGINEERS, ["Brandon Phelps", ...engineers]);
-  }
-  const sales = getList(LS_SALES, DEFAULT_SALES);
+async function refreshPeopleDropdowns() {
+  const engSelect = document.getElementById("engineer");
+  const salesSelect = document.getElementById("salesName");
+  const loggedFullName = (localStorage.getItem("username") || "").trim();
 
-  // Build option lists
-  populateSelect("engineer", engineers, "Brandon Phelps");
+  let engineers = [];
+  let sales = [];
+
+  try {
+    const [engItems, salesItems] = await Promise.all([
+      window.loadEngineers?.(),
+      window.loadSalesEngineers?.()
+    ]);
+
+    engineers = (engItems || []).map(x => String(x.name || "").trim()).filter(Boolean);
+    sales = (salesItems || []).map(x => String(x.name || "").trim()).filter(Boolean);
+  } catch (e) {
+    console.warn("Global people load failed, using local fallback:", e);
+  }
+
+  // fallback to local if API returned nothing
+  if (!engineers.length) {
+    engineers = getList(LS_ENGINEERS, DEFAULT_ENGINEERS);
+  }
+  if (!sales.length) {
+    sales = getList(LS_SALES, DEFAULT_SALES);
+  }
+
+  // keep Brandon protected in engineer list
+  if (!engineers.some(n => window.isProtectedPerson?.(n))) {
+    engineers = ["Brandon Phelps", ...engineers];
+    engineers = [...new Set(engineers)];
+  }
+
+  populateSelect("engineer", engineers, loggedFullName || "Brandon Phelps");
   populateSelect("salesName", sales, sales[0] || "");
 
-  // ✅ Auto-select engineer = logged-in full name
-  const loggedFullName = (localStorage.getItem("username") || "").trim();
-  const engSelect = document.getElementById("engineer");
-
   if (engSelect && loggedFullName) {
-    // ensure logged user exists in engineers list
-    if (!engineers.includes(loggedFullName)) {
-      setList(LS_ENGINEERS, [...engineers, loggedFullName]);
-      // re-populate with updated list and default = logged name
-      populateSelect("engineer", getList(LS_ENGINEERS, DEFAULT_ENGINEERS), loggedFullName);
+    if (engineers.includes(loggedFullName)) {
+      engSelect.value = loggedFullName;
+      try { saveField(engSelect); } catch {}
     }
-
-    engSelect.value = loggedFullName;
-    try { saveField(engSelect); } catch {}
   }
 
-  // Sync printed name
   syncEngineerToSigPrint();
 }
 
@@ -7442,7 +7500,7 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", () =>
     loginModal?.remove();
     document.body.classList.add("logged-in");
     showMenu(storedUser, localStorage.getItem("isAdmin") === "true");
-    refreshPeopleDropdowns();
+    await refreshPeopleDropdowns();
     window.updateAdminButtons?.();
     showToast(`👋 Welcome back, ${storedUser}`);
     // guarantee dropdowns populate after scripts finish loading
