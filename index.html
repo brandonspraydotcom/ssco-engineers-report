@@ -7698,6 +7698,7 @@ document.addEventListener("DOMContentLoaded", () => {
       modal.style.opacity = "1";
       box.style.opacity = "1";
       box.style.transform = "scale(1)";
+      window.lockScroll();
     });
   }
 
@@ -7706,6 +7707,7 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.style.opacity = "0";
     box.style.opacity = "0";
     box.style.transform = "scale(0.85)";
+    window.unlockScroll();
     setTimeout(() => {
       modal.style.display = "none";
       if (newPassEl) newPassEl.value = "";
