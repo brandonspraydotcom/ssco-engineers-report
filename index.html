@@ -4156,19 +4156,35 @@ window.addEventListener("DOMContentLoaded", () => {
       Change Password
     </div>
 
-    <input
-      id="changePasswordNew"
-      type="password"
-      placeholder="New password"
-      style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;margin-bottom:10px;"
-    />
+    <div style="position:relative;margin-bottom:10px;">
+  <input
+    id="changePasswordNew"
+    type="password"
+    placeholder="New password"
+    style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;"
+  />
+  <button type="button"
+    id="toggleNewPassword"
+    style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+           background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;">
+    👁
+  </button>
+</div>
 
-    <input
-      id="changePasswordConfirm"
-      type="password"
-      placeholder="Confirm new password"
-      style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;"
-    />
+<div style="position:relative;">
+  <input
+    id="changePasswordConfirm"
+    type="password"
+    placeholder="Confirm new password"
+    style="width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,0.05);border:none;color:#eee;"
+  />
+  <button type="button"
+    id="toggleConfirmPassword"
+    style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+           background:none;border:none;color:#aaa;font-size:14px;cursor:pointer;">
+    👁
+  </button>
+</div>
 
     <div id="changePasswordError" style="color:#ff6b6b;font-size:13px;opacity:0;margin-top:10px;"></div>
 
@@ -7022,7 +7038,10 @@ loginSubmit?.addEventListener("click", () => {
   window.updateAdminButtons?.();
 
   loginModal.style.opacity = "0";
-  setTimeout(() => loginModal.remove(), 300);
+  setTimeout(() => {
+    loginModal.remove();
+    window.unlockScroll?.();
+  }, 300);
 
   document.body.classList.add("logged-in");
   showMenu(fullName, admin);
@@ -7652,6 +7671,7 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", async
     const showLogin = () => {
       loginModal.style.display = "flex";
       loginModal.style.pointerEvents = "auto";
+      window.lockScroll?.();
       requestAnimationFrame(() => {
         loginModal.style.opacity = "1";
         loginBox.style.opacity = "1";
@@ -7691,6 +7711,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const newPassEl = document.getElementById("changePasswordNew");
   const confirmEl = document.getElementById("changePasswordConfirm");
 
+  const toggleNew = document.getElementById("toggleNewPassword");
+  const toggleConfirm = document.getElementById("toggleConfirmPassword");
+
+  toggleNew?.addEventListener("click", () => {
+    const input = document.getElementById("changePasswordNew");
+    if (!input) return;
+
+    const visible = input.type === "text";
+    input.type = visible ? "password" : "text";
+    toggleNew.textContent = visible ? "👁" : "🙈";
+  });
+
+  toggleConfirm?.addEventListener("click", () => {
+    const input = document.getElementById("changePasswordConfirm");
+    if (!input) return;
+
+    const visible = input.type === "text";
+    input.type = visible ? "password" : "text";
+    toggleConfirm.textContent = visible ? "👁" : "🙈";
+  });
+
   function openModal() {
     if (!modal || !box) return;
     modal.style.display = "flex";
@@ -7699,6 +7740,7 @@ document.addEventListener("DOMContentLoaded", () => {
       box.style.opacity = "1";
       box.style.transform = "scale(1)";
       window.lockScroll();
+      newPassEl?.focus();
     });
   }
 
