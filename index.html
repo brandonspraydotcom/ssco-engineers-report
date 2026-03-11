@@ -6915,7 +6915,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!shadow || !shadow.querySelector("input")) {
         console.warn(`⚠️ ${id}: shadow input missing — applying Safari fallback`);
 
-        // ✅ Create fallback input styled like the others
         const fallback = document.createElement("input");
         fallback.type = "text";
         fallback.id = `${id}Fallback`;
@@ -6932,11 +6931,13 @@ document.addEventListener("DOMContentLoaded", () => {
           box-sizing: border-box;
         `;
 
-        // Insert after broken component, hide broken element
         el.insertAdjacentElement("afterend", fallback);
         el.style.display = "none";
 
-        // ✅ Attach classic Google Autocomplete
+        fallback.addEventListener("change", () => refreshCustomerHistory?.());
+        fallback.addEventListener("input", () => refreshCustomerHistory?.());
+        fallback.addEventListener("blur", () => refreshCustomerHistory?.());
+
         const autocomplete = new google.maps.places.Autocomplete(fallback, {
           fields: ["address_components", "geometry", "name"],
           types: [type]
@@ -6947,14 +6948,24 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!place) return;
 
           if (id === "custCompany") {
-            // 🧼 Only show business name
             const cleanName = (place.name || "")
               .replace(/,.*/g, "")
               .replace(/\s+\d+.*/, "")
               .trim();
+
             fallback.value = cleanName;
+
+            const hiddenCompany = document.getElementById("custCompanyHidden");
+            if (hiddenCompany) {
+              hiddenCompany.value = cleanName;
+              try { saveField(hiddenCompany); } catch {}
+            }
+
+            setTimeout(() => {
+              refreshCustomerHistory?.();
+            }, 50);
+
           } else {
-            // 🧼 For addr1, show street address
             const addressParts = [];
             if (place.address_components) {
               place.address_components.forEach(c => {
@@ -6965,7 +6976,6 @@ document.addEventListener("DOMContentLoaded", () => {
             fallback.value = addressParts.join(" ").trim();
           }
 
-          // ✅ Fill the rest of the address fields
           fillAddress(place);
         });
       }
