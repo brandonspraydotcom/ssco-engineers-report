@@ -4075,6 +4075,7 @@ document.addEventListener("DOMContentLoaded", () => {
         place?.name ||
         "";
       setCompanyName(companyName);
+      setTimeout(refreshCustomerHistory, 50);
     });
   }
 
@@ -4113,6 +4114,7 @@ document.addEventListener("DOMContentLoaded", () => {
   gmpx?.addEventListener("gmpx-placechange", () => {
     // gmpx.value usually becomes the selected label
     sync();
+    setTimeout(refreshCustomerHistory, 50);
   });
 
   // ALSO mirror while typing in the gmpx internal input
@@ -10089,6 +10091,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const place = e.detail?.place;
       const name = String(place?.displayName || place?.name || "").trim();
       if (name) setCompany(name);
+      setTimeout(refreshCustomerHistory, 50);
     });
 
     // 2) Safety net: try to read the internal input if shadowRoot is open
