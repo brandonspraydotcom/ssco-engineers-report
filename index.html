@@ -6998,6 +6998,9 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("postal").value = get("postal_code");
       document.getElementById("country").value = get("country");
     }
+    setTimeout(() => {
+      refreshCustomerHistory();
+    }, 50);
   });
 
 });
