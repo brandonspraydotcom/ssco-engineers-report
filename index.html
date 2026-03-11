@@ -1557,6 +1557,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <button type="button" id="openOutstandingBtn" class="btn" style="width:100%;margin-bottom:10px;">
       ✅ Outstanding Actions
+      <span id="outstandingBadge"
+            style="
+            position:absolute;
+            top:-6px;
+            right:-6px;
+            background:#ff4d4d;
+            color:#fff;
+            font-size:11px;
+            font-weight:700;
+            border-radius:999px;
+            padding:2px 7px;
+            display:none;">
+      </span>
     </button>
 
     <button type="button" id="openPresenceBtn" class="btn ghost" style="width:100%;margin-bottom:10px;display:none;">
@@ -8097,6 +8110,7 @@ window.hideSimpleModal = function(modalId, boxId) {
 <script>
 
 document.addEventListener("DOMContentLoaded", () => {
+  updateOutstandingBadge();
   const openBtn  = document.getElementById("openOutstandingBtn");
   const modal    = document.getElementById("outstandingModal");
   const box      = document.getElementById("outstandingBox");
@@ -8287,6 +8301,37 @@ document.addEventListener("DOMContentLoaded", () => {
   // expose for commitReportSave()
   window.renderOutstandingActions = renderOutstanding;
 
+  function updateOutstandingBadge() {
+    const badge = document.getElementById("outstandingBadge");
+    if (!badge) return;
+    const actions = lsReadArray(LS_KEYS.actions) || [];
+    const openItems = actions.filter(a => (a.status || "open") === "open");
+    const count = openItems.length;
+
+    if (count === 0) {
+      badge.style.display = "none";
+      return;
+    }
+
+    badge.textContent = count;
+    badge.style.display = "inline-block";
+
+    // color logic
+    const overdue = openItems.some(a => {
+      const raw = a.dueDate || a.due_date || a.followUpDueDate;
+      if (!raw) return false;
+
+      const due = new Date(raw + "T00:00:00");
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      return due < today;
+    });
+
+    badge.style.background = overdue ? "#ff3b3b" : "#ffaa00";
+
+  }
+
   // ---------- Open/Close ----------
   async function openOutstanding() {
     populateEngineerFilterFromEngineerSelect();
@@ -8323,6 +8368,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn("Fetch actions failed:", e);
     }
     renderOutstanding();
+    updateOutstandingBadge();
 
     modal.style.display = "flex";
     requestAnimationFrame(() => {
@@ -8403,6 +8449,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn("Fetch actions failed:", e);
     }
     renderOutstanding();
+    updateOutstandingBadge();
   }
 
   document.getElementById("actionsEngineerFilter")?.addEventListener("change", refreshAndRenderOutstanding);
@@ -8440,6 +8487,7 @@ document.addEventListener("click", async (e) => {
 
         lsWriteArray(LS_KEYS.actions, actions);
         renderOutstanding();
+        updateOutstandingBadge();
         showToast?.("Marked as done", "success");
 
         // ✅ If this DONE action was originally PO_REQUIRED, update report
@@ -8509,6 +8557,7 @@ document.addEventListener("click", async (e) => {
       const next = actions.filter(a => a.id !== id);
       lsWriteArray(LS_KEYS.actions, next);
       renderOutstanding();
+      updateOutstandingBadge();
       showToast?.("Removed outstanding item", "success");
 
       // 2) Sync to cloud
