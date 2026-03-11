@@ -2235,7 +2235,13 @@ function readReportMetaFromForm() {
     customerName, customerEmail,
     companyName,
 
-    followUpTypes, followUpNotes, followUpDueDate,
+    followUpTypes,
+    followUpType: (followUpTypes || [])
+      .filter(t => t && t !== "NA")
+      .map(formatFollowUpType)
+      .join(" / "),
+    followUpNotes,
+    followUpDueDate,
 
     visitChargeAmount, visitChargeCurrency,
     poRequired, poReceived,
@@ -2266,6 +2272,7 @@ function addReportToLog(meta) {
 
     // follow-up
     followUpTypes: meta.followUpTypes || [],
+    followUpType: meta.followUpType || "",
     followUpNotes: meta.followUpNotes || "",
     followUpDueDate: meta.followUpDueDate || "",
 
@@ -8191,7 +8198,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? new Date(rawDue + "T00:00:00").toLocaleDateString("en-GB")
         : "—";
       const isDone = (a.status || "open") === "done";
-      const type = a.followUpType || "Follow Up";
+      const type = formatFollowUpType(a.followUpType);
 
       const badge =
         isDone && type === "PO_RECEIVED" ? "✅ PO Received" :
