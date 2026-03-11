@@ -8740,11 +8740,16 @@ document.addEventListener("click", async (e) => {
     }
 }); 
 
-  const companyField = document.getElementById("custCompany");
-  const hiddenCompanyField = document.getElementById("custCompanyHidden");
-  const companyFallback = document.getElementById("custCompanyFallback");
+  const companySelectors = [
+    "#custCompany",
+    "#company",
+    "#companyName",
+    "#custCompanyHidden",
+    "#custCompanyFallback"
+  ];
 
-  [companyField, hiddenCompanyField, companyFallback].forEach(el => {
+  companySelectors.forEach(sel => {
+    const el = document.querySelector(sel);
     if (!el) return;
 
     el.addEventListener("change", refreshCustomerHistory);
