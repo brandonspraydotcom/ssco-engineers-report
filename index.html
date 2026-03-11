@@ -1358,6 +1358,15 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
+    <div class="card" id="customerHistoryCard" style="display:none;">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Customer History</span>
+        <span id="customerHistoryCount" style="font-size:12px;color:#aaa;"></span>
+      </label>
+
+      <div id="customerHistoryList" style="margin-top:10px;"></div>
+    </div>
+
     <div class="card">
       <label>Report details</label><button id="aiRewriteReport" class="btn purple" type="button" style="flex:1">✨ Rewrite Report</button>
       <textarea id="report" type="text" rows="4" placeholder="Start typing report details..."></textarea>
@@ -2371,6 +2380,156 @@ function addOutstandingAction(meta) {
 
   lsWriteArray(LS_KEYS.actions, actions);
   return created;
+}
+
+function normaliseCompanyName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function formatHistoryDate(dateStr, createdAt) {
+  const raw = String(dateStr || createdAt || "").trim();
+  if (!raw) return "—";
+
+  try {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return new Date(raw + "T00:00:00").toLocaleDateString("en-GB");
+    }
+    return new Date(raw).toLocaleDateString("en-GB");
+  } catch {
+    return raw;
+  }
+}
+
+async function fetchCustomerHistory(companyName) {
+  const target = normaliseCompanyName(companyName);
+  if (!target) return [];
+
+  function readLocalReports() {
+    try {
+      const key = window.LS_KEYS?.reports || "ssco_reports_log";
+      return lsReadArray(key) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  let cloudItems = [];
+
+  try {
+    const res = await fetch(`${WORKER_BASE}/reports?limit=500`, {
+      method: "GET",
+      headers: dbHeaders()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok && Array.isArray(data.items)) {
+      cloudItems = data.items;
+    }
+  } catch (e) {
+    console.warn("Customer history cloud fetch failed:", e);
+  }
+
+  const localItems = readLocalReports();
+
+  // merge by id, prefer richer/local if needed
+  const map = new Map();
+
+  [...cloudItems, ...localItems].forEach(r => {
+    if (!r?.id) return;
+    map.set(r.id, { ...(map.get(r.id) || {}), ...r });
+  });
+
+  const merged = Array.from(map.values());
+
+  return merged
+    .filter(r => !r.deleted)
+    .filter(r => normaliseCompanyName(r.companyName) === target)
+    .sort((a, b) => {
+      const ad = String(a.date || a.createdAt || "");
+      const bd = String(b.date || b.createdAt || "");
+      return bd.localeCompare(ad);
+    });
+}
+
+function renderCustomerHistory(items, currentReportId = "") {
+  const card = document.getElementById("customerHistoryCard");
+  const list = document.getElementById("customerHistoryList");
+  const count = document.getElementById("customerHistoryCount");
+
+  if (!card || !list || !count) return;
+
+  const currentId = String(currentReportId || "").trim();
+  const filtered = (items || []).filter(r => String(r.id || "") !== currentId);
+
+  if (!filtered.length) {
+    card.style.display = "none";
+    list.innerHTML = "";
+    count.textContent = "";
+    return;
+  }
+
+  card.style.display = "block";
+  count.textContent = `${filtered.length} previous visit${filtered.length === 1 ? "" : "s"}`;
+
+  list.innerHTML = filtered.slice(0, 8).map(r => {
+    const date = formatHistoryDate(r.date, r.createdAt);
+    const visitType = r.visitType || "Visit";
+    const engineer = r.engineer || "—";
+    const project = r.projectNo || "—";
+    const followUp = r.followUpType || "";
+    const poText =
+      r.poReceived ? "PO received" :
+      r.poRequired ? "PO required" :
+      "";
+
+    return `
+      <div style="
+        padding:12px;
+        border-radius:12px;
+        background:rgba(255,255,255,0.04);
+        margin-bottom:10px;
+      ">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+          <div>
+            <div style="font-weight:700;color:#eee;">
+              ${window.escapeHtml(date)} • ${window.escapeHtml(visitType)}
+            </div>
+            <div style="font-size:12px;color:#999;margin-top:4px;">
+              Engineer: <span style="color:#ccc">${window.escapeHtml(engineer)}</span>
+              • Project: <span style="color:#ccc">${window.escapeHtml(project)}</span>
+            </div>
+            ${(followUp || poText) ? `
+              <div style="font-size:12px;color:#bbb;margin-top:6px;line-height:1.35;">
+                ${followUp ? `Follow-up: <span style="color:#7CFC00">${window.escapeHtml(followUp)}</span>` : ``}
+                ${followUp && poText ? ` • ` : ``}
+                ${poText ? `<span style="color:#ffcc66">${window.escapeHtml(poText)}</span>` : ``}
+              </div>
+            ` : ``}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function refreshCustomerHistory() {
+  const companyName = (typeof getCompanyValue === "function"
+    ? getCompanyValue()
+    : document.getElementById("custCompany")?.value || ""
+  ).trim();
+
+  const currentReportId = ""; // blank for now while creating a new report
+
+  if (!companyName) {
+    renderCustomerHistory([], currentReportId);
+    return;
+  }
+
+  const items = await fetchCustomerHistory(companyName);
+  renderCustomerHistory(items, currentReportId);
 }
 
 /* ---------- Helpers ---------- */
@@ -5988,6 +6147,7 @@ async function commitReportSave() {
     }
 
     showToast?.("☁️ Synced to cloud", "success");
+    refreshCustomerHistory?.();
   } catch (err) {
     console.warn("Cloud sync failed:", err);
     showToast?.("⚠️ Saved locally (offline mode)", "warning");
@@ -8575,7 +8735,24 @@ document.addEventListener("click", async (e) => {
       }
       return;
     }
-});    
+}); 
+
+  const companyField = document.getElementById("custCompany");
+  const hiddenCompanyField = document.getElementById("custCompanyHidden");
+  const companyFallback = document.getElementById("custCompanyFallback");
+
+  [companyField, hiddenCompanyField, companyFallback].forEach(el => {
+    if (!el) return;
+
+    el.addEventListener("change", refreshCustomerHistory);
+    el.addEventListener("input", refreshCustomerHistory);
+    el.addEventListener("blur", refreshCustomerHistory);
+  });
+
+  setTimeout(() => {
+    refreshCustomerHistory();
+  }, 300);
+   
 });
 </script>
 
