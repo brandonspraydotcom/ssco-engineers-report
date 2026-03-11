@@ -8743,6 +8743,20 @@ document.addEventListener("click", async (e) => {
     }
 }); 
 
+  const placeField = document.getElementById("custCompany");
+
+  placeField?.addEventListener("gmpx-placechange", () => {
+    console.log("[CustomerHistory] place selected");
+    setTimeout(refreshCustomerHistory, 100);
+  });
+
+  const hiddenCompany = document.getElementById("custCompanyHidden");
+
+  hiddenCompany?.addEventListener("change", () => {
+    console.log("[CustomerHistory] hidden company updated");
+    refreshCustomerHistory();
+  });
+
   const companySelectors = [
     "#custCompany",
     "#company",
