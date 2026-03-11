@@ -2521,6 +2521,9 @@ async function refreshCustomerHistory() {
     : document.getElementById("custCompany")?.value || ""
   ).trim();
 
+  console.log("[CustomerHistory] refresh called");
+  console.log("[CustomerHistory] companyName =", companyName);
+
   const currentReportId = ""; // blank for now while creating a new report
 
   if (!companyName) {
@@ -8750,17 +8753,30 @@ document.addEventListener("click", async (e) => {
 
   companySelectors.forEach(sel => {
     const el = document.querySelector(sel);
+    console.log("[CustomerHistory] selector", sel, "=>", el);
+
     if (!el) return;
 
-    el.addEventListener("change", refreshCustomerHistory);
-    el.addEventListener("input", refreshCustomerHistory);
-    el.addEventListener("blur", refreshCustomerHistory);
-  });
+    el.addEventListener("change", () => {
+      console.log("[CustomerHistory] change fired from", sel, "value =", el.value);
+      refreshCustomerHistory();
+    });
 
-  setTimeout(() => {
-    refreshCustomerHistory();
-  }, 300);
-   
+    el.addEventListener("input", () => {
+      console.log("[CustomerHistory] input fired from", sel, "value =", el.value);
+      refreshCustomerHistory();
+    });
+
+    el.addEventListener("blur", () => {
+      console.log("[CustomerHistory] blur fired from", sel, "value =", el.value);
+      refreshCustomerHistory();
+    });
+
+
+    setTimeout(() => {
+      refreshCustomerHistory();
+    }, 300);
+ }); 
 });
 </script>
 
