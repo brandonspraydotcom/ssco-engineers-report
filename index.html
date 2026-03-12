@@ -1725,6 +1725,25 @@ document.addEventListener("DOMContentLoaded", () => {
       <input id="reportsCustomerFilter" type="text" placeholder="Search customer / company…" style="width:100%;margin-top:5px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;">
 
       <button id="refreshReportsLog" class="btn" type="button" style="padding:10px 12px;">↻</button>
+
+    </div>
+    <div style="margin:10px 0 14px 0;">
+        <input
+          id="reportsSearchInput"
+          type="text"
+          placeholder="Search by project, company, engineer, notes..."
+          style="
+            width:100%;
+            height:44px;
+            border-radius:12px;
+            border:1px solid rgba(255,255,255,0.08);
+            background:#161616;
+            color:#eee;
+            padding:0 14px;
+            box-sizing:border-box;
+            font-size:15px;
+          "
+        />
     </div>
 
     <div id="reportsKPIBox"
@@ -1760,6 +1779,7 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
 
     </div>
+
 
     <div id="reportsLogList"
          style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
@@ -2263,6 +2283,10 @@ function readReportMetaFromForm() {
     customerName, customerEmail,
     companyName,
 
+    report: (document.getElementById("report")?.value || "").trim(),
+    partsUsed: (document.getElementById("partsUsed")?.value || "").trim(),
+    partsReq: (document.getElementById("partsReq")?.value || "").trim(),
+
     followUpTypes,
     followUpType: (followUpTypes || [])
       .filter(t => t && t !== "NA")
@@ -2297,6 +2321,11 @@ function addReportToLog(meta) {
     companyName: (meta.companyName || "").trim(),
     customerName: (meta.customerName || "").trim(),
     salesEngineer: (meta.salesEngineer || "").trim(),
+
+    report: meta.report || "",
+    projectDesc: meta.projectDesc || "",
+    partsUsed: meta.partsUsed || "",
+    partsReq: meta.partsReq || "",
 
     // follow-up
     followUpTypes: meta.followUpTypes || [],
@@ -9828,6 +9857,47 @@ document.addEventListener("DOMContentLoaded", () => {
     return (items || []).filter(r => r && r.id && !ids.has(String(r.id)));
   }
 
+  function normaliseSearchText(s) {
+    return String(s || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+       .trim();
+  }
+
+  function reportMatchesSearch(report, query) {
+    const q = normaliseSearchText(query);
+    if (!q) return true;
+
+    const haystack = [
+      report.id,
+      report.engineer,
+      report.date,
+      report.visitType,
+      report.projectNo,
+      report.poNumber,
+      report.companyName,
+      report.customerName,
+      report.salesEngineer,
+      report.followUpType,
+      report.followUpNotes,
+      report.followUpDueDate,
+      report.report,
+      report.projectDesc,
+      report.partsUsed,
+      report.partsReq
+    ]
+      .map(v => normaliseSearchText(v))
+      .join(" | ");
+
+    return haystack.includes(q);
+  }
+
+  function applyReportsSearchFilter(items) {
+    const q = document.getElementById("reportsSearchInput")?.value || "";
+    if (!q.trim()) return items || [];
+    return (items || []).filter(r => reportMatchesSearch(r, q));
+  }
+
 async function fetchReports() {
   listEl.innerHTML = `
     <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
@@ -9922,16 +9992,18 @@ async function fetchReports() {
     const visible = filterOutDeletedReports(merged);
     const filtered1 = applyReportsClientFilters(visible);
     const filtered2 = applyReportsDateFilter(filtered1);
-    renderReports(filtered2);
-    calculateKPI(filtered2);
+    const filtered3 = applyReportsSearchFilter(filtered2);
+    renderReports(filtered3);
+    calculateKPI(filtered3);
   } catch (e) {
     console.warn("Reports fetch failed:", e);
     const localItems = readLocalReports();
     const visible = filterOutDeletedReports(localItems);
     const filtered1 = applyReportsClientFilters(visible);
     const filtered2 = applyReportsDateFilter(filtered1);
-    renderReports(filtered2);
-    calculateKPI(filtered2);
+    const filtered3 = applyReportsSearchFilter(filtered2);
+    renderReports(filtered3);
+    calculateKPI(filtered3);
   }
 }
 
@@ -10032,6 +10104,10 @@ window.fetchReports = fetchReports;
 
   document.getElementById("reportsFromDate")?.addEventListener("change", fetchReports);
   document.getElementById("reportsToDate")?.addEventListener("change", fetchReports);
+  document.getElementById("reportsSearchInput")?.addEventListener("input", () => {
+    clearTimeout(window.__reportsTextSearchT);
+    window.__reportsTextSearchT = setTimeout(fetchReports, 150);
+  });
 
     closeBtn.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); closeReportsLog(); });
     modal.addEventListener("click", (e) => { if (e.target === modal) closeReportsLog(); });
