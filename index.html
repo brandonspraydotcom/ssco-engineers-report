@@ -961,6 +961,14 @@ input[type="number"]::-webkit-inner-spin-button {
 #presenceBox { max-height:80vh; overflow:auto; -webkit-overflow-scrolling:touch; }
 </style>
 
+<style>
+@media (max-width: 640px) {
+  #engineerDashboardGrid {
+    grid-template-columns: 1fr !important;
+  }
+}
+</style>
+
 <script>
 
 // one worker instance (reused)
@@ -1564,6 +1572,10 @@ document.addEventListener("DOMContentLoaded", () => {
       Logged in as: <strong>—</strong>
     </p>
 
+    <button id="openDashboardBtn" class="btn ghost">
+    📊 Dashboard
+    </button>
+
     <button type="button" id="openOutstandingBtn" class="btn" style="width:100%;margin-bottom:10px;position:relative;padding-right:34px;">
       ✅ Outstanding Actions
       <span id="outstandingBadge"
@@ -1646,6 +1658,30 @@ document.addEventListener("DOMContentLoaded", () => {
     <div id="outstandingList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
 
   </div>
+</div>
+
+<!-- ========================= -->
+<!-- Dasboard Modal -->
+<!-- ========================= -->
+<div id="dashboardModal" class="modal">
+
+  <div id="dashboardBox" class="modal-box">
+
+    <label style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Engineer Dashboard</span>
+      <button id="closeDashboard" type="button" class="btn ghost">✕</button>
+    </label>
+
+    <div id="engineerDashboardGrid"
+      style="
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      margin-top:14px;">
+    </div>
+
+  </div>
+
 </div>
 
 <!-- ========================= -->
@@ -2562,6 +2598,160 @@ async function refreshCustomerHistory() {
 
   const items = await fetchCustomerHistory(companyName);
   renderCustomerHistory(items, currentReportId);
+}
+
+function getDashboardUsername() {
+  return (localStorage.getItem("username") || "").trim();
+}
+
+function getAllLocalReports() {
+  try {
+    const key = window.LS_KEYS?.reports || "ssco_reports_log";
+    return lsReadArray(key) || [];
+  } catch {
+    return [];
+  }
+}
+
+function getAllLocalActions() {
+  try {
+    return lsReadArray(LS_KEYS.actions) || [];
+  } catch {
+    return [];
+  }
+}
+
+function isoDateOnlyLocal(d) {
+  const x = new Date(d);
+  const yyyy = x.getFullYear();
+  const mm = String(x.getMonth() + 1).padStart(2, "0");
+  const dd = String(x.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function daysAgoIsoLocal(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return isoDateOnlyLocal(d);
+}
+
+function startOfMonthIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function formatMoneyParts(gbp, eur) {
+  const out = [];
+  if (gbp > 0) out.push(`£${gbp.toFixed(2)}`);
+  if (eur > 0) out.push(`€${eur.toFixed(2)}`);
+  return out.length ? out.join(" / ") : "£0.00";
+}
+
+function calculateEngineerDashboardStats() {
+  const username = getDashboardUsername();
+  const reports = getAllLocalReports().filter(r => (r.engineer || "").trim() === username);
+  const actions = getAllLocalActions().filter(a => (a.engineer || "").trim() === username);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const weekFrom = daysAgoIsoLocal(7);
+  const monthFrom = startOfMonthIso();
+
+  const openActions = actions.filter(a => (a.status || "open") === "open");
+
+  const overdueActions = openActions.filter(a => {
+    const raw = (a.dueDate || a.due_date || a.followUpDueDate || "").trim();
+    if (!raw) return false;
+    const due = new Date(raw + "T00:00:00");
+    return due < today;
+  });
+
+  const reportsThisWeek = reports.filter(r => {
+    const d = (r.date || "").trim() || (r.createdAt ? isoDateOnlyLocal(r.createdAt) : "");
+    return d && d >= weekFrom;
+  });
+
+  const reportsThisMonth = reports.filter(r => {
+    const d = (r.date || "").trim() || (r.createdAt ? isoDateOnlyLocal(r.createdAt) : "");
+    return d && d >= monthFrom;
+  });
+
+  const chargeableThisMonth = reportsThisMonth.filter(r => (parseFloat(r.visitChargeAmount || 0) || 0) > 0);
+
+  let invoiceableGBP = 0;
+  let invoiceableEUR = 0;
+  let poOutstandingCount = 0;
+
+  reportsThisMonth.forEach(r => {
+    const amt = parseFloat(r.visitChargeAmount || 0) || 0;
+    const cur = (r.visitChargeCurrency || "£").trim();
+    const poReq = r.poRequired === true || r.poRequired === 1;
+    const poRec = r.poReceived === true || r.poReceived === 1;
+
+    if (amt > 0 && poRec) {
+      if (cur === "€" || cur.toUpperCase?.() === "EUR") invoiceableEUR += amt;
+      else invoiceableGBP += amt;
+    }
+
+    if (amt > 0 && poReq && !poRec) {
+      poOutstandingCount++;
+    }
+  });
+
+  return {
+    username,
+    openActions: openActions.length,
+    overdueActions: overdueActions.length,
+    reportsThisWeek: reportsThisWeek.length,
+    chargeableThisMonth: chargeableThisMonth.length,
+    invoiceableText: formatMoneyParts(invoiceableGBP, invoiceableEUR),
+    poOutstandingCount
+  };
+}
+
+function dashboardTile(label, value, accent = "#7CFC00") {
+  return `
+    <div style="
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.06);
+      border-radius:14px;
+      padding:12px;
+      min-height:76px;
+      box-sizing:border-box;
+    ">
+      <div style="font-size:12px;color:#9ca3af;margin-bottom:6px;">
+        ${window.escapeHtml ? window.escapeHtml(label) : label}
+      </div>
+      <div style="font-size:22px;font-weight:800;color:${accent};line-height:1.15;">
+        ${window.escapeHtml ? window.escapeHtml(String(value)) : value}
+      </div>
+    </div>
+  `;
+}
+
+function renderEngineerDashboard() {
+  const grid = document.getElementById("engineerDashboardGrid");
+  if (!grid) return;
+
+  const stats = calculateEngineerDashboardStats();
+
+  grid.innerHTML = [
+    dashboardTile("Open Actions", stats.openActions, "#7CFC00"),
+    dashboardTile(
+      "Overdue Actions",
+      stats.overdueActions,
+      stats.overdueActions > 0 ? "#ff6b6b" : "#7CFC00"
+    ),
+    dashboardTile("Reports This Week", stats.reportsThisWeek, "#60a5fa"),
+    dashboardTile("Chargeable Visits This Month", stats.chargeableThisMonth, "#fbbf24"),
+    dashboardTile("Invoiceable This Month", stats.invoiceableText, "#34d399"),
+    dashboardTile(
+      "PO Outstanding",
+      stats.poOutstandingCount,
+      stats.poOutstandingCount > 0 ? "#f59e0b" : "#7CFC00"
+    )
+  ].join("");
 }
 
 /* ---------- Helpers ---------- */
@@ -5855,6 +6045,7 @@ async function addOutstandingAction(item) {
   actions.push(item);
   lsWriteArray(LS_KEYS.actions, actions);
   window.renderOutstandingActions?.();
+  renderEngineerDashboard?.();
 
   // cloud
   try {
@@ -6143,6 +6334,7 @@ async function commitReportSave() {
 
   // 1️⃣ Save locally first (offline-first behaviour)
   const report  = addReportToLog(meta);
+  renderEngineerDashboard?.();
   localStorage.setItem("lastSavedReport", JSON.stringify(report));
 
   // 1) Get actions (await because it might be async / return promises)
@@ -8321,6 +8513,90 @@ window.hideSimpleModal = function(modalId, boxId) {
 </script>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+  const openBtn = document.getElementById("openDashboardBtn");
+  const modal = document.getElementById("dashboardModal");
+  const box = document.getElementById("dashboardBox");
+  const closeBtn = document.getElementById("closeDashboard");
+
+  console.log("[Dashboard] openBtn =", openBtn);
+  console.log("[Dashboard] modal =", modal);
+  console.log("[Dashboard] box =", box);
+  console.log("[Dashboard] closeBtn =", closeBtn);
+
+  if (!openBtn || !modal || !box || !closeBtn) {
+    console.warn("[Dashboard] wiring skipped: missing element(s)");
+    return;
+  }
+
+  function openDashboard() {
+    renderEngineerDashboard?.();
+
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    });
+
+    window.lockScroll?.();
+  }
+
+  function closeDashboard() {
+    console.log("[Dashboard] close fired");
+
+    modal.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+
+    setTimeout(() => {
+      modal.style.display = "none";
+      window.unlockScroll?.();
+    }, 250);
+  }
+
+  openBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const accountModal = document.getElementById("accountModal");
+    const accountBox = document.getElementById("accountBox");
+
+    if (accountModal && (accountModal.style.display === "flex" || accountModal.style.display === "")) {
+      accountModal.style.opacity = "0";
+      if (accountBox) {
+        accountBox.style.transform = "scale(0.85)";
+        accountBox.style.opacity = "0";
+      }
+
+      setTimeout(() => {
+        accountModal.style.display = "none";
+        openDashboard();
+      }, 260);
+    } else {
+      openDashboard();
+    }
+  });
+
+  closeBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeDashboard();
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeDashboard();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal.style.display === "flex") {
+      closeDashboard();
+    }
+  });
+});
+</script>
+
+<script>
 
 document.addEventListener("DOMContentLoaded", () => {
   updateOutstandingBadge();
@@ -8582,6 +8858,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderOutstanding();
     updateOutstandingBadge();
+    renderEngineerDashboard?.();
 
     modal.style.display = "flex";
     requestAnimationFrame(() => {
@@ -8663,6 +8940,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderOutstanding();
     updateOutstandingBadge();
+    renderEngineerDashboard?.();
   }
 
   document.getElementById("actionsEngineerFilter")?.addEventListener("change", refreshAndRenderOutstanding);
@@ -8701,6 +8979,7 @@ document.addEventListener("click", async (e) => {
         lsWriteArray(LS_KEYS.actions, actions);
         renderOutstanding();
         updateOutstandingBadge();
+        renderEngineerDashboard?.();
         showToast?.("Marked as done", "success");
 
         // ✅ If this DONE action was originally PO_REQUIRED, update report
@@ -8771,6 +9050,7 @@ document.addEventListener("click", async (e) => {
       lsWriteArray(LS_KEYS.actions, next);
       renderOutstanding();
       updateOutstandingBadge();
+      renderEngineerDashboard?.();
       showToast?.("Removed outstanding item", "success");
 
       // 2) Sync to cloud
@@ -9539,6 +9819,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) sendPresence();
     });
+    setTimeout(() => {
+      renderEngineerDashboard?.();
+    }, 250);
   });
 })();
 </script>
