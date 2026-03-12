@@ -286,6 +286,9 @@ select {
 
   .btn{display:inline-block;padding:12px 16px;border-radius:10px;background:var(--primary);color:white;text-align:center;font-weight:700;cursor:pointer;border:none;font-size:16px}
   .btn.silver{background:#C0C0C0;border:1px solid rgba(255,255,255,.12)} /* Silver */
+  .btn.orange{background:#FFA500;border:1px solid rgba(255,255,255,.12)}
+  .btn.darkgrey{background:#A9A9A9;border:1px solid rgba(255,255,255,.12)}
+  .btn.purple{background:#311432;border:1px solid rgba(255,255,255,.12)}
   .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.12)}
   .btn.green{background:var(--accent)}
   .btn.remove{background:#CC0102;border:1px solid rgba(255,255,255,.12)} /* Clear buttons */
@@ -1572,7 +1575,7 @@ document.addEventListener("DOMContentLoaded", () => {
       Logged in as: <strong>—</strong>
     </p>
 
-    <button id="openDashboardBtn" class="btn ghost">
+    <button id="openDashboardBtn" class="btn ghost" style="width:100%;margin-bottom:10px;position:relative;padding-right:34px;">
     📊 Dashboard
     </button>
 
@@ -1599,15 +1602,15 @@ document.addEventListener("DOMContentLoaded", () => {
       </span>
     </button>
 
-    <button type="button" id="openPresenceBtn" class="btn ghost" style="width:100%;margin-bottom:10px;display:none;">
+    <button type="button" id="openPresenceBtn" class="btn purple" style="width:100%;margin-bottom:10px;display:none;">
       👀 Who’s Online
     </button>
 
-    <button type="button" id="openReportsLogBtn" class="btn ghost" style="width:100%;margin-bottom:10px;display:none;">
+    <button type="button" id="openReportsLogBtn" class="btn darkgrey" style="width:100%;margin-bottom:10px;display:none;">
       🧾 Reports Log
     </button>
 
-    <button type="button" id="changePasswordBtn" class="btn silver" style="width:100%;margin-bottom:10px;">
+    <button type="button" id="changePasswordBtn" class="btn orange" style="width:100%;margin-bottom:10px;">
       🔑 Change Password
     </button>
 
@@ -2655,47 +2658,86 @@ function calculateEngineerDashboardStats() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const weekFrom = daysAgoIsoLocal(7);
-  const monthFrom = startOfMonthIso();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
 
   const openActions = actions.filter(a => (a.status || "open") === "open");
 
   const overdueActions = openActions.filter(a => {
     const raw = (a.dueDate || a.due_date || a.followUpDueDate || "").trim();
     if (!raw) return false;
-    const due = new Date(raw + "T00:00:00");
-    return due < today;
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? new Date(raw + "T00:00:00")
+      : new Date(raw);
+    return !isNaN(due) && due < today;
   });
 
   const reportsThisWeek = reports.filter(r => {
-    const d = (r.date || "").trim() || (r.createdAt ? isoDateOnlyLocal(r.createdAt) : "");
-    return d && d >= weekFrom;
+    const raw = (r.date || r.createdAt || "").trim();
+    if (!raw) return false;
+
+    let d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      d = new Date(raw + "T00:00:00");
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+      const [dd, mm, yyyy] = raw.split("/");
+      d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+    } else {
+      d = new Date(raw);
+    }
+
+    return !isNaN(d) && d >= sevenDaysAgo;
   });
 
   const reportsThisMonth = reports.filter(r => {
-    const d = (r.date || "").trim() || (r.createdAt ? isoDateOnlyLocal(r.createdAt) : "");
-    return d && d >= monthFrom;
+    const raw = (r.date || r.createdAt || "").trim();
+    if (!raw) return false;
+
+    let d;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      d = new Date(raw + "T00:00:00");
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+      const [dd, mm, yyyy] = raw.split("/");
+      d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+    } else {
+      d = new Date(raw);
+    }
+
+    return !isNaN(d) && d >= startOfMonth;
   });
 
-  const chargeableThisMonth = reportsThisMonth.filter(r => (parseFloat(r.visitChargeAmount || 0) || 0) > 0);
+  const chargeableThisMonth = reportsThisMonth.filter(r => {
+    const amt = parseFloat(r.visitChargeAmount);
+    return !isNaN(amt) && amt > 0;
+  });
 
   let invoiceableGBP = 0;
   let invoiceableEUR = 0;
   let poOutstandingCount = 0;
 
   reportsThisMonth.forEach(r => {
-    const amt = parseFloat(r.visitChargeAmount || 0) || 0;
-    const cur = (r.visitChargeCurrency || "£").trim();
-    const poReq = r.poRequired === true || r.poRequired === 1;
-    const poRec = r.poReceived === true || r.poReceived === 1;
+    const amt = parseFloat(r.visitChargeAmount);
+    const safeAmt = isNaN(amt) ? 0 : amt;
 
-    if (amt > 0 && poRec) {
-      if (cur === "€" || cur.toUpperCase?.() === "EUR") invoiceableEUR += amt;
-      else invoiceableGBP += amt;
-    }
+    const curRaw = (r.visitChargeCurrency || "£").trim();
+    const isEUR = (curRaw === "€" || curRaw.toUpperCase?.() === "EUR");
 
-    if (amt > 0 && poReq && !poRec) {
-      poOutstandingCount++;
+    const poReq = r.poRequired === 1 || r.poRequired === true;
+    const poRec = r.poReceived === 1 || r.poReceived === true;
+
+    if (safeAmt > 0) {
+      if (poRec) {
+        if (isEUR) invoiceableEUR += safeAmt;
+        else invoiceableGBP += safeAmt;
+      }
+
+      if (poReq && !poRec) {
+        poOutstandingCount++;
+      }
     }
   });
 
