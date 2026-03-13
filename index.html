@@ -1579,6 +1579,10 @@ document.addEventListener("DOMContentLoaded", () => {
     📊 Dashboard
     </button>
 
+    <button id="openRevenueBtn" class="btn ghost" style="width:100%;margin-bottom:10px;position:relative;padding-right:34px;">
+  💰 Revenue
+    </button>
+
     <button type="button" id="openOutstandingBtn" class="btn" style="width:100%;margin-bottom:10px;position:relative;padding-right:34px;">
       ✅ Outstanding Actions
       <span id="outstandingBadge"
@@ -1661,6 +1665,33 @@ document.addEventListener("DOMContentLoaded", () => {
     <div id="outstandingList" style="margin-top:12px;display:flex;flex-direction:column;gap:10px;"></div>
 
   </div>
+</div>
+
+<!-- ========================= -->
+<!-- Revenue Modal -->
+<!-- ========================= -->
+
+<div id="revenueModal" class="modal">
+
+  <div id="revenueBox" class="modal-box">
+
+    <label style="display:flex;justify-content:space-between;align-items:center;">
+      <span id="revenueTitle">Revenue Dashboard</span>
+      <button id="closeRevenue" type="button" class="btn ghost">✕</button>
+    </label>
+
+    <div id="revenueGrid"
+      style="
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+      gap:10px;
+      margin-top:14px;">
+    </div>
+
+    <div id="revenueExtra" style="margin-top:18px;"></div>
+
+  </div>
+
 </div>
 
 <!-- ========================= -->
@@ -2652,6 +2683,135 @@ function formatMoneyParts(gbp, eur) {
   if (gbp > 0) out.push(`£${gbp.toFixed(2)}`);
   if (eur > 0) out.push(`€${eur.toFixed(2)}`);
   return out.length ? out.join(" / ") : "£0.00";
+}
+
+function calculateRevenueStats() {
+
+  const reports = getAllLocalReports();
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0,0,0,0);
+
+  let totalGBP = 0;
+  let totalEUR = 0;
+
+  let invoiceGBP = 0;
+  let invoiceEUR = 0;
+
+  let poOutstandingValue = 0;
+  let chargeableVisits = 0;
+
+  const revenueByEngineer = {};
+  const revenueByCustomer = {};
+
+  reports.forEach(r => {
+
+    const amt = parseFloat(r.visitChargeAmount);
+    const safeAmt = isNaN(amt) ? 0 : amt;
+
+    if (safeAmt <= 0) return;
+
+    const rawDate = r.date || r.createdAt;
+    const d = new Date(rawDate);
+
+    if (isNaN(d) || d < startOfMonth) return;
+
+    chargeableVisits++;
+
+    const cur = (r.visitChargeCurrency || "£").trim();
+    const isEUR = (cur === "€" || cur.toUpperCase?.() === "EUR");
+
+    const poReq = r.poRequired === true || r.poRequired === 1;
+    const poRec = r.poReceived === true || r.poReceived === 1;
+
+    if (isEUR) totalEUR += safeAmt;
+    else totalGBP += safeAmt;
+
+    if (poRec) {
+      if (isEUR) invoiceEUR += safeAmt;
+      else invoiceGBP += safeAmt;
+    }
+
+    if (poReq && !poRec) {
+      poOutstandingValue += safeAmt;
+    }
+
+    const eng = r.engineer || "Unknown";
+    revenueByEngineer[eng] = (revenueByEngineer[eng] || 0) + safeAmt;
+
+    const cust = r.companyName || "Unknown";
+    revenueByCustomer[cust] = (revenueByCustomer[cust] || 0) + safeAmt;
+
+  });
+
+  return {
+    totalText: formatMoneyParts(totalGBP, totalEUR),
+    invoiceText: formatMoneyParts(invoiceGBP, invoiceEUR),
+    poOutstandingValue,
+    chargeableVisits,
+    revenueByEngineer,
+    revenueByCustomer
+  };
+
+}
+
+function renderRevenueDashboard() {
+
+  const grid = document.getElementById("revenueGrid");
+  const extra = document.getElementById("revenueExtra");
+
+  if (!grid || !extra) return;
+
+  const stats = calculateRevenueStats();
+
+  grid.innerHTML = [
+
+    dashboardTile("Total Revenue (Month)", stats.totalText, "#34d399"),
+
+    dashboardTile("Invoiceable Revenue", stats.invoiceText, "#60a5fa"),
+
+    dashboardTile("PO Outstanding Value", `£${stats.poOutstandingValue.toFixed(2)}`, "#f59e0b"),
+
+    dashboardTile("Chargeable Visits", stats.chargeableVisits, "#fbbf24")
+
+  ].join("");
+
+  const topEngineers = Object.entries(stats.revenueByEngineer)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,5);
+
+  const topCustomers = Object.entries(stats.revenueByCustomer)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0,5);
+
+  extra.innerHTML = `
+
+    <div style="margin-top:10px">
+
+      <div style="font-weight:700;margin-bottom:6px;">Top Engineers</div>
+
+      ${topEngineers.map(e => `
+        <div style="font-size:13px;color:#ccc;">
+          ${window.escapeHtml(e[0])} — £${e[1].toFixed(2)}
+        </div>
+      `).join("")}
+
+    </div>
+
+    <div style="margin-top:14px">
+
+      <div style="font-weight:700;margin-bottom:6px;">Top Customers</div>
+
+      ${topCustomers.map(c => `
+        <div style="font-size:13px;color:#ccc;">
+          ${window.escapeHtml(c[0])} — £${c[1].toFixed(2)}
+        </div>
+      `).join("")}
+
+    </div>
+
+  `;
 }
 
 function calculateEngineerDashboardStats() {
@@ -8556,6 +8716,90 @@ window.hideSimpleModal = function(modalId, boxId) {
   b.style.opacity = "0";
   setTimeout(() => (m.style.display = "none"), 250);
 };
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const openBtn = document.getElementById("openRevenueBtn");
+  const modal = document.getElementById("revenueModal");
+  const box = document.getElementById("revenueBox");
+  const closeBtn = document.getElementById("closeRevenue");
+
+  console.log("[Revenue] openBtn =", openBtn);
+  console.log("[Revenue] modal =", modal);
+  console.log("[Revenue] box =", box);
+  console.log("[Revenue] closeBtn =", closeBtn);
+
+  if (!openBtn || !modal || !box || !closeBtn) {
+    console.warn("[Revenue] wiring skipped: missing element(s)");
+    return;
+  }
+
+  function openRevenue() {
+    renderRevenueDashboard?.();
+
+    modal.style.display = "flex";
+    requestAnimationFrame(() => {
+      modal.style.opacity = "1";
+      box.style.transform = "scale(1)";
+      box.style.opacity = "1";
+    });
+
+    window.lockScroll?.();
+  }
+
+  function closeRevenue() {
+    console.log("[Revenue] close fired");
+
+    modal.style.opacity = "0";
+    box.style.transform = "scale(0.85)";
+    box.style.opacity = "0";
+
+    setTimeout(() => {
+      modal.style.display = "none";
+      window.unlockScroll?.();
+    }, 250);
+  }
+
+  openBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const accountModal = document.getElementById("accountModal");
+    const accountBox = document.getElementById("accountBox");
+
+    if (accountModal && (accountModal.style.display === "flex" || accountModal.style.display === "")) {
+      accountModal.style.opacity = "0";
+      if (accountBox) {
+        accountBox.style.transform = "scale(0.85)";
+        accountBox.style.opacity = "0";
+      }
+
+      setTimeout(() => {
+        accountModal.style.display = "none";
+        openRevenue();
+      }, 260);
+    } else {
+      openRevenue();
+    }
+  });
+
+  closeBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeRevenue();
+  });
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeRevenue();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal.style.display === "flex") {
+      closeRevenue();
+    }
+  });
+});
 </script>
 
 <script>
