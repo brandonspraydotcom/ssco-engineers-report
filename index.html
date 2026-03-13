@@ -97,6 +97,7 @@ window.onerror = function(msg, src, line, col, err) {
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <!-- =======================
        🍏 iOS PWA Meta
@@ -1236,9 +1237,36 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div>
           <label>Project Number</label>
-          <input id="project" type="text" placeholder="PJ number">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="project" type="text" placeholder="PJ number" style="flex:1;">
+            <button id="scanPlateBtn" type="button" class="btn green" style="flex:0 0 auto;padding:12px 14px;">                                                     		        📷
+            </button>
+            <input id="plateImageInput" type="file" accept="image/*" capture="environment" style="display:none;">
+          </div>
         </div>
       </div>
+   
+      <div class="row" style="margin-top:10px">
+        <div>
+          <label>Manufacturing Date</label>
+          <input id="manufacturingDate" type="date" style="height: 22px; max-width: 94%">
+        </div>
+        <div>
+          <label>System Age</label>
+          <input id="systemAge" type="text" placeholder="Auto-calculated" readonly>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1;">
+          <label>Temporary Plate Text Test</label>
+          <textarea id="plateRawTextTest" rows="3" placeholder="Paste label text here for testing..."></textarea>
+        </div>
+      </div>
+
+<div style="margin-top:10px">
+  <button id="parsePlateTextBtn" type="button" class="btn ghost">Parse Plate Text</button>
+</div>
 	
 	  <div class="row" style="margin-top:10px">
 
@@ -1679,10 +1707,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <label style="display:flex;justify-content:space-between;align-items:center;">
       <span id="revenueTitle">Revenue Dashboard</span>
-      <button id="closeRevenue" type="button" class="btn ghost">✕</button>
       <div>
         <button id="exportExcelBtn" class="btn ghost">⬇ Export</button>
-        <button id="closeRevenue" type="button" class="btn ghost">✕</button>
+        <button id="closeRevenue" type="button" class="btn">✕</button>
       </div>
     </label>
 
@@ -2811,11 +2838,59 @@ function calculateRevenueStats() {
   };
 }
 
+function sortEntriesDesc(obj) {
+  return Object.entries(obj || {}).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+}
+
+function buildTrendRows(stats) {
+  const keys = Array.from(new Set([
+    ...Object.keys(stats.monthlyRevenueGBP || {}),
+    ...Object.keys(stats.monthlyRevenueEUR || {})
+  ])).sort();
+
+  return keys.map(key => ({
+    Month: monthLabelFromKey(key),
+    RevenueGBP: Number((stats.monthlyRevenueGBP || {})[key] || 0),
+    RevenueEUR: Number((stats.monthlyRevenueEUR || {})[key] || 0)
+  }));
+}
+
+function buildEngineerComparisonRows(stats) {
+  return sortEntriesDesc(stats.revenueByEngineer).map(([name, value], idx) => ({
+    Rank: idx + 1,
+    Engineer: name,
+    Revenue: Number(value || 0)
+  }));
+}
+
+function buildCustomerComparisonRows(stats) {
+  return sortEntriesDesc(stats.revenueByCustomer).map(([name, value], idx) => ({
+    Rank: idx + 1,
+    Customer: name,
+    Revenue: Number(value || 0)
+  }));
+}
+
+function autoFitSheet(ws, rows) {
+  if (!rows || !rows.length) return;
+
+  const headers = Object.keys(rows[0]);
+  ws["!cols"] = headers.map(h => {
+    const maxLen = Math.max(
+      String(h).length,
+      ...rows.map(r => String(r[h] ?? "").length)
+    );
+    return { wch: Math.min(Math.max(maxLen + 2, 12), 40) };
+  });
+}
+
 function exportRevenueExcel() {
+  const reports =
+    (Array.isArray(window.__reportsMergedCache) && window.__reportsMergedCache.length
+      ? window.__reportsMergedCache
+      : getAllLocalReports()) || [];
 
-  const reports = getAllLocalReports() || [];
   const actions = getAllLocalActions() || [];
-
   const revenueStats = calculateRevenueStats();
 
   const workbook = XLSX.utils.book_new();
@@ -2823,88 +2898,88 @@ function exportRevenueExcel() {
   // ------------------
   // Reports Sheet
   // ------------------
-
   const reportRows = reports.map(r => ({
-    Date: r.date || "",
+    SavedAt: r.createdAt || "",
+    VisitDate: r.date || "",
     Engineer: r.engineer || "",
     Company: r.companyName || "",
-    Project: r.projectNo || "",
+    CustomerName: r.customerName || "",
+    SalesEngineer: r.salesEngineer || "",
+    ProjectNumber: r.projectNo || "",
+    PONumber: r.poNumber || "",
     VisitType: r.visitType || "",
-    Charge: r.visitChargeAmount || "",
-    Currency: r.visitChargeCurrency || "",
-    PORequired: r.poRequired ? "Yes" : "No",
-    POReceived: r.poReceived ? "Yes" : "No",
-    FollowUp: r.followUpType || "",
-    Notes: r.followUpNotes || ""
+    ProjectDescription: r.projectDesc || "",
+    ReportDetails: r.report || "",
+    PartsUsed: r.partsUsed || "",
+    PartsRequired: r.partsReq || "",
+    FollowUpType: r.followUpType || "",
+    FollowUpNotes: r.followUpNotes || "",
+    FollowUpDueDate: r.followUpDueDate || "",
+    VisitChargeAmount: r.visitChargeAmount || "",
+    VisitChargeCurrency: r.visitChargeCurrency || "",
+    PORequired: (r.poRequired === true || r.poRequired === 1) ? "Yes" : "No",
+    POReceived: (r.poReceived === true || r.poReceived === 1) ? "Yes" : "No"
   }));
-
   const reportSheet = XLSX.utils.json_to_sheet(reportRows);
+  autoFitSheet(reportSheet, reportRows);
   XLSX.utils.book_append_sheet(workbook, reportSheet, "Reports");
 
   // ------------------
   // Actions Sheet
   // ------------------
-
   const actionRows = actions.map(a => ({
     Engineer: a.engineer || "",
     Company: a.companyName || "",
     Project: a.projectNo || "",
     Type: a.followUpType || "",
     Notes: a.followUpNotes || "",
-    Due: a.followUpDueDate || "",
+    Due: a.followUpDueDate || a.dueDate || "",
     Status: a.status || ""
   }));
-
   const actionSheet = XLSX.utils.json_to_sheet(actionRows);
+  autoFitSheet(actionSheet, actionRows);
   XLSX.utils.book_append_sheet(workbook, actionSheet, "OutstandingActions");
 
   // ------------------
   // Revenue Summary
   // ------------------
-
   const summaryRows = [{
     TotalRevenue: revenueStats.totalText,
     InvoiceableRevenue: revenueStats.invoiceText,
     POOutstanding: revenueStats.poOutstandingText,
     ChargeableVisits: revenueStats.chargeableVisits,
-    ReportsThisMonth: revenueStats.reportsThisMonth
+    ReportsThisMonth: revenueStats.reportsThisMonth,
+    AverageChargeableVisit: revenueStats.averageVisitText
   }];
-
   const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+  autoFitSheet(summarySheet, summaryRows);
   XLSX.utils.book_append_sheet(workbook, summarySheet, "RevenueSummary");
 
   // ------------------
-  // Revenue by Engineer
+  // Engineer Comparison
   // ------------------
-
-  const engineerRows = Object.entries(revenueStats.revenueByEngineer)
-    .map(([name,value]) => ({
-      Engineer: name,
-      Revenue: value
-    }));
-
+  const engineerRows = buildEngineerComparisonRows(revenueStats);
   const engineerSheet = XLSX.utils.json_to_sheet(engineerRows);
-  XLSX.utils.book_append_sheet(workbook, engineerSheet, "RevenueByEngineer");
+  autoFitSheet(engineerSheet, engineerRows);
+  XLSX.utils.book_append_sheet(workbook, engineerSheet, "EngineerComparison");
 
   // ------------------
-  // Revenue by Customer
+  // Customer Comparison
   // ------------------
-
-  const customerRows = Object.entries(revenueStats.revenueByCustomer)
-    .map(([name,value]) => ({
-      Customer: name,
-      Revenue: value
-    }));
-
+  const customerRows = buildCustomerComparisonRows(revenueStats);
   const customerSheet = XLSX.utils.json_to_sheet(customerRows);
-  XLSX.utils.book_append_sheet(workbook, customerSheet, "RevenueByCustomer");
+  autoFitSheet(customerSheet, customerRows);
+  XLSX.utils.book_append_sheet(workbook, customerSheet, "CustomerComparison");
 
   // ------------------
-  // Download
+  // Revenue Trend
   // ------------------
+  const trendRows = buildTrendRows(revenueStats);
+  const trendSheet = XLSX.utils.json_to_sheet(trendRows);
+  autoFitSheet(trendSheet, trendRows);
+  XLSX.utils.book_append_sheet(workbook, trendSheet, "RevenueTrend");
 
   XLSX.writeFile(workbook, "EngineeringRevenueReport.xlsx");
-
 }
 
 function renderRevenueDashboard() {
@@ -5442,6 +5517,382 @@ function highlightField(el, isFirst = false) {
   const duration = isFirst ? 6000 : 1800;
   setTimeout(clearHighlight, duration);
 }
+</script>
+
+<script>
+let __pendingPlateInput = null;
+
+function showScanGuide(fileInput) {
+  const overlay = document.getElementById("scanGuideOverlay");
+  const box = document.getElementById("scanGuideBox");
+
+  if (!overlay || !box || !fileInput) {
+    fileInput?.click();
+    return;
+  }
+
+  __pendingPlateInput = fileInput;
+  overlay.style.display = "flex";
+
+  requestAnimationFrame(() => {
+    overlay.style.opacity = "1";
+    box.style.opacity = "1";
+    box.style.transform = "scale(1)";
+  });
+}
+
+function hideScanGuide() {
+  const overlay = document.getElementById("scanGuideOverlay");
+  const box = document.getElementById("scanGuideBox");
+  if (!overlay || !box) return;
+
+  overlay.style.opacity = "0";
+  box.style.opacity = "0";
+  box.style.transform = "scale(0.92)";
+
+  setTimeout(() => {
+    overlay.style.display = "none";
+  }, 220);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const cancelBtn = document.getElementById("scanGuideCancel");
+  const continueBtn = document.getElementById("scanGuideContinue");
+  const overlay = document.getElementById("scanGuideOverlay");
+
+  cancelBtn?.addEventListener("click", () => {
+    __pendingPlateInput = null;
+    hideScanGuide();
+  });
+
+  continueBtn?.addEventListener("click", () => {
+    const input = __pendingPlateInput;
+    hideScanGuide();
+    input?.click();
+  });
+
+  overlay?.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      __pendingPlateInput = null;
+      hideScanGuide();
+    }
+  });
+});
+</script>
+
+<script>
+async function preprocessPlateImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        const maxW = 1600;
+        const scale = Math.min(1, maxW / img.width);
+
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+
+          // grayscale
+          let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+          // contrast boost
+          gray = (gray - 128) * 1.45 + 128;
+
+          // clamp
+          gray = Math.max(0, Math.min(255, gray));
+
+          data[i] = gray;
+          data[i + 1] = gray;
+          data[i + 2] = gray;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("Image preprocessing failed"));
+            return;
+          }
+          resolve(blob);
+        }, "image/png");
+      };
+
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function runPlateOCR(file) {
+  if (!file) return;
+
+  try {
+    showToast?.("📷 Reading plate text…", "info");
+    bump?.("info");
+
+    const processedBlob = await preprocessPlateImage(file);
+
+    let text = "";
+    let parsed = { project: "", manufacturingDate: "" };
+
+    // ---- Pass 1
+    const result1 = await Tesseract.recognize(processedBlob, "eng", {
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/-",
+    });
+    text = result1?.data?.text || "";
+    parsed = parsePlateText(text);
+
+    // ---- Pass 2 retry if PJ missing
+    if (!parsed.project) {
+      const result2 = await Tesseract.recognize(processedBlob, "eng");
+      const retryText = result2?.data?.text || "";
+
+      if (retryText.length > text.length) text = retryText;
+      parsed = parsePlateText(text);
+    }
+
+    const rawBox = document.getElementById("plateRawTextTest");
+    if (rawBox) rawBox.value = text;
+
+    applyParsedPlateData(parsed);
+
+    if (parsed.project || parsed.manufacturingDate) {
+
+      showToast?.("✅ Plate scanned successfully", "success");
+      bump?.("success");
+
+    } else {
+
+      showToast?.(
+        "⚠️ Plate not detected. Try filling the frame and holding camera straight.",
+        "warning"
+      );
+
+      bump?.("warning");
+
+    }
+
+  } catch (err) {
+    console.error("OCR failed:", err);
+    showToast?.("❌ OCR failed", "error");
+    bump?.("error");
+  }
+}
+
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const fileInput = document.getElementById("plateImageInput");
+  if (!fileInput) return;
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    await runPlateOCR(file);
+
+    // allow same photo to be selected again later
+    fileInput.value = "";
+  });
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const scanBtn = document.getElementById("scanPlateBtn");
+  const fileInput = document.getElementById("plateImageInput");
+
+  if (!scanBtn || !fileInput) return;
+
+  scanBtn.addEventListener("click", () => {
+    showScanGuide(fileInput);
+  });
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("parsePlateTextBtn");
+  const raw = document.getElementById("plateRawTextTest");
+
+  if (!btn || !raw) return;
+
+  btn.addEventListener("click", () => {
+    const parsed = parsePlateText(raw.value);
+    applyParsedPlateData(parsed);
+
+    if (typeof showToast === "function") {
+      if (parsed.project || parsed.manufacturingDate) {
+        showToast("✅ Plate data parsed", "success");
+      } else {
+        showToast("⚠️ No PJ or manufacturing date found", "warning");
+      }
+    }
+  });
+});
+</script>
+
+<script>
+function parsePlateText(rawText) {
+  const original = String(rawText || "");
+  const text = original
+    .replace(/\r/g, "\n")
+    .replace(/[|]/g, "I")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  let project = "";
+  let manufacturingDate = "";
+
+  // -----------------------------
+  // PROJECT NUMBER
+  // Handles OCR mess like:
+  // PJ-B500772-501
+  // PJ B500772-501
+  // P)-B500772-501
+  // PJ-B500772-50I
+  // -----------------------------
+  const pjMatch = text.match(/\bP[Jj][-\s]?[A-Z0-9]{1,}[A-Z0-9-]{4,}\b/);
+  if (pjMatch) {
+    project = pjMatch[0]
+      .replace(/\s+/g, "")
+      .replace(/^PJ(?!-)/i, "PJ-")
+      .replace(/I$/,"1")
+      .toUpperCase();
+  }
+
+  // If OCR captured "Project number PJ-...."
+  if (!project) {
+    const projectLine = text.match(/Project\s*number[:\s]*([A-Z0-9-]+)/i);
+    if (projectLine) {
+      project = projectLine[1]
+        .replace(/\s+/g, "")
+        .replace(/^PJ(?!-)/i, "PJ-")
+        .replace(/I$/,"1")
+        .toUpperCase();
+    }
+  }
+
+  // -----------------------------
+  // FULL DATE
+  // e.g. 23/06/2020
+  // -----------------------------
+  const dmyMatch = text.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+  if (dmyMatch) {
+    const dd = dmyMatch[1];
+    const mm = dmyMatch[2];
+    const yyyy = dmyMatch[3];
+    manufacturingDate = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // -----------------------------
+  // YEAR/MONTH
+  // e.g. 2025/03
+  // -----------------------------
+  if (!manufacturingDate) {
+    const ymMatch = text.match(/\b(20\d{2}|19\d{2})\/(0\d|1[0-2])\b/);
+    if (ymMatch) {
+      const yyyy = ymMatch[1];
+      const mm = ymMatch[2];
+      manufacturingDate = `${yyyy}-${mm}-01`;
+    }
+  }
+
+  return {
+    project,
+    manufacturingDate
+  };
+}
+
+
+function applyParsedPlateData(parsed) {
+  const projectEl = document.getElementById("project");
+  const mfgEl = document.getElementById("manufacturingDate");
+
+  if (projectEl && parsed.project) {
+    projectEl.value = parsed.project;
+  }
+
+  if (mfgEl && parsed.manufacturingDate) {
+    mfgEl.value = parsed.manufacturingDate;
+  }
+
+  // recalculate age using Step 1b function
+  if (typeof updateSystemAgeFromManufacturingDate === "function") {
+    updateSystemAgeFromManufacturingDate();
+  }
+}
+</script>
+
+<script>
+function calculateSystemAgeText(dateStr) {
+  if (!dateStr) return "";
+
+  const start = new Date(dateStr + "T00:00:00");
+  const now = new Date();
+
+  if (isNaN(start.getTime()) || start > now) return "";
+
+  let years = now.getFullYear() - start.getFullYear();
+  let months = now.getMonth() - start.getMonth();
+  let days = now.getDate() - start.getDate();
+
+  if (days < 0) months--;
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  if (years < 0) return "";
+
+  if (years === 0) {
+    return months === 1 ? "1 month old" : `${months} months old`;
+  }
+
+  if (months <= 0) {
+    return years === 1 ? "1 year old" : `${years} years old`;
+  }
+
+  return `${years} years and ${months} months old`;
+}
+
+function updateSystemAgeFromManufacturingDate() {
+  const mfgEl = document.getElementById("manufacturingDate");
+  const ageEl = document.getElementById("systemAge");
+  if (!mfgEl || !ageEl) return;
+
+  ageEl.value = calculateSystemAgeText(mfgEl.value);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const mfgEl = document.getElementById("manufacturingDate");
+  if (!mfgEl) return;
+
+  mfgEl.addEventListener("change", updateSystemAgeFromManufacturingDate);
+
+  // in case value is restored from storage/autofill
+  updateSystemAgeFromManufacturingDate();
+});
 </script>
 
 <script>
@@ -10938,6 +11389,44 @@ document.addEventListener("DOMContentLoaded", () => {
   setCompany(getCompanyValue());
 });
 </script>
+
+<div id="scanGuideOverlay"
+     style="display:none;position:fixed;inset:0;z-index:9500;
+            background:rgba(0,0,0,0.55);
+            backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+            align-items:center;justify-content:center;
+            padding:24px;opacity:0;transition:opacity .25s ease;">
+
+  <div id="scanGuideBox"
+       style="background:rgba(30,30,31,0.96);
+              border-radius:18px;
+              padding:24px 20px;
+              max-width:420px;
+              width:92%;
+              text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.92);
+              opacity:0;
+              transition:all .25s ease;">
+
+    <div style="font-size:30px;margin-bottom:10px;">📷</div>
+
+    <div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:10px;">
+      Scan the plate straight on
+    </div>
+
+    <div style="font-size:16px;line-height:1.5;color:#ddd;margin-bottom:18px;">
+      Fill most of the frame with the plate.<br>
+      Keep the camera straight and steady.<br>
+      Avoid glare where possible.
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <button id="scanGuideCancel" type="button" class="btn remove" style="flex:1;">Cancel</button>
+      <button id="scanGuideContinue" type="button" class="btn green" style="flex:1;">Continue</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
