@@ -2608,6 +2608,10 @@ function getDashboardUsername() {
 }
 
 function getAllLocalReports() {
+  if (Array.isArray(window.__reportsMergedCache) && window.__reportsMergedCache.length) {
+    return window.__reportsMergedCache;
+  }
+
   try {
     const key = window.LS_KEYS?.reports || "ssco_reports_log";
     return lsReadArray(key) || [];
@@ -10313,6 +10317,7 @@ async function fetchReports() {
 
     // ✅ this is the key line
     const merged = mergeReportsPreferRicher(cloudItems, localItems);
+    window.__reportsMergedCache = merged;
 
     const visible = filterOutDeletedReports(merged);
     const filtered1 = applyReportsClientFilters(visible);
@@ -10320,15 +10325,18 @@ async function fetchReports() {
     const filtered3 = applyReportsSearchFilter(filtered2);
     renderReports(filtered3);
     calculateKPI(filtered3);
+    renderEngineerDashboard?.();
   } catch (e) {
     console.warn("Reports fetch failed:", e);
     const localItems = readLocalReports();
+    window.__reportsMergedCache = localItems;
     const visible = filterOutDeletedReports(localItems);
     const filtered1 = applyReportsClientFilters(visible);
     const filtered2 = applyReportsDateFilter(filtered1);
     const filtered3 = applyReportsSearchFilter(filtered2);
     renderReports(filtered3);
     calculateKPI(filtered3);
+    renderEngineerDashboard?.();
   }
 }
 
