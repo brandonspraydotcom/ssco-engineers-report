@@ -96,6 +96,8 @@ window.onerror = function(msg, src, line, col, err) {
   }
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
   <!-- =======================
        🍏 iOS PWA Meta
   ======================== -->
@@ -1678,6 +1680,10 @@ document.addEventListener("DOMContentLoaded", () => {
     <label style="display:flex;justify-content:space-between;align-items:center;">
       <span id="revenueTitle">Revenue Dashboard</span>
       <button id="closeRevenue" type="button" class="btn ghost">✕</button>
+      <div>
+        <button id="exportExcelBtn" class="btn ghost">⬇ Export</button>
+        <button id="closeRevenue" type="button" class="btn ghost">✕</button>
+      </div>
     </label>
 
     <div id="revenueGrid"
@@ -2803,6 +2809,102 @@ function calculateRevenueStats() {
     monthlyRevenueGBP,
     monthlyRevenueEUR
   };
+}
+
+function exportRevenueExcel() {
+
+  const reports = getAllLocalReports() || [];
+  const actions = getAllLocalActions() || [];
+
+  const revenueStats = calculateRevenueStats();
+
+  const workbook = XLSX.utils.book_new();
+
+  // ------------------
+  // Reports Sheet
+  // ------------------
+
+  const reportRows = reports.map(r => ({
+    Date: r.date || "",
+    Engineer: r.engineer || "",
+    Company: r.companyName || "",
+    Project: r.projectNo || "",
+    VisitType: r.visitType || "",
+    Charge: r.visitChargeAmount || "",
+    Currency: r.visitChargeCurrency || "",
+    PORequired: r.poRequired ? "Yes" : "No",
+    POReceived: r.poReceived ? "Yes" : "No",
+    FollowUp: r.followUpType || "",
+    Notes: r.followUpNotes || ""
+  }));
+
+  const reportSheet = XLSX.utils.json_to_sheet(reportRows);
+  XLSX.utils.book_append_sheet(workbook, reportSheet, "Reports");
+
+  // ------------------
+  // Actions Sheet
+  // ------------------
+
+  const actionRows = actions.map(a => ({
+    Engineer: a.engineer || "",
+    Company: a.companyName || "",
+    Project: a.projectNo || "",
+    Type: a.followUpType || "",
+    Notes: a.followUpNotes || "",
+    Due: a.followUpDueDate || "",
+    Status: a.status || ""
+  }));
+
+  const actionSheet = XLSX.utils.json_to_sheet(actionRows);
+  XLSX.utils.book_append_sheet(workbook, actionSheet, "OutstandingActions");
+
+  // ------------------
+  // Revenue Summary
+  // ------------------
+
+  const summaryRows = [{
+    TotalRevenue: revenueStats.totalText,
+    InvoiceableRevenue: revenueStats.invoiceText,
+    POOutstanding: revenueStats.poOutstandingText,
+    ChargeableVisits: revenueStats.chargeableVisits,
+    ReportsThisMonth: revenueStats.reportsThisMonth
+  }];
+
+  const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(workbook, summarySheet, "RevenueSummary");
+
+  // ------------------
+  // Revenue by Engineer
+  // ------------------
+
+  const engineerRows = Object.entries(revenueStats.revenueByEngineer)
+    .map(([name,value]) => ({
+      Engineer: name,
+      Revenue: value
+    }));
+
+  const engineerSheet = XLSX.utils.json_to_sheet(engineerRows);
+  XLSX.utils.book_append_sheet(workbook, engineerSheet, "RevenueByEngineer");
+
+  // ------------------
+  // Revenue by Customer
+  // ------------------
+
+  const customerRows = Object.entries(revenueStats.revenueByCustomer)
+    .map(([name,value]) => ({
+      Customer: name,
+      Revenue: value
+    }));
+
+  const customerSheet = XLSX.utils.json_to_sheet(customerRows);
+  XLSX.utils.book_append_sheet(workbook, customerSheet, "RevenueByCustomer");
+
+  // ------------------
+  // Download
+  // ------------------
+
+  XLSX.writeFile(workbook, "EngineeringRevenueReport.xlsx");
+
 }
 
 function renderRevenueDashboard() {
@@ -8854,6 +8956,10 @@ document.addEventListener("DOMContentLoaded", () => {
       closeRevenue();
     }
   });
+});
+
+document.getElementById("exportExcelBtn")?.addEventListener("click", () => {
+  exportRevenueExcel();
 });
 </script>
 
