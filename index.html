@@ -2685,13 +2685,43 @@ function formatMoneyParts(gbp, eur) {
   return out.length ? out.join(" / ") : "£0.00";
 }
 
+function parseReportDate(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s + "T00:00:00");
+    return isNaN(d) ? null : d;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    const [dd, mm, yyyy] = s.split("/");
+    const d = new Date(`${yyyy}-${mm}-${dd}T00:00:00`);
+    return isNaN(d) ? null : d;
+  }
+
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function monthKey(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function monthLabelFromKey(key) {
+  const [y, m] = String(key).split("-");
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  return d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+}
+
 function calculateRevenueStats() {
+  const reports = getAllLocalReports() || [];
 
-  const reports = getAllLocalReports();
-
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0,0,0,0);
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  startOfMonth.setHours(0, 0, 0, 0);
 
   let totalGBP = 0;
   let totalEUR = 0;
@@ -2699,25 +2729,24 @@ function calculateRevenueStats() {
   let invoiceGBP = 0;
   let invoiceEUR = 0;
 
-  let poOutstandingValue = 0;
+  let poOutstandingGBP = 0;
+  let poOutstandingEUR = 0;
+
   let chargeableVisits = 0;
+  let reportsThisMonth = 0;
 
   const revenueByEngineer = {};
   const revenueByCustomer = {};
+  const monthlyRevenueGBP = {};
+  const monthlyRevenueEUR = {};
 
   reports.forEach(r => {
+    const rawDate = r.date || r.createdAt;
+    const d = parseReportDate(rawDate);
+    if (!d) return;
 
     const amt = parseFloat(r.visitChargeAmount);
     const safeAmt = isNaN(amt) ? 0 : amt;
-
-    if (safeAmt <= 0) return;
-
-    const rawDate = r.date || r.createdAt;
-    const d = new Date(rawDate);
-
-    if (isNaN(d) || d < startOfMonth) return;
-
-    chargeableVisits++;
 
     const cur = (r.visitChargeCurrency || "£").trim();
     const isEUR = (cur === "€" || cur.toUpperCase?.() === "EUR");
@@ -2725,39 +2754,58 @@ function calculateRevenueStats() {
     const poReq = r.poRequired === true || r.poRequired === 1;
     const poRec = r.poReceived === true || r.poReceived === 1;
 
-    if (isEUR) totalEUR += safeAmt;
-    else totalGBP += safeAmt;
+    const mKey = monthKey(d);
+    if (isEUR) monthlyRevenueEUR[mKey] = (monthlyRevenueEUR[mKey] || 0) + safeAmt;
+    else monthlyRevenueGBP[mKey] = (monthlyRevenueGBP[mKey] || 0) + safeAmt;
 
-    if (poRec) {
-      if (isEUR) invoiceEUR += safeAmt;
-      else invoiceGBP += safeAmt;
+    if (safeAmt > 0) {
+      const eng = r.engineer || "Unknown";
+      const cust = r.companyName || "Unknown";
+
+      revenueByEngineer[eng] = (revenueByEngineer[eng] || 0) + safeAmt;
+      revenueByCustomer[cust] = (revenueByCustomer[cust] || 0) + safeAmt;
     }
 
-    if (poReq && !poRec) {
-      poOutstandingValue += safeAmt;
+    if (d >= startOfMonth) {
+      reportsThisMonth++;
+
+      if (safeAmt > 0) {
+        chargeableVisits++;
+
+        if (isEUR) totalEUR += safeAmt;
+        else totalGBP += safeAmt;
+
+        if (poRec) {
+          if (isEUR) invoiceEUR += safeAmt;
+          else invoiceGBP += safeAmt;
+        }
+
+        if (poReq && !poRec) {
+          if (isEUR) poOutstandingEUR += safeAmt;
+          else poOutstandingGBP += safeAmt;
+        }
+      }
     }
-
-    const eng = r.engineer || "Unknown";
-    revenueByEngineer[eng] = (revenueByEngineer[eng] || 0) + safeAmt;
-
-    const cust = r.companyName || "Unknown";
-    revenueByCustomer[cust] = (revenueByCustomer[cust] || 0) + safeAmt;
-
   });
+
+  const averageGBP = chargeableVisits > 0 ? totalGBP / chargeableVisits : 0;
+  const averageEUR = chargeableVisits > 0 ? totalEUR / chargeableVisits : 0;
 
   return {
     totalText: formatMoneyParts(totalGBP, totalEUR),
     invoiceText: formatMoneyParts(invoiceGBP, invoiceEUR),
-    poOutstandingValue,
+    poOutstandingText: formatMoneyParts(poOutstandingGBP, poOutstandingEUR),
+    averageVisitText: formatMoneyParts(averageGBP, averageEUR),
     chargeableVisits,
+    reportsThisMonth,
     revenueByEngineer,
-    revenueByCustomer
+    revenueByCustomer,
+    monthlyRevenueGBP,
+    monthlyRevenueEUR
   };
-
 }
 
 function renderRevenueDashboard() {
-
   const grid = document.getElementById("revenueGrid");
   const extra = document.getElementById("revenueExtra");
 
@@ -2766,51 +2814,58 @@ function renderRevenueDashboard() {
   const stats = calculateRevenueStats();
 
   grid.innerHTML = [
-
     dashboardTile("Total Revenue (Month)", stats.totalText, "#34d399"),
-
     dashboardTile("Invoiceable Revenue", stats.invoiceText, "#60a5fa"),
-
-    dashboardTile("PO Outstanding Value", `£${stats.poOutstandingValue.toFixed(2)}`, "#f59e0b"),
-
-    dashboardTile("Chargeable Visits", stats.chargeableVisits, "#fbbf24")
-
+    dashboardTile("PO Outstanding Value", stats.poOutstandingText, "#f59e0b"),
+    dashboardTile("Chargeable Visits", stats.chargeableVisits, "#fbbf24"),
+    dashboardTile("Average Chargeable Visit", stats.averageVisitText, "#a78bfa"),
+    dashboardTile("Reports This Month", stats.reportsThisMonth, "#7CFC00")
   ].join("");
 
   const topEngineers = Object.entries(stats.revenueByEngineer)
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,5);
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
 
   const topCustomers = Object.entries(stats.revenueByCustomer)
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,5);
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  const monthlyKeys = Array.from(new Set([
+    ...Object.keys(stats.monthlyRevenueGBP),
+    ...Object.keys(stats.monthlyRevenueEUR)
+  ])).sort().slice(-6);
 
   extra.innerHTML = `
-
-    <div style="margin-top:10px">
-
-      <div style="font-weight:700;margin-bottom:6px;">Top Engineers</div>
-
-      ${topEngineers.map(e => `
-        <div style="font-size:13px;color:#ccc;">
-          ${window.escapeHtml(e[0])} — £${e[1].toFixed(2)}
-        </div>
-      `).join("")}
-
+    <div style="margin-top:10px;">
+      <div style="font-weight:700;margin-bottom:8px;">Revenue Trend (Last 6 Months)</div>
+      ${monthlyKeys.length ? monthlyKeys.map(key => {
+        const gbp = stats.monthlyRevenueGBP[key] || 0;
+        const eur = stats.monthlyRevenueEUR[key] || 0;
+        return `
+          <div style="font-size:13px;color:#ccc;margin-bottom:4px;">
+            ${window.escapeHtml(monthLabelFromKey(key))} — ${window.escapeHtml(formatMoneyParts(gbp, eur))}
+          </div>
+        `;
+      }).join("") : `<div style="font-size:13px;color:#888;">No revenue data yet.</div>`}
     </div>
 
-    <div style="margin-top:14px">
-
-      <div style="font-weight:700;margin-bottom:6px;">Top Customers</div>
-
-      ${topCustomers.map(c => `
-        <div style="font-size:13px;color:#ccc;">
-          ${window.escapeHtml(c[0])} — £${c[1].toFixed(2)}
+    <div style="margin-top:16px;">
+      <div style="font-weight:700;margin-bottom:8px;">Top Engineers</div>
+      ${topEngineers.length ? topEngineers.map(([name, value]) => `
+        <div style="font-size:13px;color:#ccc;margin-bottom:4px;">
+          ${window.escapeHtml(name)} — £${Number(value).toFixed(2)}
         </div>
-      `).join("")}
-
+      `).join("") : `<div style="font-size:13px;color:#888;">No engineer revenue yet.</div>`}
     </div>
 
+    <div style="margin-top:16px;">
+      <div style="font-weight:700;margin-bottom:8px;">Top Customers</div>
+      ${topCustomers.length ? topCustomers.map(([name, value]) => `
+        <div style="font-size:13px;color:#ccc;margin-bottom:4px;">
+          ${window.escapeHtml(name)} — £${Number(value).toFixed(2)}
+        </div>
+      `).join("") : `<div style="font-size:13px;color:#888;">No customer revenue yet.</div>`}
+    </div>
   `;
 }
 
