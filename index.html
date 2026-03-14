@@ -5752,12 +5752,47 @@ async function checkProjectHistoryLookup() {
   if (!projectEl) return [];
 
   const projectNo = projectEl.value || "";
-  const matches = getReportsByProjectNumber(projectNo);
+  const matches = await fetchProjectHistory(projectNo);
 
   window.lastProjectHistoryMatches = matches;
 
   renderCustomerHistory(matches, "");
-  showProjectHistoryMatchesIfAny();
+
+  if (!matches.length) return [];
+
+  const latest = matches[0];
+
+  // Company
+  const companyHidden = document.getElementById("custCompanyHidden");
+  const companyUI = document.getElementById("custCompany");
+
+  if (companyHidden && !companyHidden.value && latest.companyName) {
+    companyHidden.value = latest.companyName;
+
+    if (companyUI) {
+      try {
+        companyUI.value = latest.companyName;
+        companyUI.setAttribute?.("value", latest.companyName);
+      } catch {}
+    }
+  }
+
+  const setIfEmpty = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && !el.value && value) {
+      el.value = value;
+    }
+  };
+
+  setIfEmpty("custName", latest.customerName);
+  setIfEmpty("custEmail", latest.customerEmail);
+
+  setIfEmpty("addr1", latest.addr1);
+  setIfEmpty("addr2", latest.addr2);
+  setIfEmpty("city", latest.city);
+  setIfEmpty("region", latest.region);
+  setIfEmpty("postal", latest.postal);
+  setIfEmpty("country", latest.country);
 
   return matches;
 }
@@ -5766,7 +5801,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const projectEl = document.getElementById("project");
   if (!projectEl) return;
 
-  // Trigger when user manually finishes entering PJ
   projectEl.addEventListener("change", checkProjectHistoryLookup);
   projectEl.addEventListener("blur", checkProjectHistoryLookup);
 });
