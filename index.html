@@ -1619,7 +1619,11 @@ document.addEventListener("DOMContentLoaded", () => {
          transition:opacity 0.3s;">
   v1.0.1 • Offline
 </span>
+   
     </footer>
+<div>
+  <label>Developed By Brandon Phelps</label>
+</div>
 
 <!-- ⋮ Floating Account Menu -->
 <button id="menuBtn"
@@ -2439,6 +2443,13 @@ function readReportMetaFromForm() {
     partsUsed: (document.getElementById("partsUsed")?.value || "").trim(),
     partsReq: (document.getElementById("partsReq")?.value || "").trim(),
 
+    addr1: (document.getElementById("addr1")?.value || "").trim(),
+    addr2: (document.getElementById("addr2")?.value || "").trim(),
+    city: (document.getElementById("city")?.value || "").trim(),
+    region: (document.getElementById("region")?.value || "").trim(),
+    postal: (document.getElementById("postal")?.value || "").trim(),
+    country: (document.getElementById("country")?.value || "").trim(),
+
     followUpTypes,
     followUpType: (followUpTypes || [])
       .filter(t => t && t !== "NA")
@@ -2473,6 +2484,14 @@ function addReportToLog(meta) {
     companyName: (meta.companyName || "").trim(),
     customerName: (meta.customerName || "").trim(),
     salesEngineer: (meta.salesEngineer || "").trim(),
+
+    addr1: meta.addr1 || "",
+    addr2: meta.addr2 || "",
+    city: meta.city || "",
+    region: meta.region || "",
+    postal: meta.postal || "",
+    country: meta.country || "",
+    customerEmail: meta.customerEmail || "",
 
     report: meta.report || "",
     projectDesc: meta.projectDesc || "",
@@ -2696,6 +2715,58 @@ function renderCustomerHistory(items, currentReportId = "") {
   }).join("");
 }
 
+async function fetchProjectHistory(projectNo) {
+  const target = normaliseProjectNumber(projectNo);
+  if (!target) return [];
+
+  function readLocalReports() {
+    try {
+      const key = window.LS_KEYS?.reports || "ssco_reports_log";
+      return lsReadArray(key) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  let cloudItems = [];
+
+  try {
+    const res = await fetch(`${WORKER_BASE}/reports?limit=500`, {
+      method: "GET",
+      headers: dbHeaders()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok && Array.isArray(data.items)) {
+      cloudItems = data.items;
+    }
+  } catch (e) {
+    console.warn("Project history cloud fetch failed:", e);
+  }
+
+  const localItems = readLocalReports();
+
+  // merge by id
+  const map = new Map();
+
+  [...cloudItems, ...localItems].forEach(r => {
+    if (!r?.id) return;
+    map.set(r.id, { ...(map.get(r.id) || {}), ...r });
+  });
+
+  const merged = Array.from(map.values());
+
+  return merged
+    .filter(r => !r.deleted)
+    .filter(r => normaliseProjectNumber(r.projectNo) === target)
+    .sort((a, b) => {
+      const ad = String(a.date || a.createdAt || "");
+      const bd = String(b.date || b.createdAt || "");
+      return bd.localeCompare(ad);
+    });
+}
+
+
 async function refreshCustomerHistory() {
   const companyName = (typeof getCompanyValue === "function"
     ? getCompanyValue()
@@ -2715,6 +2786,20 @@ async function refreshCustomerHistory() {
   const items = await fetchCustomerHistory(companyName);
   renderCustomerHistory(items, currentReportId);
 }
+
+async function refreshProjectHistory() {
+  const projectNo = (document.getElementById("project")?.value || "").trim();
+  const currentReportId = ""; // new report for now
+
+  if (!projectNo) {
+    renderCustomerHistory([], currentReportId);
+    return;
+  }
+
+  const items = await fetchProjectHistory(projectNo);
+  renderCustomerHistory(items, currentReportId);
+}
+
 
 function getDashboardUsername() {
   return (localStorage.getItem("username") || "").trim();
@@ -5569,6 +5654,125 @@ function highlightField(el, isFirst = false) {
 </script>
 
 <script>
+function normaliseProjectNumber(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .replace(/_/g, "-");
+}
+
+function getReportsByProjectNumber(projectNo) {
+  const target = normaliseProjectNumber(projectNo);
+  if (!target) return [];
+
+  const reports = lsReadArray(LS_KEYS.reports);
+
+  return reports
+    .filter(r => normaliseProjectNumber(r.projectNo) === target)
+    .sort((a, b) => {
+      const aTime = new Date(a.createdAt || a.date || 0).getTime();
+      const bTime = new Date(b.createdAt || b.date || 0).getTime();
+      return bTime - aTime;
+    });
+}
+</script>
+
+<script>
+function applyPreviousReportDetails(report, { force = false } = {}) {
+  if (!report) return false;
+
+  const fields = {
+    custName: report.customerName || "",
+    custEmail: report.customerEmail || "",
+    addr1: report.addr1 || "",
+    addr2: report.addr2 || "",
+    city: report.city || "",
+    region: report.region || "",
+    postal: report.postal || "",
+    country: report.country || ""
+  };
+
+  // Company is special because you use Google Places + hidden mirror
+  const companyValue = report.companyName || "";
+
+  const currentHasData =
+    (document.getElementById("custName")?.value || "").trim() ||
+    (document.getElementById("custEmail")?.value || "").trim() ||
+    (document.getElementById("addr1")?.value || "").trim() ||
+    (document.getElementById("city")?.value || "").trim() ||
+    (document.getElementById("postal")?.value || "").trim() ||
+    (document.getElementById("custCompanyHidden")?.value || "").trim() ||
+    (document.getElementById("custCompany")?.value || "").trim();
+
+  if (currentHasData && !force) {
+    return false;
+  }
+
+  // Normal inputs
+  Object.entries(fields).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+
+  // Company hidden mirror
+  const hidden = document.getElementById("custCompanyHidden");
+  if (hidden) hidden.value = companyValue;
+
+  // Company visible field / place component
+  const companyEl = document.getElementById("custCompany");
+  if (companyEl) {
+    try {
+      companyEl.value = companyValue;
+      if (typeof companyEl.setAttribute === "function") {
+        companyEl.setAttribute("value", companyValue);
+      }
+    } catch {}
+  }
+
+  // Optional persistence hooks
+  if (typeof saveField === "function") {
+    [
+      "custName","custEmail","addr1","addr2","city","region","postal","country"
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) saveField(el);
+    });
+  }
+
+  return true;
+}
+</script>
+
+<script>
+window.lastProjectHistoryMatches = [];
+
+async function checkProjectHistoryLookup() {
+  const projectEl = document.getElementById("project");
+  if (!projectEl) return [];
+
+  const projectNo = projectEl.value || "";
+  const matches = getReportsByProjectNumber(projectNo);
+
+  window.lastProjectHistoryMatches = matches;
+
+  renderCustomerHistory(matches, "");
+  showProjectHistoryMatchesIfAny();
+
+  return matches;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const projectEl = document.getElementById("project");
+  if (!projectEl) return;
+
+  // Trigger when user manually finishes entering PJ
+  projectEl.addEventListener("change", checkProjectHistoryLookup);
+  projectEl.addEventListener("blur", checkProjectHistoryLookup);
+});
+</script>
+
+<script>
 function showScanFx() {
   const overlay = document.getElementById("scanFxOverlay");
   if (!overlay) return;
@@ -5973,6 +6177,35 @@ function applyParsedPlateData(parsed) {
     updateSystemAgeFromManufacturingDate();
   }
   updatePlatePreviewMeta(parsed);
+  checkProjectHistoryLookup();
+}
+</script>
+
+<script>
+function showProjectHistoryMatchesIfAny() {
+  const matches = window.lastProjectHistoryMatches || [];
+  if (!matches.length) return false;
+
+  // 1) If you already have a shared history renderer, use it
+  if (typeof window.renderReportHistory === "function") {
+    window.renderReportHistory(matches, {
+      source: "project",
+      title: "Previous reports for this PJ"
+    });
+    return true;
+  }
+
+  // 2) If you already have a company history modal opener, reuse it
+  if (typeof window.openReportHistoryModal === "function") {
+    window.openReportHistoryModal(matches, {
+      source: "project",
+      title: "Previous reports for this PJ"
+    });
+    return true;
+  }
+
+  // 3) Fallback: do nothing for now
+  return false;
 }
 </script>
 
