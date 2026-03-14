@@ -2387,8 +2387,29 @@ function getCompanyValue() {
   return "";
 }
 
+function setCompanyValue(value) {
+  const v = String(value || "").trim();
 
+  const hidden = document.getElementById("custCompanyHidden");
+  if (hidden) hidden.value = v;
 
+  const companyEl = document.getElementById("custCompany");
+  if (companyEl) {
+    try {
+      // best-effort for custom element
+      companyEl.value = v;
+    } catch {}
+
+    try {
+      companyEl.setAttribute("value", v);
+    } catch {}
+  }
+
+  // optional: keep same fallback source your app already uses elsewhere
+  try {
+    localStorage.setItem("custCompany", v);
+  } catch {}
+}
 
 // ---- Follow-up checklist helper ----
 function getSelectedFollowUps() {
@@ -5763,18 +5784,12 @@ async function checkProjectHistoryLookup() {
   const latest = matches[0];
 
   // Company
-  const companyHidden = document.getElementById("custCompanyHidden");
-  const companyUI = document.getElementById("custCompany");
+  const currentCompany =
+    (document.getElementById("custCompanyHidden")?.value || "").trim() ||
+    (localStorage.getItem("custCompany") || "").trim();
 
-  if (companyHidden && !companyHidden.value && latest.companyName) {
-    companyHidden.value = latest.companyName;
-
-    if (companyUI) {
-      try {
-        companyUI.value = latest.companyName;
-        companyUI.setAttribute?.("value", latest.companyName);
-      } catch {}
-    }
+  if (!currentCompany && latest.companyName) {
+    setCompanyValue(latest.companyName);
   }
 
   const setIfEmpty = (id, value) => {
