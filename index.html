@@ -5822,6 +5822,57 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+function showScanRetryModal() {
+  const modal = document.getElementById("scanRetryModal");
+  const box = document.getElementById("scanRetryBox");
+  if (!modal || !box) return;
+
+  modal.style.display = "flex";
+  requestAnimationFrame(() => {
+    modal.style.opacity = "1";
+    box.style.opacity = "1";
+    box.style.transform = "scale(1)";
+  });
+}
+
+function hideScanRetryModal() {
+  const modal = document.getElementById("scanRetryModal");
+  const box = document.getElementById("scanRetryBox");
+  if (!modal || !box) return;
+
+  modal.style.opacity = "0";
+  box.style.opacity = "0";
+  box.style.transform = "scale(0.92)";
+
+  setTimeout(() => {
+    modal.style.display = "none";
+  }, 180);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const retryBtn = document.getElementById("scanRetryAgain");
+  const cancelBtn = document.getElementById("scanRetryCancel");
+  const fileInput = document.getElementById("plateImageInput");
+  const modal = document.getElementById("scanRetryModal");
+
+  retryBtn?.addEventListener("click", () => {
+    hideScanRetryModal();
+    setTimeout(() => {
+      showScanGuide(fileInput);
+    }, 180);
+  });
+
+  cancelBtn?.addEventListener("click", () => {
+    hideScanRetryModal();
+  });
+
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) hideScanRetryModal();
+  });
+});
+</script>
+
+<script>
 function showScanFx() {
   const overlay = document.getElementById("scanFxOverlay");
   if (!overlay) return;
@@ -5965,6 +6016,7 @@ async function preprocessPlateImage(file, contrastBoost = 1.45) {
 
 async function runPlateOCR(file) {
   if (!file) return;
+
   showScanFx();
 
   try {
@@ -5974,13 +6026,13 @@ async function runPlateOCR(file) {
     let text = "";
     let parsed = { project: "", manufacturingDate: "" };
 
-    // Pass 1: normal preprocessing
+    // Pass 1
     const processedBlob1 = await preprocessPlateImage(file, 1.45);
     const result1 = await Tesseract.recognize(processedBlob1, "eng");
     text = result1?.data?.text || "";
     parsed = parsePlateText(text);
 
-    // Pass 2: stronger contrast only if PJ missing
+    // Pass 2 if PJ missing
     if (!parsed.project) {
       const processedBlob2 = await preprocessPlateImage(file, 1.85);
       const result2 = await Tesseract.recognize(processedBlob2, "eng");
@@ -5989,8 +6041,6 @@ async function runPlateOCR(file) {
       if (text2.length > text.length) text = text2;
 
       const parsed2 = parsePlateText(text2);
-
-      // prefer second parse if it found more
       if (parsed2.project || parsed2.manufacturingDate) {
         parsed = parsed2;
       }
@@ -6002,18 +6052,37 @@ async function runPlateOCR(file) {
     applyParsedPlateData(parsed);
 
     if (parsed.project || parsed.manufacturingDate) {
+      hideScanFx();
+
       showToast?.("✅ Plate scanned successfully", "success");
       bump?.("success");
-      hideScanFx();
     } else {
-      showToast?.("⚠️ Plate not detected. Try filling the frame and holding camera straight.", "warning");
+      hideScanFx();
+
+      showToast?.(
+        "⚠️ Plate not detected. Try filling the frame and holding camera straight.",
+        "warning"
+      );
       bump?.("warning");
+
+      setTimeout(() => {
+        showScanRetryModal?.();
+      }, 250);
     }
 
   } catch (err) {
     console.error("OCR failed:", err);
+
+    hideScanFx();
+
     showToast?.("❌ OCR failed", "error");
     bump?.("error");
+
+    setTimeout(() => {
+      showScanRetryModal?.();
+    }, 250);
+  } finally {
+    // absolute safety net
     hideScanFx();
   }
 }
@@ -11914,6 +11983,43 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       pointer-events:none;
     "></div>
+  </div>
+</div>
+
+<div id="scanRetryModal"
+     style="display:none;position:fixed;inset:0;z-index:9900;
+            background:rgba(0,0,0,0.55);
+            backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+            align-items:center;justify-content:center;
+            opacity:0;transition:opacity .2s ease;">
+
+  <div id="scanRetryBox"
+       style="background:rgba(30,30,31,0.96);
+              border-radius:18px;
+              padding:24px 20px;
+              max-width:420px;
+              width:92%;
+              text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.92);
+              opacity:0;
+              transition:all .2s ease;">
+
+    <div style="font-size:30px;margin-bottom:10px;">⚠️</div>
+
+    <div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:10px;">
+      Plate not detected
+    </div>
+
+    <div style="font-size:16px;line-height:1.5;color:#ddd;margin-bottom:18px;">
+      Try again with the plate filling most of the frame,<br>
+      camera straight on, and glare reduced if possible.
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <button id="scanRetryCancel" type="button" class="btn remove" style="flex:1;">Cancel</button>
+      <button id="scanRetryAgain" type="button" class="btn green" style="flex:1;">Retry</button>
+    </div>
   </div>
 </div>
 
