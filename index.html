@@ -5703,6 +5703,8 @@ function getReportsByProjectNumber(projectNo) {
 }
 </script>
 
+
+
 <script>
 function showLoadedCompanyNote(companyName) {
   const note = document.getElementById("pjLoadedCompanyNote");
@@ -5809,30 +5811,45 @@ async function checkProjectHistoryLookup() {
 
   renderCustomerHistory(matches, "");
 
-  if (!matches.length) return [];
+  if (!matches.length) {
+    showLoadedCompanyNote("");
+    return [];
+  }
 
   const latest = matches[0];
 
-  // Company
-  const currentCompany =
-    (document.getElementById("custCompanyHidden")?.value || "").trim() ||
-    (localStorage.getItem("custCompany") || "").trim();
-
-  if (!currentCompany && latest.companyName) {
-    setCompanyValue(latest.companyName);
-    showLoadedCompanyNote(latest.companyName);
-  }
-
   const setIfEmpty = (id, value) => {
     const el = document.getElementById(id);
-    if (el && !el.value && value) {
+    if (el && !String(el.value || "").trim() && value) {
       el.value = value;
     }
   };
 
+  // Company
+  const companyHidden = document.getElementById("custCompanyHidden");
+  const companyUI = document.getElementById("custCompany");
+  const currentCompany =
+    (companyHidden?.value || "").trim() ||
+    (localStorage.getItem("custCompany") || "").trim();
+
+  if (!currentCompany && latest.companyName) {
+    if (companyHidden) companyHidden.value = latest.companyName;
+
+    try {
+      localStorage.setItem("custCompany", latest.companyName);
+    } catch {}
+
+    if (companyUI) {
+      try { companyUI.value = latest.companyName; } catch {}
+      try { companyUI.setAttribute("value", latest.companyName); } catch {}
+    }
+
+    showLoadedCompanyNote(latest.companyName);
+  }
+
+  // Customer + address
   setIfEmpty("custName", latest.customerName);
   setIfEmpty("custEmail", latest.customerEmail);
-
   setIfEmpty("addr1", latest.addr1);
   setIfEmpty("addr2", latest.addr2);
   setIfEmpty("city", latest.city);
