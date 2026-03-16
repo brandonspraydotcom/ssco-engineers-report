@@ -1427,6 +1427,10 @@ document.addEventListener("DOMContentLoaded", () => {
   		">
 	</gmpx-place-autocomplete>
 	<input id="custCompanyHidden" type="hidden">
+	
+	<div id="pjLoadedCompanyNote"
+     style="display:none;margin-top:8px;font-size:13px;color:#7CFC00;">
+   </div>
 
   <div class="row" style="margin-top:10px">
     <!-- ✅ Address Line 1 autocomplete UI -->
@@ -5700,6 +5704,32 @@ function getReportsByProjectNumber(projectNo) {
 </script>
 
 <script>
+function showLoadedCompanyNote(companyName) {
+  const note = document.getElementById("pjLoadedCompanyNote");
+  if (!note) return;
+
+  const value = String(companyName || "").trim();
+  if (!value) {
+    note.style.display = "none";
+    note.textContent = "";
+    return;
+  }
+
+  note.textContent = `Loaded from PJ history: ${value}`;
+  note.style.display = "block";
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const companyEl = document.getElementById("custCompany");
+  companyEl?.addEventListener("change", () => {
+    showLoadedCompanyNote("");
+  });
+});
+</script>
+
+<script>
 function applyPreviousReportDetails(report, { force = false } = {}) {
   if (!report) return false;
 
@@ -5790,6 +5820,7 @@ async function checkProjectHistoryLookup() {
 
   if (!currentCompany && latest.companyName) {
     setCompanyValue(latest.companyName);
+    showLoadedCompanyNote(latest.companyName);
   }
 
   const setIfEmpty = (id, value) => {
