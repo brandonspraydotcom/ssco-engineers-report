@@ -2127,6 +2127,31 @@ window.WORKER_BASE = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev"
 </script>
 
 <script>
+function setCompanyValue(value) {
+  const v = String(value || "").trim();
+
+  const hidden = document.getElementById("custCompanyHidden");
+  if (hidden) hidden.value = v;
+
+  const companyEl = document.getElementById("custCompany");
+  if (companyEl) {
+    try { companyEl.value = v; } catch {}
+    try { companyEl.setAttribute("value", v); } catch {}
+  }
+
+  try { localStorage.setItem("custCompany", v); } catch {}
+
+  if (typeof saveField === "function" && hidden) {
+    try { saveField(hidden); } catch {}
+  }
+
+  if (typeof showLoadedCompanyNote === "function") {
+    showLoadedCompanyNote(v);
+  }
+}
+</script>
+
+<script>
 
 // ===============================
 // USER NAME HELPERS
@@ -5839,22 +5864,8 @@ async function checkProjectHistoryLookup() {
     }
   };
 
-  // Company
-  const companyHidden = document.getElementById("custCompanyHidden");
-  const companyUI = document.getElementById("custCompany");
-
   if (latest.companyName) {
-    if (companyHidden) companyHidden.value = latest.companyName;
-
-    try {
-      localStorage.setItem("custCompany", latest.companyName);
-    } catch {}
-
-    if (companyUI) {
-      try { companyUI.value = latest.companyName; } catch {}
-      try { companyUI.setAttribute("value", latest.companyName); } catch {}
-    }
-
+    setCompanyValue(latest.companyName);    
     showLoadedCompanyNote(latest.companyName);
   }
 
@@ -6534,6 +6545,36 @@ document.addEventListener("DOMContentLoaded", () => {
   syncCurrencyUI();
   updatePOLogic();
 })();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const companyEl = document.getElementById("custCompany");
+  if (!companyEl) return;
+
+  const syncCompanyFromUI = () => {
+    let value = "";
+
+    try {
+      value = String(companyEl.value || companyEl.getAttribute("value") || "").trim();
+    } catch {
+      value = "";
+    }
+
+    const hidden = document.getElementById("custCompanyHidden");
+    if (hidden) hidden.value = value;
+
+    try { localStorage.setItem("custCompany", value); } catch {}
+
+    if (!value && typeof showLoadedCompanyNote === "function") {
+      showLoadedCompanyNote("");
+    }
+  };
+
+  companyEl.addEventListener("change", syncCompanyFromUI);
+  companyEl.addEventListener("input", syncCompanyFromUI);
+  companyEl.addEventListener("blur", syncCompanyFromUI);
+});
 </script>
 
 <script>
