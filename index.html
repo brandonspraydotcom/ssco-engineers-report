@@ -2474,6 +2474,7 @@ function readReportMetaFromForm() {
     region: (document.getElementById("region")?.value || "").trim(),
     postal: (document.getElementById("postal")?.value || "").trim(),
     country: (document.getElementById("country")?.value || "").trim(),
+    customerEmail: (document.getElementById("custEmail")?.value || "").trim(),
 
     followUpTypes,
     followUpType: (followUpTypes || [])
@@ -5818,6 +5819,19 @@ async function checkProjectHistoryLookup() {
 
   const latest = matches[0];
 
+  alert(
+    "PJ match found:\n\n" +
+    "companyName = " + (latest.companyName || "[blank]") + "\n" +
+    "customerName = " + (latest.customerName || "[blank]") + "\n" +
+    "customerEmail = " + (latest.customerEmail || "[blank]") + "\n" +
+    "addr1 = " + (latest.addr1 || "[blank]") + "\n" +
+    "addr2 = " + (latest.addr2 || "[blank]") + "\n" +
+    "city = " + (latest.city || "[blank]") + "\n" +
+    "region = " + (latest.region || "[blank]") + "\n" +
+    "postal = " + (latest.postal || "[blank]") + "\n" +
+    "country = " + (latest.country || "[blank]")
+  );
+
   const setIfEmpty = (id, value) => {
     const el = document.getElementById(id);
     if (el && !String(el.value || "").trim() && value) {
@@ -5828,11 +5842,8 @@ async function checkProjectHistoryLookup() {
   // Company
   const companyHidden = document.getElementById("custCompanyHidden");
   const companyUI = document.getElementById("custCompany");
-  const currentCompany =
-    (companyHidden?.value || "").trim() ||
-    (localStorage.getItem("custCompany") || "").trim();
 
-  if (!currentCompany && latest.companyName) {
+  if (latest.companyName) {
     if (companyHidden) companyHidden.value = latest.companyName;
 
     try {
@@ -8097,6 +8108,22 @@ document.addEventListener("DOMContentLoaded", () => {
           if (["button","submit","file"].includes(el.type)) return;
           el.value = "";
         });
+
+        // Clear company hidden mirror + custom company UI + PJ loaded note
+        const companyHidden = document.getElementById("custCompanyHidden");
+        if (companyHidden) companyHidden.value = "";
+
+        const companyEl = document.getElementById("custCompany");
+        if (companyEl) {
+          try { companyEl.value = ""; } catch {}
+          try { companyEl.setAttribute("value", ""); } catch {}
+        }
+
+        try { localStorage.removeItem("custCompany"); } catch {}
+
+        if (typeof showLoadedCompanyNote === "function") {
+          showLoadedCompanyNote("");
+        }
 
         // Optional: reset date to today
         const dateEl = document.getElementById("date");
