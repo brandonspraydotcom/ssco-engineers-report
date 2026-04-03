@@ -2127,6 +2127,22 @@ window.WORKER_BASE = "https://ssco-engineer-ai.brandon-phelps-spray.workers.dev"
 </script>
 
 <script>
+// ---- Company helper (single source of truth)
+function getCompanyValue() {
+  const hidden = (document.getElementById("custCompanyHidden")?.value || "").trim();
+  if (hidden) return hidden;
+
+  const companyEl = document.getElementById("custCompany");
+  const visible = String(
+    companyEl?.value ||
+    companyEl?.getAttribute?.("value") ||
+    ""
+  ).trim();
+  if (visible) return visible;
+
+  return (localStorage.getItem("custCompany") || "").trim();
+}
+
 function setCompanyValue(value) {
   const v = String(value || "").trim();
 
@@ -2139,16 +2155,81 @@ function setCompanyValue(value) {
     try { companyEl.setAttribute("value", v); } catch {}
   }
 
-  try { localStorage.setItem("custCompany", v); } catch {}
-
-  if (typeof saveField === "function" && hidden) {
-    try { saveField(hidden); } catch {}
+  if (v) {
+    try { localStorage.setItem("custCompany", v); } catch {}
+  } else {
+    try { localStorage.removeItem("custCompany"); } catch {}
   }
 
   if (typeof showLoadedCompanyNote === "function") {
     showLoadedCompanyNote(v);
   }
 }
+
+function syncCompanyFromUI() {
+  const companyEl = document.getElementById("custCompany");
+  const hidden = document.getElementById("custCompanyHidden");
+
+  const visible = String(
+    companyEl?.value ||
+    companyEl?.getAttribute?.("value") ||
+    ""
+  ).trim();
+
+  if (visible) {
+    if (hidden) hidden.value = visible;
+    try { localStorage.setItem("custCompany", visible); } catch {}
+    return visible;
+  }
+
+  const hiddenVal = String(hidden?.value || "").trim();
+  if (hiddenVal) {
+    try { localStorage.setItem("custCompany", hiddenVal); } catch {}
+    return hiddenVal;
+  }
+
+  try { localStorage.removeItem("custCompany"); } catch {}
+  return "";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const gmpx = document.getElementById("custCompany");
+  const fb = document.getElementById("custCompanyFallback");
+
+  // Google Places selection
+  if (gmpx) {
+    gmpx.addEventListener("gmpx-placechange", (e) => {
+      const place = e.detail?.place;
+      const name = String(place?.displayName || place?.name || "").trim();
+      if (name) setCompanyValue(name);
+      setTimeout(() => refreshCustomerHistory?.(), 50);
+    });
+
+    // Manual typing / best-effort sync
+    const sync = () => syncCompanyFromUI();
+    gmpx.addEventListener("input", sync);
+    gmpx.addEventListener("change", sync);
+    gmpx.addEventListener("blur", sync);
+
+    try {
+      const inner = gmpx.shadowRoot?.querySelector("input");
+      if (inner) {
+        inner.addEventListener("input", () => setCompanyValue(inner.value));
+        inner.addEventListener("blur", () => setCompanyValue(inner.value), true);
+      }
+    } catch {}
+  }
+
+  // Optional fallback input
+  if (fb) {
+    fb.addEventListener("input", () => setCompanyValue(fb.value));
+    fb.addEventListener("blur", () => setCompanyValue(fb.value));
+  }
+
+  // Hydrate visible/hidden from current best value
+  const current = getCompanyValue();
+  if (current) setCompanyValue(current);
+});
 </script>
 
 <script>
@@ -2379,7 +2460,31 @@ window.clearPdfSaved = clearPdfSaved;
 const LS_KEYS = {
   actions: "ssco_outstanding_actions",
   reports: "ssco_reports_log",
+  syncQueue: "ssco_sync_queue",
 };
+
+function readSyncQueue() {
+  return lsReadArray(LS_KEYS.syncQueue);
+}
+
+function writeSyncQueue(items) {
+  lsWriteArray(LS_KEYS.syncQueue, items);
+}
+
+function enqueueSyncItem(item) {
+  const queue = readSyncQueue();
+  queue.push({
+    id: makeId("sync"),
+    createdAt: new Date().toISOString(),
+    ...item
+  });
+  writeSyncQueue(queue);
+}
+
+function removeSyncQueueItem(queueId) {
+  const queue = readSyncQueue().filter(item => item.id !== queueId);
+  writeSyncQueue(queue);
+}
 
 function lsReadArray(key) {
   try {
@@ -2399,47 +2504,6 @@ function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`;
 }
 
-// ---- Company helper (because gmpx-place-autocomplete isn't a normal input)
-function getCompanyValue() {
-  // 1) Hidden (preferred)
-  const hidden = (document.getElementById("custCompanyHidden")?.value || "").trim();
-  if (hidden) return hidden;
-
-  // 2) Visible field (Google places input)
-  const vis = (document.getElementById("custCompany")?.value || "").trim();
-  if (vis) return vis;
-
-  // 3) LocalStorage fallback
-  const ls = (localStorage.getItem("custCompany") || "").trim();
-  if (ls) return ls;
-
-  return "";
-}
-
-function setCompanyValue(value) {
-  const v = String(value || "").trim();
-
-  const hidden = document.getElementById("custCompanyHidden");
-  if (hidden) hidden.value = v;
-
-  const companyEl = document.getElementById("custCompany");
-  if (companyEl) {
-    try {
-      // best-effort for custom element
-      companyEl.value = v;
-    } catch {}
-
-    try {
-      companyEl.setAttribute("value", v);
-    } catch {}
-  }
-
-  // optional: keep same fallback source your app already uses elsewhere
-  try {
-    localStorage.setItem("custCompany", v);
-  } catch {}
-}
-
 // ---- Follow-up checklist helper ----
 function getSelectedFollowUps() {
   return Array.from(
@@ -2449,6 +2513,8 @@ function getSelectedFollowUps() {
 
 
 function readReportMetaFromForm() {
+  syncCompanyFromUI();
+
   const engineer = (document.getElementById("engineer")?.value || "").trim()
     || (localStorage.getItem("username") || "").trim();
 
@@ -4063,6 +4129,8 @@ function prepareForPdf(clone, sigData) {
   clone.querySelectorAll(
     ".btn, .controls, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal"
   ).forEach(el => el.remove());
+  
+  syncCompanyFromUI();
 
   // Gather data
   const data = {
@@ -4075,10 +4143,7 @@ function prepareForPdf(clone, sigData) {
     salesEmail: $('salesEmail')?.value || '—',
     custName: $('custName')?.value || '—',
     custEmail: $('custEmail')?.value || '—',
-    custCompany:
-    (localStorage.getItem("custCompany") || "").trim() ||
-    $('custCompanyHidden')?.value?.trim() ||
-    $('custCompanyFallback')?.value?.trim() || '—',
+    custCompany: (typeof getCompanyValue === "function" ? getCompanyValue() : "") || '—',
     addr1: $('addr1')?.value || '',
     addr2: $('addr2')?.value || '',
     city: $('city')?.value || '',
@@ -5844,19 +5909,6 @@ async function checkProjectHistoryLookup() {
 
   const latest = matches[0];
 
-  alert(
-    "PJ match found:\n\n" +
-    "companyName = " + (latest.companyName || "[blank]") + "\n" +
-    "customerName = " + (latest.customerName || "[blank]") + "\n" +
-    "customerEmail = " + (latest.customerEmail || "[blank]") + "\n" +
-    "addr1 = " + (latest.addr1 || "[blank]") + "\n" +
-    "addr2 = " + (latest.addr2 || "[blank]") + "\n" +
-    "city = " + (latest.city || "[blank]") + "\n" +
-    "region = " + (latest.region || "[blank]") + "\n" +
-    "postal = " + (latest.postal || "[blank]") + "\n" +
-    "country = " + (latest.country || "[blank]")
-  );
-
   const setIfEmpty = (id, value) => {
     const el = document.getElementById(id);
     if (el && !String(el.value || "").trim() && value) {
@@ -6119,7 +6171,19 @@ async function runPlateOCR(file) {
     const rawBox = document.getElementById("plateRawTextTest");
     if (rawBox) rawBox.value = text;
 
-    applyParsedPlateData(parsed);
+    const projectMatches = parsed.project
+      ? await fetchProjectHistory(parsed.project)
+      : [];
+
+    const latestMatch = projectMatches?.length ? projectMatches[0] : null;
+
+    fillScanReviewModal({
+      parsed,
+      rawText: text,
+      latestMatch
+    });
+
+    openScanReviewModal();
 
     if (parsed.project || parsed.manufacturingDate) {
       hideScanFx();
@@ -6366,6 +6430,198 @@ function applyParsedPlateData(parsed) {
   }
   updatePlatePreviewMeta(parsed);
   checkProjectHistoryLookup();
+}
+</script>
+
+<script>
+function applyScanReviewToForm() {
+  const getVal = (id) => (document.getElementById(id)?.value || "").trim();
+
+  // Main scan fields
+  const projectEl = document.getElementById("project");
+  const mfgEl = document.getElementById("manufacturingDate");
+
+  if (projectEl) projectEl.value = getVal("scanReviewProject");
+  if (mfgEl) mfgEl.value = getVal("scanReviewMfgDate");
+
+  // Recalculate age on main form
+  if (typeof updateSystemAgeFromManufacturingDate === "function") {
+    updateSystemAgeFromManufacturingDate();
+  }
+
+  // Customer fields
+  const map = {
+    custName: "scanReviewCustName",
+    custEmail: "scanReviewCustEmail",
+    addr1: "scanReviewAddr1",
+    addr2: "scanReviewAddr2",
+    city: "scanReviewCity",
+    region: "scanReviewRegion",
+    postal: "scanReviewPostal",
+    country: "scanReviewCountry"
+  };
+
+  Object.entries(map).forEach(([formId, modalId]) => {
+    const formEl = document.getElementById(formId);
+    if (formEl) formEl.value = getVal(modalId);
+  });
+
+  // Company — use the proper setter so hidden mirror + PDF source stay synced
+  if (typeof setCompanyValue === "function") {
+    setCompanyValue(getVal("scanReviewCompany"));
+  } else {
+    const hidden = document.getElementById("custCompanyHidden");
+    if (hidden) hidden.value = getVal("scanReviewCompany");
+  }
+
+  // Optional persistence hooks
+  if (typeof saveField === "function") {
+    [
+      "project","manufacturingDate",
+      "custName","custEmail","addr1","addr2","city","region","postal","country",
+      "custCompanyHidden"
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        try { saveField(el); } catch {}
+      }
+    });
+  }
+
+  // Refresh preview meta based on final edited values
+  if (typeof updatePlatePreviewMeta === "function") {
+    updatePlatePreviewMeta({
+      project: getVal("scanReviewProject"),
+      manufacturingDate: getVal("scanReviewMfgDate")
+    });
+  }
+
+  closeScanReviewModal();
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const applyBtn = document.getElementById("scanReviewApply");
+  applyBtn?.addEventListener("click", applyScanReviewToForm);
+});
+</script>
+
+<script>
+function openScanReviewModal() {
+  const modal = document.getElementById("scanReviewModal");
+  const box = document.getElementById("scanReviewBox");
+  if (!modal || !box) return;
+
+  modal.style.display = "flex";
+  requestAnimationFrame(() => {
+    modal.style.opacity = "1";
+    box.style.opacity = "1";
+    box.style.transform = "scale(1)";
+  });
+}
+
+function closeScanReviewModal() {
+  const modal = document.getElementById("scanReviewModal");
+  const box = document.getElementById("scanReviewBox");
+  if (!modal || !box) return;
+
+  modal.style.opacity = "0";
+  box.style.opacity = "0";
+  box.style.transform = "scale(0.92)";
+
+  setTimeout(() => {
+    modal.style.display = "none";
+  }, 180);
+}
+
+function updateScanReviewAge() {
+  const mfgEl = document.getElementById("scanReviewMfgDate");
+  const ageEl = document.getElementById("scanReviewSystemAge");
+  if (!mfgEl || !ageEl) return;
+
+  if (typeof calculateSystemAgeText === "function") {
+    ageEl.value = calculateSystemAgeText(mfgEl.value);
+  } else {
+    ageEl.value = "";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("scanReviewModal");
+  const closeBtn = document.getElementById("closeScanReview");
+  const cancelBtn = document.getElementById("scanReviewCancel");
+  const rescanBtn = document.getElementById("scanReviewRescan");
+  const mfgEl = document.getElementById("scanReviewMfgDate");
+
+  closeBtn?.addEventListener("click", closeScanReviewModal);
+  cancelBtn?.addEventListener("click", closeScanReviewModal);
+
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) closeScanReviewModal();
+  });
+
+  mfgEl?.addEventListener("change", updateScanReviewAge);
+  mfgEl?.addEventListener("input", updateScanReviewAge);
+
+  rescanBtn?.addEventListener("click", () => {
+    closeScanReviewModal();
+    const fileInput = document.getElementById("plateImageInput");
+    setTimeout(() => {
+      if (typeof showScanGuide === "function") {
+        showScanGuide(fileInput);
+      } else {
+        fileInput?.click();
+      }
+    }, 180);
+  });
+});
+</script>
+
+<script>
+function fillScanReviewModal({ parsed = {}, rawText = "", latestMatch = null } = {}) {
+  const getCurrent = (id) => (document.getElementById(id)?.value || "").trim();
+  const setVal = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || "";
+  };
+
+  // Scanned values first
+  setVal("scanReviewProject", parsed.project || getCurrent("project"));
+  setVal("scanReviewMfgDate", parsed.manufacturingDate || getCurrent("manufacturingDate"));
+  setVal("scanReviewRawText", rawText || "");
+
+  const currentCompany =
+    (document.getElementById("custCompanyHidden")?.value || "").trim() ||
+    (typeof getCompanyValue === "function" ? getCompanyValue() : "");
+
+  // Prefer PJ history, then current form values
+  setVal("scanReviewCustName", latestMatch?.customerName || getCurrent("custName"));
+  setVal("scanReviewCustEmail", latestMatch?.customerEmail || getCurrent("custEmail"));
+  setVal("scanReviewCompany", latestMatch?.companyName || currentCompany || "");
+  setVal("scanReviewAddr1", latestMatch?.addr1 || getCurrent("addr1"));
+  setVal("scanReviewAddr2", latestMatch?.addr2 || getCurrent("addr2"));
+  setVal("scanReviewCity", latestMatch?.city || getCurrent("city"));
+  setVal("scanReviewRegion", latestMatch?.region || getCurrent("region"));
+  setVal("scanReviewPostal", latestMatch?.postal || getCurrent("postal"));
+  setVal("scanReviewCountry", latestMatch?.country || getCurrent("country"));
+
+  // PJ history hint
+  const hint = document.getElementById("scanReviewHistoryHint");
+  if (hint) {
+    if (latestMatch) {
+      const when = latestMatch.date || latestMatch.createdAt || "";
+      hint.style.display = "block";
+      hint.textContent = `Customer/site details loaded from PJ history${when ? ` • last visit ${when}` : ""}`;
+    } else {
+      hint.style.display = "none";
+      hint.textContent = "";
+    }
+  }
+
+  if (typeof updateScanReviewAge === "function") {
+    updateScanReviewAge();
+  }
 }
 </script>
 
@@ -7531,8 +7787,6 @@ function buildPOOutstandingFromForm() {
   const amt = parseFloat(localStorage.getItem("visitChargeAmount") || "0");
   const cur = (localStorage.getItem("visitChargeCurrency") || "£").trim();
   const hasCharge = amt > 0;
-  const due = (document.getElementById("followUpDue")?.value || "").trim() 
-           || (typeof todayISO === "function" ? todayISO() : new Date().toISOString().slice(0,10));
 
   const poReq = !!document.getElementById("poRequired")?.checked;
   const poRec = !!document.getElementById("poReceived")?.checked;
@@ -7540,43 +7794,77 @@ function buildPOOutstandingFromForm() {
   // ✅ If no charge, PO flags are redundant → no action
   if (!hasCharge) return null;
 
-  // Only create actions when PO is relevant
+  // ✅ Only create PO actions when PO is relevant
   if (!poReq && !poRec) return null;
 
   const inputs = collectAIInputs();
   const money = `${cur}${amt.toFixed(2)}`;
 
-  // Choose action type + notes
+  const projectNo = (inputs.project || "").trim();
+  const companyName = (getCompanyValue?.() || inputs.custCompany || "").trim();
+  const engineer = (inputs.engineer || "").trim();
+  const salesEngineer = (inputs.salesName || "").trim();
+  const customerName = (inputs.custName || "").trim();
+  const poNumber = (inputs.po || "").trim();
+
+  // ✅ Use a stable ID so repeated saves don't keep creating duplicates
   const followUpType = poRec ? "PO_RECEIVED" : "PO_REQUIRED";
+  const stableId = `po_${projectNo || "no_project"}_${followUpType}`;
+
+  // ✅ Single dueDate only
+  const dueDate = (document.getElementById("followUpDue")?.value || "").trim()
+    || (poRec
+      ? new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+      : (typeof todayISO === "function"
+          ? todayISO()
+          : new Date().toISOString().slice(0, 10)));
+
   const followUpNotes = poRec
     ? `Purchase order received. Visit charge ${money}. Please invoice ASAP.`
     : `Purchase order needed. Visit charge ${money}. Please obtain PO and invoice ASAP.`;
 
   return {
-    id: newId(),
+    id: stableId,
     status: "open",
     createdAt: new Date().toISOString(),
-    dueDate: poRec
-      ? new Date(Date.now() + 86400000).toISOString().slice(0,10)
-      : todayISO(),
+    dueDate,
+
     followUpType,
     followUpNotes,
 
-    engineer: inputs.engineer || "",
-    salesEngineer: inputs.salesName || "",
-    projectNo: inputs.project || "",
+    engineer,
+    salesEngineer,
+    projectNo,
+    poNumber,
 
-    companyName: getCompanyValue?.() || inputs.custCompany || "",
-    customerName: inputs.custName || "",
+    companyName,
+    customerName,
     visitType: inputs.visitType || "",
 
-    // useful for future
     visitChargeAmount: amt,
     visitChargeCurrency: cur,
     poRequired: poReq,
     poReceived: poRec,
-    dueDate: due,
   };
+}
+
+function addPOOutstandingToLocal(action) {
+  if (!action || !action.id) return null;
+
+  const actions = lsReadArray(LS_KEYS.actions);
+
+  const existingIndex = actions.findIndex(a => a.id === action.id);
+  if (existingIndex >= 0) {
+    actions[existingIndex] = {
+      ...actions[existingIndex],
+      ...action
+    };
+  } else {
+    actions.unshift(action);
+  }
+
+  lsWriteArray(LS_KEYS.actions, actions);
+  return action;
 }
 
 function ensureActionHasId(a) {
@@ -7730,50 +8018,77 @@ async function commitReportSave() {
   });
 
   // 1️⃣ Save locally first (offline-first behaviour)
-  const report  = addReportToLog(meta);
+  const report = addReportToLog(meta);
   renderEngineerDashboard?.();
   localStorage.setItem("lastSavedReport", JSON.stringify(report));
 
-  // 1) Get actions (await because it might be async / return promises)
+  // 2️⃣ Build actions
   let actions = await addOutstandingAction(meta);
 
-  // 2) Normalise into an array
   if (!actions) actions = [];
   if (!Array.isArray(actions)) actions = [actions];
 
-  // 3) Add PO-related action (if applicable)
   const poAction = buildPOOutstandingFromForm();
-  if (poAction) actions.push(poAction);
+  if (poAction) {
+    addPOOutstandingToLocal(poAction); // ✅ make it visible locally immediately
+    actions.push(poAction);
+  }
 
-  // 4) Resolve any promises inside the array (this is the bug you’re hitting)
   actions = await Promise.all(actions);
 
-  // 5) Ensure every action has an id and is a plain object
   actions = actions
     .map(ensureActionHasId)
     .filter(a => a && typeof a === "object" && a.id);
 
   // ✅ Update UI immediately
   window.renderOutstandingActions?.();
-  
+
   console.log("FollowUps:", meta.followUpTypes);
   console.log("Actions to sync:", actions);
 
-  // 2️⃣ Now sync to Cloudflare (background)
+  // 3️⃣ Sync each item individually so only failures get queued
+  let reportFailed = false;
+  let failedActions = [];
+
+  // --- Report sync ---
   try {
-    // sync report log
     await syncReportToCloud(report);
+  } catch (err) {
+    reportFailed = true;
+    console.warn("Report sync failed:", err);
 
-    // sync actions (multiple)
-    if (actions.length) {
-      await Promise.all(actions.map(a => syncActionToCloud(a)));
+    enqueueSyncItem({
+      type: "report",
+      payload: report
+    });
+  }
+
+  // --- Actions sync ---
+  for (const action of actions) {
+    try {
+      await syncActionToCloud(action);
+    } catch (err) {
+      console.warn("Action sync failed:", action?.id, err);
+      failedActions.push(action);
+
+      enqueueSyncItem({
+        type: "action",
+        payload: action
+      });
     }
+  }
 
+  // 4️⃣ User feedback
+  if (!reportFailed && failedActions.length === 0) {
     showToast?.("☁️ Synced to cloud", "success");
     refreshCustomerHistory?.();
-  } catch (err) {
-    console.warn("Cloud sync failed:", err);
-    showToast?.("⚠️ Saved locally (offline mode)", "warning");
+    return;
+  }
+
+  if (!reportFailed || failedActions.length < actions.length) {
+    showToast?.("⚠️ Saved locally — some items queued for sync", "warning");
+  } else {
+    showToast?.("⚠️ Saved locally — queued for sync", "warning");
   }
 }
 
@@ -11935,57 +12250,26 @@ window.fetchReports = fetchReports;
 </script>
 
 <script>
-function getCompanyValue() {
-  return (
-    (localStorage.getItem("custCompany") || "").trim() ||
-    (document.getElementById("custCompanyHidden")?.value || "").trim() ||
-    (document.getElementById("custCompanyFallback")?.value || "").trim() ||
-    ""
-  );
-}
-
 document.addEventListener("DOMContentLoaded", () => {
-  const gmpx   = document.getElementById("custCompany");        // <gmpx-place-autocomplete>
-  const hidden = document.getElementById("custCompanyHidden");  // hidden input
-  const fb     = document.getElementById("custCompanyFallback");// fallback input (optional)
+  const companyEl = document.getElementById("custCompany");
+  if (!companyEl) return;
 
-  if (!hidden) return;
+  const syncCompanyFromUI = () => {
+    const visible = String(
+      companyEl.value ||
+      companyEl.getAttribute?.("value") ||
+      ""
+    ).trim();
 
-  function setCompany(raw) {
-    const v = String(raw || "").trim();
-    hidden.value = v;
+    const hidden = document.getElementById("custCompanyHidden");
+    if (hidden) hidden.value = visible;
 
-    if (v) localStorage.setItem("custCompany", v);
-    else localStorage.removeItem("custCompany");
-  }
+    try { localStorage.setItem("custCompany", visible); } catch {}
+  };
 
-  // 1) Preferred: when a place is selected in gmpx
-  if (gmpx) {
-    gmpx.addEventListener("gmpx-placechange", (e) => {
-      const place = e.detail?.place;
-      const name = String(place?.displayName || place?.name || "").trim();
-      if (name) setCompany(name);
-      setTimeout(refreshCustomerHistory, 50);
-    });
-
-    // 2) Safety net: try to read the internal input if shadowRoot is open
-    try {
-      const inner = gmpx.shadowRoot?.querySelector("input");
-      if (inner) {
-        inner.addEventListener("input", () => setCompany(inner.value));
-        inner.addEventListener("blur",  () => setCompany(inner.value), true);
-      }
-    } catch {}
-  }
-
-  // 3) Manual fallback input (if you ever show it)
-  if (fb) {
-    fb.addEventListener("input", () => setCompany(fb.value));
-    fb.addEventListener("blur",  () => setCompany(fb.value));
-  }
-
-  // 4) Hydrate on load
-  setCompany(getCompanyValue());
+  companyEl.addEventListener("change", syncCompanyFromUI);
+  companyEl.addEventListener("input", syncCompanyFromUI);
+  companyEl.addEventListener("blur", syncCompanyFromUI);
 });
 </script>
 
@@ -12136,6 +12420,125 @@ document.addEventListener("DOMContentLoaded", () => {
       <button id="scanRetryCancel" type="button" class="btn remove" style="flex:1;">Cancel</button>
       <button id="scanRetryAgain" type="button" class="btn green" style="flex:1;">Retry</button>
     </div>
+  </div>
+</div>
+
+<div id="scanReviewModal"
+     style="display:none;position:fixed;inset:0;z-index:9950;
+            background:rgba(0,0,0,0.55);
+            backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+            align-items:center;justify-content:center;
+            opacity:0;transition:opacity .2s ease;">
+
+  <div id="scanReviewBox"
+       style="background:rgba(30,30,31,0.97);
+              border-radius:18px;
+              padding:20px;
+              width:min(94vw, 760px);
+              max-height:88vh;
+              overflow:auto;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.92);
+              opacity:0;
+              transition:all .2s ease;">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:22px;font-weight:700;color:#fff;">Review Scan</div>
+      <button id="closeScanReview" type="button" class="btn ghost">✕</button>
+    </div>
+
+    <div id="scanReviewHistoryHint"
+         style="display:none;margin-bottom:12px;padding:10px 12px;
+                border-radius:10px;
+                background:rgba(124,252,0,0.08);
+                border:1px solid rgba(124,252,0,0.18);
+                color:#cfeec1;
+                font-size:13px;line-height:1.4;">
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Project Number</label>
+        <input id="scanReviewProject" type="text" placeholder="PJ number">
+      </div>
+      <div>
+        <label>Manufacturing Date</label>
+        <input id="scanReviewMfgDate" type="date">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>System Age</label>
+        <input id="scanReviewSystemAge" type="text" readonly>
+      </div>
+      <div>
+        <label>Customer Name</label>
+        <input id="scanReviewCustName" type="text" placeholder="Customer name">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Customer Email</label>
+        <input id="scanReviewCustEmail" type="text" placeholder="Customer email">
+      </div>
+      <div>
+        <label>Company</label>
+        <input id="scanReviewCompany" type="text" placeholder="Company">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Address Line 1</label>
+        <input id="scanReviewAddr1" type="text" placeholder="Address line 1">
+      </div>
+      <div>
+        <label>Address Line 2</label>
+        <input id="scanReviewAddr2" type="text" placeholder="Address line 2">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>City / Town</label>
+        <input id="scanReviewCity" type="text" placeholder="City / Town">
+      </div>
+      <div>
+        <label>Region</label>
+        <input id="scanReviewRegion" type="text" placeholder="Region">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>Postal Code</label>
+        <input id="scanReviewPostal" type="text" placeholder="Postal Code">
+      </div>
+      <div>
+        <label>Country</label>
+        <input id="scanReviewCountry" type="text" placeholder="Country">
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Raw OCR Text</label>
+      <textarea id="scanReviewRawText" rows="5" placeholder="OCR text..." style="width:100%;"></textarea>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+      <button id="scanReviewApply" type="button" class="btn green" style="flex:1;min-width:140px;">
+        Apply to Form
+      </button>
+      <button id="scanReviewRescan" type="button" class="btn ghost" style="flex:1;min-width:140px;">
+        Rescan
+      </button>
+      <button id="scanReviewCancel" type="button" class="btn remove" style="flex:1;min-width:140px;">
+        Cancel
+      </button>
+    </div>
+
   </div>
 </div>
 
