@@ -4545,6 +4545,19 @@ document.getElementById("poReceived")?.addEventListener("change", (e) => {
 </script>
 
 <script>
+async function normalisePhotoForStorage(file, fallbackName = "photo.jpg") {
+  const arrayBuffer = await file.arrayBuffer();
+
+  return {
+    name: file.name || fallbackName,
+    type: file.type || "image/jpeg",
+    size: file.size || arrayBuffer.byteLength,
+    bytes: arrayBuffer
+  };
+}
+</script>
+
+<script>
 const PHOTO_DB_NAME = "ssco_engineers_photos";
 const PHOTO_DB_VERSION = 1;
 const PHOTO_STORE = "photos";
@@ -4698,14 +4711,17 @@ async function addPhotosToBucket(files, bucket) {
     const createdAt = new Date().toISOString();
 
     try {
+      const stored = await normalisePhotoForStorage(file, `${bucket}.jpg`);
+
       await savePhotoRecord({
         id,
         reportId: sessionId,
         bucket,
         createdAt,
-        blob: file,
-        name: file.name || `${bucket}.jpg`,
-        type: file.type || "image/jpeg"
+        name: stored.name,
+        type: stored.type,
+        size: stored.size,
+        bytes: stored.bytes
       });
     } catch (err) {
       alert(
@@ -4752,7 +4768,20 @@ async function renderPhotoBucket(bucket) {
 
   for (const item of items) {
     const record = await getPhotoRecord(item.id);
-    if (!record?.blob) continue;
+    if (!record) continue;
+
+    let previewBlob = null;
+
+    if (record.blob instanceof Blob) {
+      // backward compatibility with any older stored records
+      previewBlob = record.blob;
+    } else if (record.bytes) {
+      previewBlob = new Blob([record.bytes], {
+        type: record.type || "image/jpeg"
+      });
+    }
+
+    if (!previewBlob) continue;
 
     const card = document.createElement("div");
     card.style.position = "relative";
@@ -4764,7 +4793,7 @@ async function renderPhotoBucket(bucket) {
     card.style.flex = "0 0 auto";
 
     const img = document.createElement("img");
-    const url = URL.createObjectURL(record.blob);
+    const url = URL.createObjectURL(previewBlob);
     img.src = url;
     img.alt = item.name || bucket;
     img.style.width = "100%";
