@@ -4545,6 +4545,290 @@ document.getElementById("poReceived")?.addEventListener("change", (e) => {
 </script>
 
 <script>
+const PHOTO_DB_NAME = "ssco_engineers_photos";
+const PHOTO_DB_VERSION = 1;
+const PHOTO_STORE = "photos";
+
+function openPhotoDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(PHOTO_DB_NAME, PHOTO_DB_VERSION);
+
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PHOTO_STORE)) {
+        const store = db.createObjectStore(PHOTO_STORE, { keyPath: "id" });
+        store.createIndex("reportId", "reportId", { unique: false });
+        store.createIndex("bucket", "bucket", { unique: false }); // before / after / plate
+        store.createIndex("createdAt", "createdAt", { unique: false });
+      }
+    };
+
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function photoTx(storeMode = "readonly") {
+  return openPhotoDb().then(db => {
+    const tx = db.transaction(PHOTO_STORE, storeMode);
+    return { db, tx, store: tx.objectStore(PHOTO_STORE) };
+  });
+}
+
+async function savePhotoRecord(record) {
+  const { db, tx, store } = await photoTx("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const req = store.put(record);
+    req.onsuccess = () => resolve(record);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function getPhotoRecord(id) {
+  const { db, tx, store } = await photoTx("readonly");
+
+  return new Promise((resolve, reject) => {
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function deletePhotoRecord(id) {
+  const { db, tx, store } = await photoTx("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const req = store.delete(id);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function getPhotosByReport(reportId, bucket = "") {
+  const { db, tx, store } = await photoTx("readonly");
+
+  return new Promise((resolve, reject) => {
+    const out = [];
+    const req = store.openCursor();
+
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) {
+        resolve(out);
+        return;
+      }
+
+      const v = cursor.value;
+      if (
+        v &&
+        v.reportId === reportId &&
+        (!bucket || v.bucket === bucket)
+      ) {
+        out.push(v);
+      }
+
+      cursor.continue();
+    };
+
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+function makePhotoId(prefix = "photo") {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+</script>
+
+<script>
+const PHOTO_META_KEY = "ssco_photo_meta";
+const PHOTO_SESSION_KEY = "ssco_photo_session_id";
+
+function readPhotoMeta() {
+  try {
+    const raw = localStorage.getItem(PHOTO_META_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object"
+      ? { before: parsed.before || [], after: parsed.after || [] }
+      : { before: [], after: [] };
+  } catch {
+    return { before: [], after: [] };
+  }
+}
+
+function writePhotoMeta(meta) {
+  localStorage.setItem(PHOTO_META_KEY, JSON.stringify({
+    before: Array.isArray(meta?.before) ? meta.before : [],
+    after: Array.isArray(meta?.after) ? meta.after : []
+  }));
+}
+
+function getCurrentPhotoSessionId() {
+  let id = localStorage.getItem(PHOTO_SESSION_KEY);
+  if (!id) {
+    id = (typeof makeId === "function")
+      ? makeId("draftphotos")
+      : `draftphotos_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem(PHOTO_SESSION_KEY, id);
+  }
+  return id;
+}
+
+async function addPhotosToBucket(files, bucket) {
+  const list = Array.from(files || []);
+  if (!list.length) return;
+
+  const sessionId = getCurrentPhotoSessionId();
+  const meta = readPhotoMeta();
+
+  for (const file of list) {
+    const id = makePhotoId(bucket);
+    const createdAt = new Date().toISOString();
+
+    await savePhotoRecord({
+      id,
+      reportId: sessionId,
+      bucket,
+      createdAt,
+      blob: file,
+      name: file.name || `${bucket}.jpg`,
+      type: file.type || "image/jpeg"
+    });
+
+    meta[bucket].push({
+      id,
+      createdAt,
+      name: file.name || "",
+      type: file.type || "image/jpeg"
+    });
+  }
+
+  writePhotoMeta(meta);
+  await renderPhotoBucket(bucket);
+}
+
+async function removePhotoFromBucket(bucket, photoId) {
+  await deletePhotoRecord(photoId);
+
+  const meta = readPhotoMeta();
+  meta[bucket] = (meta[bucket] || []).filter(p => p.id !== photoId);
+  writePhotoMeta(meta);
+
+  await renderPhotoBucket(bucket);
+}
+
+async function renderPhotoBucket(bucket) {
+  const wrap = document.getElementById(bucket === "before" ? "beforeThumbs" : "afterThumbs");
+  if (!wrap) return;
+
+  wrap.replaceChildren();
+
+  const meta = readPhotoMeta();
+  const items = meta[bucket] || [];
+
+  for (const item of items) {
+    const record = await getPhotoRecord(item.id);
+    if (!record?.blob) continue;
+
+    const card = document.createElement("div");
+    card.style.position = "relative";
+    card.style.width = "150px";
+    card.style.height = "100px";
+    card.style.borderRadius = "10px";
+    card.style.overflow = "hidden";
+    card.style.background = "rgba(255,255,255,0.04)";
+    card.style.flex = "0 0 auto";
+
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(record.blob);
+    img.src = url;
+    img.alt = item.name || bucket;
+    img.style.width = "100%";
+    img.style.height = "100%";
+    img.style.objectFit = "cover";
+    img.style.display = "block";
+    img.onload = () => URL.revokeObjectURL(url);
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "✕";
+    del.style.position = "absolute";
+    del.style.top = "6px";
+    del.style.right = "6px";
+    del.style.width = "28px";
+    del.style.height = "28px";
+    del.style.borderRadius = "999px";
+    del.style.border = "none";
+    del.style.background = "rgba(0,0,0,0.65)";
+    del.style.color = "#fff";
+    del.style.fontSize = "14px";
+    del.style.cursor = "pointer";
+    del.addEventListener("click", () => removePhotoFromBucket(bucket, item.id));
+
+    card.appendChild(img);
+    card.appendChild(del);
+    wrap.appendChild(card);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const beforeInputOld = document.getElementById("beforeInput");
+  const afterInputOld = document.getElementById("afterInput");
+
+  // Replace nodes so any old localStorage photo listeners are stripped off
+  let beforeInput = beforeInputOld;
+  let afterInput = afterInputOld;
+
+  if (beforeInputOld) {
+    beforeInput = beforeInputOld.cloneNode(true);
+    beforeInputOld.replaceWith(beforeInput);
+  }
+
+  if (afterInputOld) {
+    afterInput = afterInputOld.cloneNode(true);
+    afterInputOld.replaceWith(afterInput);
+  }
+
+  beforeInput?.addEventListener("change", async () => {
+    try {
+      await addPhotosToBucket(beforeInput.files, "before");
+    } catch (err) {
+      console.error("Before photo save failed:", err);
+      showToast?.("❌ Failed to save before photo", "error");
+    } finally {
+      beforeInput.value = "";
+    }
+  });
+
+  afterInput?.addEventListener("change", async () => {
+    try {
+      await addPhotosToBucket(afterInput.files, "after");
+    } catch (err) {
+      console.error("After photo save failed:", err);
+      showToast?.("❌ Failed to save after photo", "error");
+    } finally {
+      afterInput.value = "";
+    }
+  });
+
+  renderPhotoBucket("before");
+  renderPhotoBucket("after");
+});
+</script>
+
+<script>
 // === Global cache for sharing ===
 let lastPdfBlob = null;
 
@@ -6078,6 +6362,41 @@ document.addEventListener("DOMContentLoaded", () => {
 </script>
 
 <script>
+function projectHistoryCompletenessScore(r) {
+  let score = 0;
+
+  if ((r.companyName || "").trim()) score += 3;
+  if ((r.customerName || "").trim()) score += 2;
+  if ((r.customerEmail || "").trim()) score += 2;
+
+  if ((r.addr1 || "").trim()) score += 4;
+  if ((r.addr2 || "").trim()) score += 1;
+  if ((r.city || "").trim()) score += 3;
+  if ((r.region || "").trim()) score += 2;
+  if ((r.postal || "").trim()) score += 3;
+  if ((r.country || "").trim()) score += 2;
+
+  return score;
+}
+
+function pickBestProjectHistoryMatch(matches) {
+  const items = Array.isArray(matches) ? [...matches] : [];
+  if (!items.length) return null;
+
+  items.sort((a, b) => {
+    const scoreDiff = projectHistoryCompletenessScore(b) - projectHistoryCompletenessScore(a);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    const aTime = new Date(a.date || a.createdAt || 0).getTime();
+    const bTime = new Date(b.date || b.createdAt || 0).getTime();
+    return bTime - aTime;
+  });
+
+  return items[0] || null;
+}
+</script>
+
+<script>
 async function preprocessPlateImage(file, contrastBoost = 1.45) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -6175,7 +6494,7 @@ async function runPlateOCR(file) {
       ? await fetchProjectHistory(parsed.project)
       : [];
 
-    const latestMatch = projectMatches?.length ? projectMatches[0] : null;
+    const latestMatch = pickBestProjectHistoryMatch(projectMatches);
 
     fillScanReviewModal({
       parsed,
@@ -12541,6 +12860,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
   </div>
 </div>
+
+<script>
+(function () {
+  if (window.__lsTraceInstalled) return;
+  window.__lsTraceInstalled = true;
+
+  const originalSetItem = localStorage.setItem.bind(localStorage);
+
+  localStorage.setItem = function (key, value) {
+    const str = String(value ?? "");
+    const chars = str.length;
+    const kb = (chars / 1024).toFixed(1);
+
+    try {
+      console.log("[LS WRITE]", key, `${kb} KB`);
+
+      // big write warning
+      if (chars > 150000) {
+        console.warn("[LS BIG WRITE]", key, `${kb} KB`);
+      }
+
+      return originalSetItem(key, value);
+    } catch (err) {
+      console.error("[LS WRITE FAILED]", key, `${kb} KB`, err);
+
+      alert(
+        "localStorage write failed\n\n" +
+        "Key: " + key + "\n" +
+        "Size: " + kb + " KB\n\n" +
+        String(err)
+      );
+
+      throw err;
+    }
+  };
+})();
+</script>
 
 </body>
 </html>
