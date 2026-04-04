@@ -4697,15 +4697,27 @@ async function addPhotosToBucket(files, bucket) {
     const id = makePhotoId(bucket);
     const createdAt = new Date().toISOString();
 
-    await savePhotoRecord({
-      id,
-      reportId: sessionId,
-      bucket,
-      createdAt,
-      blob: file,
-      name: file.name || `${bucket}.jpg`,
-      type: file.type || "image/jpeg"
-    });
+    try {
+      await savePhotoRecord({
+        id,
+        reportId: sessionId,
+        bucket,
+        createdAt,
+        blob: file,
+        name: file.name || `${bucket}.jpg`,
+        type: file.type || "image/jpeg"
+      });
+    } catch (err) {
+      alert(
+        "savePhotoRecord failed\n\n" +
+        "bucket: " + bucket + "\n" +
+        "file: " + (file?.name || "[no name]") + "\n" +
+        "type: " + (file?.type || "[no type]") + "\n" +
+        "size: " + (file?.size || 0) + "\n\n" +
+        ((err?.name || "Error") + ": " + (err?.message || String(err)))
+      );
+      throw err;
+    }
 
     meta[bucket].push({
       id,
@@ -4806,6 +4818,13 @@ document.addEventListener("DOMContentLoaded", () => {
       await addPhotosToBucket(beforeInput.files, "before");
     } catch (err) {
       console.error("Before photo save failed:", err);
+
+      const msg =
+        (err && (err.name || "Error")) +
+        ": " +
+        (err && (err.message || String(err)));
+
+      alert("Before photo save failed\n\n" + msg);
       showToast?.("❌ Failed to save before photo", "error");
     } finally {
       beforeInput.value = "";
@@ -4817,6 +4836,13 @@ document.addEventListener("DOMContentLoaded", () => {
       await addPhotosToBucket(afterInput.files, "after");
     } catch (err) {
       console.error("After photo save failed:", err);
+
+      const msg =
+        (err && (err.name || "Error")) +
+        ": " +
+        (err && (err.message || String(err)));
+
+      alert("After photo save failed\n\n" + msg);
       showToast?.("❌ Failed to save after photo", "error");
     } finally {
       afterInput.value = "";
