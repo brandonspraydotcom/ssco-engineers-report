@@ -8714,10 +8714,10 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
       const w = isPWA ? null : window.open('', '_blank');
-      const pdfWin = buildPdf(w);
+      const pdfWin = await buildPdf(w);
       window.lastBuiltPdfWindow = pdfWin;
 
-      lastPdfBlob = await html2pdf().from(pdfWin.document?.body || document.body).output('blob');
+      lastPdfBlob = await html2pdf().from(pdfWin?.document?.body || document.body).output('blob');
       try {
         await commitReportSave();
         window.__reportsLastSavedAt = Date.now();
@@ -8767,17 +8767,42 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  printNow.addEventListener("click", () => {
+  printNow.addEventListener("click", async () => {
     bump("info");
     showToast("Opening print dialog…", "info");
+
     try {
+      if (window.lastBuiltPdfWindow?.iframePrint) {
+        window.lastBuiltPdfWindow.iframePrint.focus();
+        window.lastBuiltPdfWindow.iframePrint.print();
+        return;
+      }
+
       if (window.lastBuiltPdfWindow && !window.lastBuiltPdfWindow.closed) {
         window.lastBuiltPdfWindow.focus();
         window.lastBuiltPdfWindow.print();
-      } else if (hasSavedPdf()) {
-        const w = buildPdf();
+        return;
+      }
+
+      if (hasSavedPdf()) {
+        const w = await buildPdf();
         window.lastBuiltPdfWindow = w;
-        setTimeout(() => w.print(), 800);
+
+        setTimeout(() => {
+          try {
+            if (w?.iframePrint) {
+              w.iframePrint.focus();
+              w.iframePrint.print();
+            } else if (w) {
+              w.focus();
+              w.print();
+            }
+          } catch (err) {
+            console.warn("⚠️ Print unavailable:", err);
+            showToast("⚠️ Unable to open print window", "warning");
+          }
+        }, 800);
+
       } else {
         showToast("⚠️ Please save the PDF first", "warning");
       }
