@@ -5126,7 +5126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 let lastPdfBlob = null;
 
 /* ---------- Build printable doc (light) and open it ---------- */
-async function buildPdf(existingWindow = null) {
+async function buildPdf(existingWindow = null, { silent = false } = {}) {
   // --- Capture signatures first ---
   // --- Capture signatures for PDF: convert WHITE ink to BLACK on WHITE background ---
    function getSignatureForPdf(id) {
@@ -5335,11 +5335,14 @@ doc += `
     </div>
   </body></html>`;
 
-    // --- Detect Safari PWA mode ---
-  let isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    // --- Detect Safari PWA mode --
+const isPWA =
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.navigator.standalone ||
+  document.referrer.startsWith('android-app://');
 
-if (isPWA) {
-  // ✅ Hidden iframe print for Safari PWA (no blank tab)
+// Silent mode OR PWA: use hidden iframe, never open a blank tab
+if (silent || isPWA) {
   const iframe = document.createElement('iframe');
   iframe.style.display = 'none';
   document.body.appendChild(iframe);
@@ -5349,12 +5352,14 @@ if (isPWA) {
   docStream.write(doc);
   docStream.close();
 
-  // Return print reference (used by save handler)
-  return { iframePrint: iframe.contentWindow };
-} else {
-  // ✅ Regular browser method
-  if (existingWindow) {
-  // ✅ Use provided window (e.g., if already opened elsewhere)
+  return {
+    iframePrint: iframe.contentWindow,
+    iframeEl: iframe
+  };
+}
+
+// Normal browser print window path
+if (existingWindow) {
   existingWindow.document.open();
   existingWindow.document.write(doc);
   existingWindow.document.close();
@@ -5362,19 +5367,6 @@ if (isPWA) {
   return existingWindow;
 }
 
-if (isPWA) {
-  // ✅ Hidden iframe (no visible tab)
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
-  const idoc = iframe.contentWindow.document;
-  idoc.open();
-  idoc.write(doc);
-  idoc.close();
-  return { iframePrint: iframe.contentWindow };
-}
-
-// ✅ Normal browser fallback
 const w = window.open('', '_blank');
 w.document.open();
 w.document.write(doc);
@@ -5382,8 +5374,6 @@ w.document.close();
 w.focus();
 return w;
 }
-}
-
 
 /* ---------- Buttons ---------- */
 
@@ -8712,59 +8702,48 @@ document.addEventListener("DOMContentLoaded", () => {
     saveSignature("sig2");
 
     try {
-      const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-      const w = isPWA ? null : window.open('', '_blank');
-      const pdfWin = await buildPdf(w);
-      window.lastBuiltPdfWindow = pdfWin;
+      // Close modal immediately so the UI does not get stuck while building
+  		modal.classList.remove("show");
+  		box.style.transform = "scale(0.85)";
+  		box.style.opacity = "0";
+  		setTimeout(() => (modal.style.display = "none"), 300);
+  		window.unlockScroll?.();
 
-      lastPdfBlob = await html2pdf().from(pdfWin?.document?.body || document.body).output('blob');
-      try {
-        await commitReportSave();
-        window.__reportsLastSavedAt = Date.now();
-      } catch (err) {
-        console.warn("commitReportSave failed:", err);
-        showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
-      }
+  		// Build a silent printable document in a hidden iframe
+  		const pdfWin = await buildPdf(null, { silent: true });
+  		
+  		const pdfBody = pdfWin?.iframePrint?.document?.body;
+  		if (!pdfBody) {
+    		throw new Error("PDF source body not ready");
+  		}
 
-      if (isPWA && pdfWin?.iframePrint) {
-        setTimeout(() => {
-          try {
-            pdfWin.iframePrint.focus();
-            pdfWin.iframePrint.print();
-            showToast("✅ PDF ready and sent to print", "success");
-            bump("success");
-          } catch (err) {
-            console.warn("⚠️ PWA print blocked:", err);
-            showToast("⚠️ Printing blocked in PWA", "warning");
-          }
-        }, 600);
+  		// Give iframe a moment to fully paint
+  		await new Promise(resolve => setTimeout(resolve, 300));
 
-      } else if (pdfWin) {
-        setTimeout(() => {
-          try {
-            pdfWin.focus();
-            pdfWin.print();
-             // ✅ replaced
-            bump("success");
-            showToast("✅ PDF ready and sent to print", "success");
-          } catch (err) {
-            console.warn("⚠️ Print blocked:", err);
-            showToast("⚠️ Printing blocked, preview opened instead", "warning");
-          }
-        }, 600);
-      }
+  		lastPdfBlob = await html2pdf().from(pdfBody).output('blob');
 
-      modal.classList.remove("show");
-      box.style.transform = "scale(0.85)";
-      box.style.opacity = "0";
-      setTimeout(() => (modal.style.display = "none"), 300);
-      window.unlockScroll?.();
+  		try {
+    		await commitReportSave();
+    		window.__reportsLastSavedAt = Date.now();
+  		} catch (err) {
+    		console.warn("commitReportSave failed:", err);
+    		showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
+  		}
 
-    } catch (err) {
-      console.error("❌ PDF build failed:", err);
-      bump("error");
-      showToast("❌ PDF failed to generate", "error");
-    }
+  		// Cleanup the hidden iframe after blob generation
+  		try {
+    		pdfWin?.iframeEl?.remove?.();
+  		} catch {}
+      window.lastBuiltPdfWindow = null;
+
+  		bump("success");
+  		showToast("✅ PDF saved", "success");
+
+	 } catch (err) {
+  		console.error("❌ PDF build failed:", err);
+  		bump("error");
+  		showToast("❌ PDF failed to generate", "error");
+	 }
   });
 
   printNow.addEventListener("click", async () => {
@@ -8785,17 +8764,23 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       if (hasSavedPdf()) {
-        const w = await buildPdf();
-        window.lastBuiltPdfWindow = w;
+        const isPWA =
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.navigator.standalone ||
+          document.referrer.startsWith('android-app://');
+
+        const w = isPWA ? null : window.open('', '_blank');
+        const target = await buildPdf(w);
+        window.lastBuiltPdfWindow = target;
 
         setTimeout(() => {
           try {
-            if (w?.iframePrint) {
-              w.iframePrint.focus();
-              w.iframePrint.print();
-            } else if (w) {
-              w.focus();
-              w.print();
+            if (target?.iframePrint) {
+              target.iframePrint.focus();
+              target.iframePrint.print();
+            } else if (target) {
+              target.focus();
+              target.print();
             }
           } catch (err) {
             console.warn("⚠️ Print unavailable:", err);
