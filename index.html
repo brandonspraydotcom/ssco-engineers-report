@@ -3692,6 +3692,56 @@ async function blobToDataURL(blob) {
 </script>
 
 <script>
+async function replacePhotoRecordBytes(photoId, newBlob) {
+  const existing = await getPhotoRecord(photoId);
+  if (!existing) throw new Error("Photo record not found");
+
+  const arrayBuffer = await newBlob.arrayBuffer();
+
+  const updated = {
+    ...existing,
+    type: newBlob.type || existing.type || "image/jpeg",
+    size: newBlob.size || arrayBuffer.byteLength,
+    bytes: arrayBuffer
+  };
+
+  await savePhotoRecord(updated);
+  return updated;
+}
+
+async function getDownloadItems(type) {
+  const meta = readPhotoMeta();
+
+  const items =
+    type === "before"
+      ? (meta.before || []).map(x => ({ ...x, bucket: "before" }))
+      : type === "after"
+      ? (meta.after || []).map(x => ({ ...x, bucket: "after" }))
+      : [
+          ...(meta.before || []).map(x => ({ ...x, bucket: "before" })),
+          ...(meta.after || []).map(x => ({ ...x, bucket: "after" }))
+        ];
+
+  const out = [];
+
+  for (const item of items) {
+    const blob = await getPhotoBlobById(item.id);
+    if (!blob) continue;
+
+    out.push({
+      id: item.id,
+      bucket: item.bucket,
+      name: item.name || `${item.bucket}.jpg`,
+      blob,
+      src: await blobToDataURL(blob)
+    });
+  }
+
+  return out;
+}
+</script>
+
+<script>
 async function getPhotoBlobById(photoId) {
   const record = await getPhotoRecord(photoId);
   if (!record) return null;
@@ -9043,8 +9093,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const progressText = document.getElementById("downloadProgressText");
   const sizeInfo = document.getElementById("photoSizeInfo");
   const successOverlay = document.getElementById("downloadSuccess");
-  const beforeThumbs = document.getElementById("beforeThumbs");
-  const afterThumbs  = document.getElementById("afterThumbs");
 
   // ✅ HARD GUARD: if any required element missing, do not crash the entire app
   if (!btnOpen || !mainModal) {
@@ -9091,16 +9139,9 @@ document.addEventListener("DOMContentLoaded", () => {
     openModal("downloadPhotosModal");
 
     // estimate total photo size
-    const allImgs = [...beforeThumbs.querySelectorAll("img"), ...afterThumbs.querySelectorAll("img")];
-    if (allImgs.length) {
-      let totalBytes = 0;
-      for (const img of allImgs) {
-        try {
-          const res = await fetch(img.src);
-          const blob = await res.blob();
-          totalBytes += blob.size;
-        } catch {}
-      }
+    const allItems = await getDownloadItems("all");
+    if (allItems.length) {
+      const totalBytes = allItems.reduce((sum, item) => sum + (item.blob?.size || 0), 0);
       const mb = (totalBytes / (1024 * 1024)).toFixed(2);
       sizeInfo.textContent = `Approx. total size: ${mb} MB`;
       sizeInfo.style.display = "block";
@@ -9178,30 +9219,25 @@ let downloadChoice = null;
 
   if (choosePdf) choosePdf.addEventListener("click", async () => {
     closeModal("formatSelectModal");
-    const photos = gatherPhotos(downloadChoice);
+    const photos = await gatherPhotos(downloadChoice);
     if (photos.length) await window.downloadAsPdf(photos);
   });
 
   if (cancelFormat) cancelFormat.addEventListener("click", () => closeModal("formatSelectModal"));
 
   // ---- Helpers ----
-  function gatherPhotos(type) {
-    const beforeImgs = [...beforeThumbs.querySelectorAll("img")].map(i => i.src);
-    const afterImgs  = [...afterThumbs.querySelectorAll("img")].map(i => i.src);
-    if (type === "before") return beforeImgs;
-    if (type === "after") return afterImgs;
-    return [...beforeImgs, ...afterImgs];
+  async function gatherPhotos(type) {
+    const items = await getDownloadItems(type);
+    return items.map(x => x.src);
   }
 
   // ---- ZIP builder ----
   window.zipAndDownload = async function zipAndDownload(type) {
     const zip = new JSZip();
     const folder = zip.folder("photos");
-    let imgs = [];
-    if (type === "before") imgs = beforeThumbs.querySelectorAll("img");
-    if (type === "after")  imgs = afterThumbs.querySelectorAll("img");
-    if (type === "all")    imgs = [...beforeThumbs.querySelectorAll("img"), ...afterThumbs.querySelectorAll("img")];
-    if (!imgs.length) return alert("No photos found.");
+
+    const items = await getDownloadItems(type);
+    if (!items.length) return alert("No photos found.");
 
     progressContainer.style.display = "block";
     progressText.style.display = "block";
@@ -9209,31 +9245,45 @@ let downloadChoice = null;
     progressBar.style.width = "0%";
 
     let done = 0;
-    for (const [i, img] of [...imgs].entries()) {
-      try {
-        const res = await fetch(img.src);
-        const blob = await res.blob();
-        folder.file(`${type}_${i + 1}.jpg`, blob);
-      } catch {}
+
+    for (const [i, item] of items.entries()) {
+      const ext =
+        item.blob.type === "image/png" ? "png" :
+        item.blob.type === "image/webp" ? "webp" :
+        "jpg";
+
+      const prefix = type === "all" ? item.bucket : type;
+
+      folder.file(`${prefix}_${i + 1}.${ext}`, item.blob);
+
       done++;
-      progressBar.style.width = `${(done / imgs.length) * 100}%`;
+      progressBar.style.width = `${(done / items.length) * 100}%`;
       await new Promise(r => setTimeout(r, 50));
     }
 
     const blob = await zip.generateAsync({ type: "blob" }, meta => {
       progressBar.style.width = `${Math.min(meta.percent, 100)}%`;
     });
+
     saveAs(blob, `SSCo_Photos_${type}_${new Date().toISOString().slice(0,10)}.zip`);
     showSuccess();
   };
 
   // ---- PDF builder ----
   window.downloadAsPdf = async function downloadAsPdf(photos) {
+
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: "a4" });
+
+    progressContainer.style.display = "block";
+    progressText.style.display = "block";
+    sizeInfo.style.display = "none";
+    progressBar.style.width = "0%";
+    
     let first = true;
     for (const [i, src] of photos.entries()) {
       progressText.textContent = `Adding photo ${i + 1} of ${photos.length}...`;
+      progressBar.style.width = `${((i + 1) / photos.length) * 100}%`;
       const img = await loadImage(src);
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
