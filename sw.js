@@ -1,5 +1,10 @@
 // sw.js
-const VERSION = 'v1.0.2'; // bump on each deploy
+const VERSION = 'v1.0.3';
+
+const SHELL_CACHE = `ssc-shell-${VERSION}`;
+const IMG_CACHE = `ssc-img-${VERSION}`;
+const AUDIO_CACHE = `ssc-audio-${VERSION}`;
+
 const APP_SHELL = [
   './',
   './index.html',
@@ -11,76 +16,131 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
   './img-worker.js',
-  './water-splash-46402.mp3',
-  // add any css/js you reference by path
+  './water-splash-46402.mp3'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open('ssc-shell-' + VERSION).then(c => c.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(SHELL_CACHE)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil((async () => {
-    const names = await caches.keys();
-    await Promise.all(names.filter(n => !n.endsWith(VERSION)).map(n => caches.delete(n)));
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys.filter(k => ![SHELL_CACHE, IMG_CACHE, AUDIO_CACHE].includes(k))
+          .map(k => caches.delete(k))
+    );
     await self.clients.claim();
   })());
 });
 
-// SWR for images, network-first for navigations, cache-first for shell
-self.addEventListener('fetch', e => {
-  const { request } = e;
+async function networkFirst(request, fallbackUrl = null, cacheName = null) {
+  try {
+    const response = await fetch(request);
+    if (cacheName && response && response.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (fallbackUrl) {
+      const fallback = await caches.match(fallbackUrl);
+      if (fallback) return fallback;
+    }
+    throw err;
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  return fetch(request);
+}
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+
+  const fetchPromise = fetch(request)
+    .then(response => {
+      if (response && response.ok) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  return cached || fetchPromise || fetch(request);
+}
+
+self.addEventListener('fetch', event => {
+  const { request } = event;
   const url = new URL(request.url);
 
-  // HTML navigations: network first, fallback to cache
+  if (request.method !== 'GET') return;
+
+  // Dev safety: don't aggressively cache localhost traffic
+  if (['localhost', '127.0.0.1'].includes(self.location.hostname)) {
+    event.respondWith(fetch(request).catch(() => caches.match(request)));
+    return;
+  }
+
+  // HTML/document navigations
   if (request.mode === 'navigate') {
-    e.respondWith((async () => {
-      try { return await fetch(request); }
-      catch { return (await caches.match('./index.html')) || Response.error(); }
-    })());
+    event.respondWith(networkFirst(request, './index.html', SHELL_CACHE));
     return;
   }
 
-  // images: stale-while-revalidate
+  // Same-origin scripts/styles/worker/manifest should prefer fresh network
+  if (
+    url.origin === self.location.origin &&
+    (
+      request.destination === 'script' ||
+      request.destination === 'style' ||
+      request.destination === 'worker' ||
+      request.destination === 'manifest'
+    )
+  ) {
+    event.respondWith(networkFirst(request, null, SHELL_CACHE));
+    return;
+  }
+
+  // Images
   if (request.destination === 'image') {
-    e.respondWith((async () => {
-      const cache = await caches.open('ssc-img-' + VERSION);
-      const cached = await cache.match(request);
-      const prom = fetch(request)
-  .then(r => {
-    if (r.ok && r.status === 200) cache.put(request, r.clone());
-    return r;
-  })
-  .catch(() => null);
-
-      return cached || prom || fetch(request);
-    })());
+    event.respondWith(staleWhileRevalidate(request, IMG_CACHE));
     return;
   }
 
-  // Audio (handle splash sound efficiently)
+  // Audio
   if (request.destination === 'audio') {
-    e.respondWith((async () => {
-      const cache = await caches.open('ssc-audio-' + VERSION);
-      const cached = await cache.match(request);
-      const prom = fetch(request)
-  .then(r => {
-    if (r.ok && r.status === 200) cache.put(request, r.clone());
-    return r;
-  })
-  .catch(() => null);
-
-      return cached || prom || fetch(request);
-    })());
+    event.respondWith(staleWhileRevalidate(request, AUDIO_CACHE));
     return;
   }
 
-
-  // everything in shell: cache-first
-  e.respondWith(caches.match(request).then(r => r || fetch(request)));
+  // Shell files
+  if (url.origin === self.location.origin) {
+    event.respondWith(cacheFirst(request));
+    return;
+  }
 });
 
-// update flow
-self.addEventListener('message', e => {
-  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+self.addEventListener('message', event => {
+  if (!event.data) return;
+
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+
+  if (event.data.type === 'CLEAR_CACHES') {
+    event.waitUntil((async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    })());
+  }
 });

@@ -37,8 +37,17 @@ window.onerror = function(msg, src, line, col, err) {
   <!-- =======================
         🧩 Service Worker
   ======================== -->
-  <script>
-  if ('serviceWorker' in navigator) {
+<script>
+if ('serviceWorker' in navigator) {
+  const isLocalDev =
+    location.hostname === 'localhost' ||
+    location.hostname === '127.0.0.1';
+
+  if (isLocalDev) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
+    });
+  } else {
     navigator.serviceWorker.register('./sw.js').then(reg => {
       function promptUpdate(worker) {
         showToast('New version available — tap to update', 'info');
@@ -59,9 +68,12 @@ window.onerror = function(msg, src, line, col, err) {
       });
 
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+    }).catch(err => {
+      console.error('SW registration failed:', err);
     });
   }
-  </script>
+}
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -983,7 +995,6 @@ input[type="number"]::-webkit-inner-spin-button {
 </style>
 
 <script>
-
 // one worker instance (reused)
 const imgWorker = new Worker('img-worker.js');
 let _reqId = 0;
@@ -991,18 +1002,33 @@ function processImageInWorker(file, { maxDim = 2000, quality = 0.72 } = {}) {
   return new Promise((resolve, reject) => {
     const id = ++_reqId;
     const fr = new FileReader();
+
     fr.onload = () => {
       imgWorker.onmessage = (e) => {
         const msg = e.data;
         if (msg.id !== id) return;
-        if (msg.error) return reject(new Error(msg.error));
-        const blob = new Blob([msg.buffer], { type: msg.type || 'image/jpeg' });
-        resolve(URL.createObjectURL(blob)); // object URL (fast, revocable)
+
+        if (msg.error) {
+          reject(new Error(msg.error));
+          return;
+        }
+
+        const blob = new Blob([msg.buffer], {
+          type: msg.type || 'image/jpeg'
+        });
+
+        resolve(blob);
       };
+
       imgWorker.postMessage({
-        id, arrayBuffer: fr.result, type: file.type, maxDim, quality
-      }, [fr.result]); // transfer
+        id,
+        arrayBuffer: fr.result,
+        type: file.type,
+        maxDim,
+        quality
+      }, [fr.result]);
     };
+
     fr.onerror = () => reject(fr.error);
     fr.readAsArrayBuffer(file);
   });
@@ -3609,16 +3635,19 @@ document.addEventListener("DOMContentLoaded", () => {
     addTimeSlot();
   });
 });
+</script>
 
+<script>
 /* Compress and resize image before preview/PDF */
-async function compressImage(file, maxDim = 1600, quality = 0.7) {
-  return new Promise(resolve => {
+async function compressImageToBlob(fileOrBlob, maxDim = 1600, quality = 0.7) {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     const reader = new FileReader();
 
     reader.onload = e => {
       img.onload = () => {
         let { width, height } = img;
+
         if (width > height && width > maxDim) {
           height *= maxDim / width;
           width = maxDim;
@@ -3626,48 +3655,110 @@ async function compressImage(file, maxDim = 1600, quality = 0.7) {
           width *= maxDim / height;
           height = maxDim;
         }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
 
-        // ✅ Return inline data URL (works 100% with html2pdf)
-        resolve(canvas.toDataURL("image/jpeg", quality));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(width);
+        canvas.height = Math.round(height);
+
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(blob => {
+          if (!blob) {
+            reject(new Error("Compression failed"));
+            return;
+          }
+          resolve(blob);
+        }, "image/jpeg", quality);
       };
+
+      img.onerror = reject;
       img.src = e.target.result;
     };
 
-    reader.readAsDataURL(file);
+    reader.onerror = reject;
+    reader.readAsDataURL(fileOrBlob);
   });
 }
 
-/* ---------- Photo previews (with remove) — ENHANCED: click to annotate and compress ---------- */
-async function previewFiles(inputEl, targetId){
-  const target = document.getElementById(targetId);
-  const files = Array.from(inputEl.files);
-  // process sequentially (bounded) to avoid memory spikes on iPad
-  for (const file of files) {
-    const url = await compressImage(file, 2000, 0.72);
-    const wrap = document.createElement('div'); wrap.className='photoWrap';
-    const img = document.createElement('img'); img.className='thumb'; img.src = url; img.alt = file.name;
-    const btn = document.createElement('button'); btn.type='button'; btn.className='removePhoto'; btn.textContent='✖';
-    btn.addEventListener('click', ()=>{ URL.revokeObjectURL(url); wrap.remove(); savePhotos(); });
-    // tap to annotate (your existing handler)
-    img.style.cursor = 'zoom-in';
-    img.addEventListener('click', ()=> openAnnotator(img, targetId));
+async function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+</script>
 
-    wrap.appendChild(img); wrap.appendChild(btn); target.appendChild(wrap);
-    savePhotos();
+<script>
+async function getPhotoBlobById(photoId) {
+  const record = await getPhotoRecord(photoId);
+  if (!record) return null;
+
+  if (record.blob instanceof Blob) {
+    return record.blob; // backward compatibility
   }
-  inputEl.value = '';
+
+  if (record.bytes) {
+    return new Blob([record.bytes], {
+      type: record.type || "image/jpeg"
+    });
+  }
+
+  return null;
+}
+</script>
+
+<script>
+function getImageOrientationFromSrc(src) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      resolve((img.naturalHeight || 1) > (img.naturalWidth || 1) ? "portrait" : "landscape");
+    };
+    img.onerror = () => resolve("landscape");
+    img.src = src;
+  });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  $('beforeInput')?.addEventListener('change', e=> previewFiles(e.target,'beforeThumbs'));
-  $('afterInput')?.addEventListener('change', e=> previewFiles(e.target,'afterThumbs'));
-});
+async function buildSmartPhotoPagesFromItems(items, label, forceNewPage = false) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) return "";
 
+  let html = "";
+  if (forceNewPage) html += `<div class="pb"></div>`;
+
+  for (let i = 0; i < safeItems.length; i += 2) {
+    if (i > 0) html += `<div class="pb"></div>`;
+
+    const img1 = safeItems[i];
+    const img2 = safeItems[i + 1];
+
+    const orient1 = img1?.src ? await getImageOrientationFromSrc(img1.src) : "landscape";
+    const orient2 = img2?.src ? await getImageOrientationFromSrc(img2.src) : "landscape";
+
+    html += `
+      <section class="photo-sheet">
+        ${i === 0 ? `<div class="photo-heading">${label} Photos</div>` : ``}
+
+        <div class="photo-slot">
+          <img src="${img1.src}" alt="${label} ${i + 1}" class="${orient1}">
+        </div>
+
+        ${img2 ? `
+        <div class="photo-slot">
+          <img src="${img2.src}" alt="${label} ${i + 2}" class="${orient2}">
+        </div>` : ``}
+      </section>
+    `;
+  }
+
+  return html;
+}
+</script>
+
+<script>
 /* ---------- Image Annotator (mobile/touch friendly) ---------- */
 (function(){
   const modal = document.getElementById('annotatorModal');
@@ -3724,6 +3815,9 @@ function applyTransform(animated = false, springy = false) {
   }
   let imgCanvas, drawCanvas, imgCtx, drawCtx;
   let currentImgEl = null;
+  let currentPhotoId = null;
+  let currentBucket = null;
+  let annotatorReady = false;
   let drawing = false;
   let last = {x:0,y:0};
   let stack = []; // undo stack (dataURLs of drawCanvas)
@@ -3969,33 +4063,92 @@ wrapper.addEventListener('dblclick', () => {
   }
 
   // Open annotator with clicked thumbnail image element
-  window.openAnnotator = function(thumbnailImgEl, thumbListId){
-    currentImgEl = thumbnailImgEl;
+  window.openAnnotator = async function(thumbnailImgEl, bucket, photoId) {
+    currentImgEl = thumbnailImgEl || null;
+    currentPhotoId = photoId || null;
+    currentBucket = bucket || null;
+    annotatorReady = false;
+
     modal.style.display = 'block';
     window.lockScroll?.();
-    bump('info');
-    showToast('Annotator opened', 'info');
+    bump?.('info');
+    showToast?.('Annotator opened', 'info');
 
-    // create a new Image() at full resolution if src already loaded
-    const base = new Image();
-    base.onload = ()=>{
-      mkCanvases(base);
-      attachDrawing();
-    };
-    // ensure cross-origin safe (images are dataURL or blob urls from file input or local storage)
-    base.crossOrigin = 'anonymous';
-    base.src = thumbnailImgEl.src;
+    try {
+      const blob = currentPhotoId
+        ? await getPhotoBlobById(currentPhotoId)
+        : null;
+
+      if (!blob) {
+        throw new Error("No blob found for annotator image");
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const base = new Image();
+
+      base.onload = () => {
+        try {
+          mkCanvases(base);
+          attachDrawing();
+          annotatorReady = true;
+        } catch (err) {
+          console.error("mkCanvases failed:", err);
+          showToast?.("❌ Failed to prepare annotator canvas", "error");
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+
+      base.onerror = (e) => {
+        console.error("Annotator image failed to load:", e, objectUrl);
+        URL.revokeObjectURL(objectUrl);
+        modal.style.display = 'none';
+        window.unlockScroll?.();
+        stage.innerHTML = '';
+        currentImgEl = null;
+        currentPhotoId = null;
+        currentBucket = null;
+        imgCanvas = null;
+        drawCanvas = null;
+        imgCtx = null;
+        drawCtx = null;
+        annotatorReady = false;
+        showToast?.("❌ Failed to load image into annotator", "error");
+      };
+
+      base.src = objectUrl;
+
+    } catch (err) {
+      console.error("Annotator open failed:", err);
+      modal.style.display = 'none';
+      window.unlockScroll?.();
+      stage.innerHTML = '';
+      currentImgEl = null;
+      currentPhotoId = null;
+      currentBucket = null;
+      imgCanvas = null;
+      drawCanvas = null;
+      imgCtx = null;
+      drawCtx = null;
+      annotatorReady = false;
+      showToast?.("❌ Failed to open annotator", "error");
+    }
   };
+
 
   // undo
   btnUndo.addEventListener('click', ()=> {
+    if (!drawCtx || !drawCanvas) {
+      showToast?.('⚠️ Image not ready yet', 'warning');
+      return;
+    }
+
     if(stack.length <= 1) {
-      // clear
       drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
       stack = [drawCanvas.toDataURL()];
       return;
     }
-    // pop current
+
     stack.pop();
     const lastState = stack[stack.length - 1];
     const img = new Image();
@@ -4007,6 +4160,10 @@ wrapper.addEventListener('dblclick', () => {
   });
 
   btnClear.addEventListener('click', ()=> {
+    if (!drawCtx || !drawCanvas) {
+      showToast?.('⚠️ Image not ready yet', 'warning');
+      return;
+    }
     drawCtx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
     pushStack();
   });
@@ -4018,11 +4175,18 @@ wrapper.addEventListener('dblclick', () => {
 
   colorButtons.forEach(b=>{
     b.addEventListener('click', ()=>{
-      eraser = false; btnEraser.classList.remove('green');
+      console.log("[NEW ANNOTATOR COLOR HANDLER]", { annotatorReady, hasDrawCtx: !!drawCtx });
+      if (!drawCtx) {
+        showToast?.('⚠️ Image not ready yet', 'warning');
+        return;
+      }
+
+      eraser = false;
+      btnEraser.classList.remove('green');
       strokeColor = b.dataset.color;
       drawCtx.strokeStyle = strokeColor;
       colorButtons.forEach(x=>x.classList.remove('green'));
-	  b.classList.add('green');
+      b.classList.add('green');
     });
   });
 
@@ -4031,54 +4195,104 @@ wrapper.addEventListener('dblclick', () => {
     window.unlockScroll?.();
     stage.innerHTML = '';
     currentImgEl = null;
+    currentPhotoId = null;
+    currentBucket = null;
+    imgCanvas = null;
+    drawCanvas = null;
+    imgCtx = null;
+    drawCtx = null;
+    annotatorReady = false;
   });
 
-  btnSave.addEventListener('click', () => {
-  bump?.('info');
-  showToast?.('Saving annotation…', 'info');
+  btnSave.addEventListener('click', async () => {
+    if (!annotatorReady || !imgCanvas || !drawCanvas) {
+      showToast?.('⚠️ Image not ready yet', 'warning');
+      return;
+    }
 
-  // Merge imgCanvas + drawCanvas into a single image (keeps original resolution)
-  const outCanvas = document.createElement('canvas');
-  outCanvas.width = imgCanvas.width;
-  outCanvas.height = imgCanvas.height;
+    bump?.('info');
+    showToast?.('Saving annotation…', 'info');
 
-  const outCtx = outCanvas.getContext('2d');
-  outCtx.drawImage(imgCanvas, 0, 0);
-  outCtx.drawImage(drawCanvas, 0, 0);
+    try {
+      // Merge image + drawing at original resolution
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = imgCanvas.width;
+      outCanvas.height = imgCanvas.height;
 
-  const annotatedDataUrl = outCanvas.toDataURL('image/jpeg', 0.92);
+      const outCtx = outCanvas.getContext('2d');
+      outCtx.drawImage(imgCanvas, 0, 0);
+      outCtx.drawImage(drawCanvas, 0, 0);
 
-  // Replace thumbnail image src with annotated dataURL
-  if (currentImgEl) {
-    currentImgEl.src = annotatedDataUrl;
-    savePhotos?.();
-  }
+      const mergedBlob = await new Promise((resolve, reject) => {
+        outCanvas.toBlob(blob => {
+          if (!blob) {
+            reject(new Error("Failed to create annotated image"));
+            return;
+          }
+          resolve(blob);
+        }, 'image/jpeg', 0.92);
+      });
 
-  // Close modal + cleanup
-  modal.style.display = 'none';
-  stage.innerHTML = '';
-  currentImgEl = null;
-  window.unlockScroll?.();
+      // Compress before saving back
+      const finalBlob = (typeof compressImageToBlob === "function")
+        ? await compressImageToBlob(mergedBlob, 2000, 0.82)
+        : mergedBlob;
 
-  bump?.('success');
-  showToast?.('✅ Annotation saved!', 'success');
-});
+      if (!currentPhotoId) {
+        throw new Error("No current photo id");
+      }
+
+      // Save back into same IndexedDB record
+      await replacePhotoRecordBytes(currentPhotoId, finalBlob);
+
+      // Re-render thumbnails from IndexedDB so UI + PDF stay aligned
+      if (currentBucket) {
+        await renderPhotoBucket(currentBucket);
+      }
+
+      // Close modal + cleanup
+      modal.style.display = 'none';
+      window.unlockScroll?.();
+      stage.innerHTML = '';
+      currentImgEl = null;
+      currentPhotoId = null;
+      currentBucket = null;
+      imgCanvas = null;
+      drawCanvas = null;
+      imgCtx = null;
+      drawCtx = null;
+      annotatorReady = false;
+
+      bump?.('success');
+      showToast?.('✅ Annotation saved!', 'success');
+
+    } catch (err) {
+      console.error("Annotation save failed:", err);
+      showToast?.("❌ Failed to save annotation", "error");
+    }
+  });
 
   // Close when clicking backdrop
   document.getElementById('annotatorBackdrop').addEventListener('click', ()=> {
     // behave like close without saving
     modal.style.display = 'none';
+    window.unlockScroll?.();
     stage.innerHTML = '';
     currentImgEl = null;
+    currentPhotoId = null;
+    currentBucket = null;
+    imgCanvas = null;
+    drawCanvas = null;
+    imgCtx = null;
+    drawCtx = null;
+    annotatorReady = false;
   });
 
   // small keyboard / orientation handling: recalc on resize
   window.addEventListener('resize', ()=> {
-    if(modal.style.display === 'block' && currentImgEl){
-      // reopen to re-render with new size
-      const src = currentImgEl.src;
-      modal.style.display='none';
-      setTimeout(()=> openAnnotator(currentImgEl),100);
+    if (modal.style.display === 'block' && currentImgEl && currentPhotoId && currentBucket) {
+      modal.style.display = 'none';
+      setTimeout(() => openAnnotator(currentImgEl, currentBucket, currentPhotoId), 100);
     }
   });
 
@@ -4124,7 +4338,7 @@ function formatTextForPdf(text) {
 }
 
 /* ---------- Prepare clone for PDF (smart photo pagination + no blanks) ---------- */
-function prepareForPdf(clone, sigData) {
+async function prepareForPdf(clone, sigData) {
   // Remove UI-only elements
   clone.querySelectorAll(
     ".btn, .controls, #quickBar, #versionBadge, #zoomIndicator, #annotatorModal"
@@ -4316,61 +4530,15 @@ ${data.partsReq
   `;
 
 // Append before/after photo pages to the HTML
-const beforeCount = document.querySelectorAll('#beforeThumbs img').length;
-const afterCount = document.querySelectorAll('#afterThumbs img').length;
+const beforeItems = await getPhotoItemsForPdf("before");
+const afterItems = await getPhotoItemsForPdf("after");
 
-const photoPages = `
-  ${buildSmartPhotoPages('beforeThumbs', 'Before')}
-  ${buildSmartPhotoPages('afterThumbs', 'After', beforeCount > 0)}
-`;
+const photoPages =
+  (await buildSmartPhotoPagesFromItems(beforeItems, "Before")) +
+  (await buildSmartPhotoPagesFromItems(afterItems, "After", beforeItems.length > 0));
 
 clone.innerHTML = html + photoPages;
 return clone;
-}
-
-// Build pages with explicit "break before next page" separators
-function buildSmartPhotoPages(listId, label, forceNewPage = false) {
-  const list = document.getElementById(listId);
-  if (!list) return "";
-
-  const imgs = Array.from(list.querySelectorAll("img"));
-  if (!imgs.length) return "";
-
-  // helper
-  const orient = img => {
-    const w = img?.naturalWidth || 1, h = img?.naturalHeight || 1;
-    return h > w ? "portrait" : "landscape";
-  };
-
-  let html = "";
-
-  // If we must start this section on a fresh page (e.g., After after Before)
-  if (forceNewPage) html += `<div class="pb"></div>`;
-
-  for (let i = 0; i < imgs.length; i += 2) {
-    // insert page break BETWEEN sheets (not after the last one)
-    if (i > 0) html += `<div class="pb"></div>`;
-
-    const img1 = imgs[i];
-    const img2 = imgs[i + 1];
-
-    html += `
-      <section class="photo-sheet">
-        ${i === 0 ? `<div class="photo-heading">${label} Photos</div>` : ``}
-
-        <div class="photo-slot">
-          <img src="${img1.src}" alt="${label} ${i + 1}" class="${orient(img1)}">
-        </div>
-
-        ${img2 ? `
-        <div class="photo-slot">
-          <img src="${img2.src}" alt="${label} ${i + 2}" class="${orient(img2)}">
-        </div>` : ``}
-      </section>
-    `;
-  }
-
-  return html;
 }
 
 /*
@@ -4711,7 +4879,13 @@ async function addPhotosToBucket(files, bucket) {
     const createdAt = new Date().toISOString();
 
     try {
-      const stored = await normalisePhotoForStorage(file, `${bucket}.jpg`);
+      const compressed = (typeof processImageInWorker === "function")
+        ? await processImageInWorker(file, { maxDim: 2000, quality: 0.72 })
+        : ((typeof compressImageToBlob === "function")
+            ? await compressImageToBlob(file, 2000, 0.72)
+            : file);
+
+      const stored = await normalisePhotoForStorage(compressed, `${bucket}.jpg`);
 
       await savePhotoRecord({
         id,
@@ -4745,6 +4919,17 @@ async function addPhotosToBucket(files, bucket) {
 
   writePhotoMeta(meta);
   await renderPhotoBucket(bucket);
+}
+
+async function normalisePhotoForStorage(fileOrBlob, fallbackName = "photo.jpg") {
+  const arrayBuffer = await fileOrBlob.arrayBuffer();
+
+  return {
+    name: fileOrBlob.name || fallbackName,
+    type: fileOrBlob.type || "image/jpeg",
+    size: fileOrBlob.size || arrayBuffer.byteLength,
+    bytes: arrayBuffer
+  };
 }
 
 async function removePhotoFromBucket(bucket, photoId) {
@@ -4801,6 +4986,9 @@ async function renderPhotoBucket(bucket) {
     img.style.objectFit = "cover";
     img.style.display = "block";
     img.onload = () => URL.revokeObjectURL(url);
+
+    img.style.cursor = "zoom-in";
+    img.addEventListener("click", () => openAnnotator(img, bucket, item.id));
 
     const del = document.createElement("button");
     del.type = "button";
@@ -4888,7 +5076,7 @@ document.addEventListener("DOMContentLoaded", () => {
 let lastPdfBlob = null;
 
 /* ---------- Build printable doc (light) and open it ---------- */
-function buildPdf(existingWindow = null) {
+async function buildPdf(existingWindow = null) {
   // --- Capture signatures first ---
   // --- Capture signatures for PDF: convert WHITE ink to BLACK on WHITE background ---
    function getSignatureForPdf(id) {
@@ -4930,15 +5118,7 @@ function buildPdf(existingWindow = null) {
   const sig1 = getSignatureForPdf('sig1');
   const sig2 = getSignatureForPdf('sig2');
   const clone = $('formContainer').cloneNode(true);
-  // ✅ Copy photo thumbnails into the cloned form before building PDF
-["beforeThumbs", "afterThumbs"].forEach(id => {
-  const originalList = document.getElementById(id);
-  const cloneList = clone.querySelector("#" + id);
-  if (originalList && cloneList) {
-    cloneList.innerHTML = originalList.innerHTML;
-  }
-});
-  const prepared = prepareForPdf(clone, [sig1, sig2]);
+  const prepared = await prepareForPdf(clone, [sig1, sig2]);
 
   // --- Get textarea values before removing them ---
   const reportVal = ($('report')?.value || '').trim();
@@ -4964,26 +5144,14 @@ function buildPdf(existingWindow = null) {
   `;
 
   // --- Replace the report/parts card in the cloned form with bullet version ---
-  const reportCard = prepared.querySelector('#report')?.closest('.card');
-  if (reportCard) {
-    reportCard.innerHTML = bulletHTML; // replaces it in-place (no duplicates!)
-  }
 
   // --- Title and metadata ---
   const projectNo = $('project').value || '—';
   const dateVal = $('date').value || new Date().toISOString().slice(0,10);
   const formattedDate = formatDateWithOrdinal(dateVal);
   // Resolve company name reliably (localStorage / hidden / fallback / visible input)
-const company =
-  (localStorage.getItem("custCompany") || "").trim() ||
-  (document.getElementById("custCompanyHidden")?.value || "").trim() ||
-  (document.getElementById("custCompanyFallback")?.value || "").trim() ||
-  (document.getElementById("custCompany")?.value || "").trim() ||
-  "—";
+  const company = (typeof getCompanyValue === "function" ? getCompanyValue() : "") || "—";
   const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
-
-  const beforeImgs = JSON.parse(localStorage.getItem("beforeThumbs") || "[]");
-  const afterImgs = JSON.parse(localStorage.getItem("afterThumbs") || "[]");
 
   // --- Print styling ---
   const css = `
@@ -5250,37 +5418,14 @@ function restoreSignatures() {
 }
 
 function savePhotos() {
-  ["beforeThumbs", "afterThumbs"].forEach(listId => {
-    const imgs = Array.from(document.querySelectorAll(`#${listId} img`))
-      .map(img => img.src);
-    localStorage.setItem(listId, JSON.stringify(imgs));
-  });
+  // No-op now: photos are stored in IndexedDB + metadata in ssco_photo_meta
+  // Kept only so older code does not break if it still calls savePhotos().
 }
 
-function restorePhotos() {
-  ["beforeThumbs", "afterThumbs"].forEach(listId => {
-    const data = localStorage.getItem(listId);
-    if (data) {
-      const imgs = JSON.parse(data);
-      const c = document.getElementById(listId);
-      imgs.forEach(src => {
-        const wrap = document.createElement("div");
-        wrap.className = "photoWrap";
-        const img = document.createElement("img");
-        img.className = "thumb";
-        img.src = src;
-        const btn = document.createElement("button");
-        btn.className = "removePhoto";
-        btn.textContent = "✖";
-        btn.onclick = () => { wrap.remove(); savePhotos(); };
-        wrap.appendChild(img);
-        wrap.appendChild(btn);
-        c.appendChild(wrap);
-      });
-    }
-  });
+async function restorePhotos() {
+  await renderPhotoBucket("before");
+  await renderPhotoBucket("after");
 }
-
 
 
 /* ---------- Run once DOM is ready ---------- */
