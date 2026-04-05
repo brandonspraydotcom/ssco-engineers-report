@@ -5344,7 +5344,18 @@ const isPWA =
 // Silent mode OR PWA: use hidden iframe, never open a blank tab
 if (silent || isPWA) {
   const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
+
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    left: '-10000px',
+    top: '0',
+    width: '794px',   // approx A4 width at screen px
+    height: '1123px', // approx A4 height at screen px
+    opacity: '0',
+    pointerEvents: 'none',
+    border: '0'
+  });
+
   document.body.appendChild(iframe);
 
   const docStream = iframe.contentWindow.document;
@@ -8651,6 +8662,39 @@ async function commitReportSave() {
   }
 }
 
+function waitForPrintDocReady(win) {
+  return new Promise((resolve, reject) => {
+    const doc = win?.document;
+    if (!doc) {
+      reject(new Error("No print document"));
+      return;
+    }
+
+    const done = async () => {
+      try {
+        const imgs = Array.from(doc.images || []);
+        await Promise.all(imgs.map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(res => {
+            img.addEventListener("load", res, { once: true });
+            img.addEventListener("error", res, { once: true });
+          });
+        }));
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    if (doc.readyState === "complete") {
+      done();
+    } else {
+      win.addEventListener("load", done, { once: true });
+      setTimeout(done, 800);
+    }
+  });
+}
+
 // --- SAVE PDF (Desktop + Safari PWA safe) ---
 document.addEventListener("DOMContentLoaded", () => {
   const saveBtn = document.getElementById("savePdf");
@@ -8718,9 +8762,8 @@ document.addEventListener("DOMContentLoaded", () => {
   		}
 
   		// Give iframe a moment to fully paint
-  		await new Promise(resolve => setTimeout(resolve, 300));
-
-  		lastPdfBlob = await html2pdf().from(pdfBody).output('blob');
+  		await waitForPrintDocReady(pdfWin.iframePrint);
+      lastPdfBlob = await html2pdf().from(pdfWin.iframePrint.document.body).output('blob');
 
   		try {
     		await commitReportSave();
@@ -8921,7 +8964,7 @@ window.addEventListener('load', () => {
   }
 });
 
-const version = "v1.0.0";
+const version = "v1.0.3";
 const badge = document.getElementById("versionBadge");
 
 function updateStatus() {
