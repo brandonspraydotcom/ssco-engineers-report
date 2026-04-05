@@ -5126,264 +5126,219 @@ document.addEventListener("DOMContentLoaded", () => {
 let lastPdfBlob = null;
 
 /* ---------- Build printable doc (light) and open it ---------- */
-async function buildPdf(existingWindow = null, { silent = false } = {}) {
-  // --- Capture signatures first ---
-  // --- Capture signatures for PDF: convert WHITE ink to BLACK on WHITE background ---
-   function getSignatureForPdf(id) {
-     const c = document.getElementById(id);
-     if (!c) return "";
+async function buildPdfMarkup() {
+  function getSignatureForPdf(id) {
+    const c = document.getElementById(id);
+    if (!c) return "";
 
-     const srcCtx = c.getContext("2d", { willReadFrequently: true });
-     const { width, height } = c;
+    const srcCtx = c.getContext("2d", { willReadFrequently: true });
+    const { width, height } = c;
 
-     const src = srcCtx.getImageData(0, 0, width, height);
-     const d = src.data;
+    const src = srcCtx.getImageData(0, 0, width, height);
+    const d = src.data;
 
-     const out = document.createElement("canvas");
-     out.width = width;
-     out.height = height;
-     const octx = out.getContext("2d");
+    const out = document.createElement("canvas");
+    out.width = width;
+    out.height = height;
+    const octx = out.getContext("2d");
 
-     // White background
-     octx.fillStyle = "#fff";
-     octx.fillRect(0, 0, width, height);
+    octx.fillStyle = "#fff";
+    octx.fillRect(0, 0, width, height);
 
-     const outImg = octx.getImageData(0, 0, width, height);
-     const od = outImg.data;
+    const outImg = octx.getImageData(0, 0, width, height);
+    const od = outImg.data;
 
-     // Any non-transparent pixel becomes BLACK
-     for (let i = 0; i < d.length; i += 4) {
-       const alpha = d[i + 3];
-       if (alpha > 0) {
-         od[i] = 0; od[i + 1] = 0; od[i + 2] = 0; od[i + 3] = 255;
-       } else {
-         od[i] = 255; od[i + 1] = 255; od[i + 2] = 255; od[i + 3] = 255;
-       }
-     }
+    for (let i = 0; i < d.length; i += 4) {
+      const alpha = d[i + 3];
+      if (alpha > 0) {
+        od[i] = 0; od[i + 1] = 0; od[i + 2] = 0; od[i + 3] = 255;
+      } else {
+        od[i] = 255; od[i + 1] = 255; od[i + 2] = 255; od[i + 3] = 255;
+      }
+    }
 
-     octx.putImageData(outImg, 0, 0);
-     return out.toDataURL("image/png");
-   }
+    octx.putImageData(outImg, 0, 0);
+    return out.toDataURL("image/png");
+  }
 
-  const sig1 = getSignatureForPdf('sig1');
-  const sig2 = getSignatureForPdf('sig2');
-  const clone = $('formContainer').cloneNode(true);
+  const sig1 = getSignatureForPdf("sig1");
+  const sig2 = getSignatureForPdf("sig2");
+
+  const clone = $("formContainer").cloneNode(true);
   const prepared = await prepareForPdf(clone, [sig1, sig2]);
 
-  // --- Get textarea values before removing them ---
-  const reportVal = ($('report')?.value || '').trim();
-  const partsUsedVal = ($('partsUsed')?.value || '').trim();
-  const partsReqVal = ($('partsReq')?.value || '').trim();
-
-  // --- Create bullet sections ---
-  const makeBullets = (title, val) => {
-    if (!val) return '';
-    const items = val
-      .split(/\n+/)
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(l => `<li>${l}</li>`)
-      .join('');
-    return `<h3>${title}</h3><ul>${items}</ul>`;
-  };
-
-  const bulletHTML = `
-    ${makeBullets('Report Details', reportVal)}
-    ${makeBullets('Parts Used', partsUsedVal)}
-    ${makeBullets('Parts Required (To Be Quoted)', partsReqVal)}
-  `;
-
-  // --- Replace the report/parts card in the cloned form with bullet version ---
-
-  // --- Title and metadata ---
-  const projectNo = $('project').value || '—';
-  const dateVal = $('date').value || new Date().toISOString().slice(0,10);
+  const projectNo = $("project")?.value || "—";
+  const dateVal = $("date")?.value || new Date().toISOString().slice(0, 10);
   const formattedDate = formatDateWithOrdinal(dateVal);
-  // Resolve company name reliably (localStorage / hidden / fallback / visible input)
   const company = (typeof getCompanyValue === "function" ? getCompanyValue() : "") || "—";
   const sscoTitle = `SSCo – Engineers Report — Project ${projectNo} — ${formattedDate}`;
 
-  // --- Print styling ---
   const css = `
     @page { margin: 20mm; counter-increment: page; }
-    body { font-family: Helvetica, Arial, sans-serif; color: #111; padding: 20px; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #111; padding: 20px; background:#fff; }
     .banner { display:block; width:100%; max-width:720px; height:auto; margin:0 auto 12px; object-fit:contain; }
     .card { page-break-inside: avoid; margin-bottom: 10px; }
     h3 { margin: 6px 0 3px; font-size: 15px; }
     ul { margin:6px 0 12px 20px; padding:0; }
     li { margin:4px 0; line-height:1.4; }
 
-/* --- Smart Auto-Scaling 2-Per-Page Photo Layout --- */
-/* A4 with 20mm margins already set elsewhere */
-@media print {
-  /* the only thing that forces pages */
-  .pb { break-before: page; page-break-before: always; }
-}
+    @media print {
+      .pb { break-before: page; page-break-before: always; }
+    }
 
-/* one sheet = one page (two photos) */
-.photo-sheet {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4mm;
-  /* keep a safe content height BELOW the printable height (297-40=257mm).
-     We let the content size itself so engines don't try to split it. */
-  padding: 6mm 6mm 4mm;
-  box-sizing: border-box;
+    .photo-sheet {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4mm;
+      padding: 6mm 6mm 4mm;
+      box-sizing: border-box;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
 
-  /* absolutely forbid splitting */
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
+    .photo-heading {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 4mm 0;
+      break-inside: avoid;
+    }
 
-/* heading lives inside the first sheet of its section */
-.photo-heading {
-  text-align: center;
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0 0 4mm 0;
-  break-inside: avoid;
-}
+    .photo-slot {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 85%;
+      height: 40%;
+      max-height: 110mm;
+      background: #fff;
+      border: none;
+      overflow: hidden;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      margin: 0;
+      padding: 0;
+    }
 
-/* your existing slot rules; keep them non-greedy so they never overflow */
-.photo-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 85%;
-  height: 40%;
-  max-height: 110mm;
-  background: #fff;
-  border: none;
-  overflow: hidden;
+    .photo-slot img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 6px;
+      display: block;
+      break-inside: avoid;
+    }
 
-  /* do not allow break here either */
-  break-inside: avoid;
-  page-break-inside: avoid;
-  margin: 0;       /* avoid margin-collapsing surprises */
-  padding: 0;
-}
+    .photo-slot img.portrait { height: 95%; width: auto; }
+    .photo-slot img.landscape { width: 95%; height: auto; }
 
-.photo-slot img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 6px;
-  display: block;      /* avoid inline gaps */
-  break-inside: avoid; /* belt & braces */
-}
+    @media print {
+      .footer { display: none; }
+      .photo-page:last-of-type { page-break-after: avoid; }
+    }
 
-.photo-slot img.portrait { height: 95%; width: auto; }
-.photo-slot img.landscape { width: 95%; height: auto; }
+    .footer {
+      position: fixed;
+      bottom: 2px;
+      left: 0;
+      right: 0;
+      font-size: 8px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      opacity: 0.5;
+    }
+    .footer .page:before { content: "Page " counter(page); }
 
-@media print {
-  .footer { display: none; }
-  .photo-page:last-of-type { page-break-after: avoid; }
-}
+    @media print {
+      body:last-child {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+    }
+  `;
 
-.footer { 
-  position:fixed; 
-  bottom:2px; 
-  left:0; 
-  right:0; 
-  font-size:8px; 
-  color:#666;
-  display:flex; 
-  justify-content:space-between; 
-  padding:0 20px; 
-  opacity:0.5; 
-}
-.footer .page:before { 
-  content:"Page " counter(page); 
-}
-
-@media print {
-  body:last-child {
-    break-after: avoid;
-    page-break-after: avoid;
-  }
-}
-`;
-
-  // --- Build PDF document ---
   let doc = `
-    <!doctype html><html><head>
+    <!doctype html>
+    <html>
+    <head>
       <meta charset="utf-8">
       <title>${sscoTitle}</title>
       <style>${css}</style>
-    </head><body>
+    </head>
+    <body>
   `;
 
-  // Banner
-  if (MAINTENANCE_B64?.startsWith('data:')) {
+  if (MAINTENANCE_B64?.startsWith("data:")) {
     doc += `<img class="banner" src="${MAINTENANCE_B64}" alt="">`;
   }
 
-// Title block
-doc += `
-  <div style="text-align:center;font-weight:700">${sscoTitle}</div>
-  <div style="text-align:center;margin-bottom:14px">
-    Prepared for <strong>${company}</strong>
-  </div>
-  ${prepared.innerHTML}
-`;
-
-doc += `
+  doc += `
+    <div style="text-align:center;font-weight:700">${sscoTitle}</div>
+    <div style="text-align:center;margin-bottom:14px">
+      Prepared for <strong>${company}</strong>
+    </div>
+    ${prepared.innerHTML}
     <div class="footer">
       <div style="font-style:italic">MAXIMISING YOUR SPRAY SYSTEMS — Make Every Drop Count</div>
       <div class="page"></div>
     </div>
-  </body></html>`;
+    </body>
+    </html>
+  `;
 
-    // --- Detect Safari PWA mode --
-const isPWA =
-  window.matchMedia('(display-mode: standalone)').matches ||
-  window.navigator.standalone ||
-  document.referrer.startsWith('android-app://');
-
-// Silent mode OR PWA: use hidden iframe, never open a blank tab
-if (silent || isPWA) {
-  const iframe = document.createElement('iframe');
-
-  Object.assign(iframe.style, {
-    position: 'fixed',
-    left: '-10000px',
-    top: '0',
-    width: '794px',   // approx A4 width at screen px
-    height: '1123px', // approx A4 height at screen px
-    opacity: '0',
-    pointerEvents: 'none',
-    border: '0'
-  });
-
-  document.body.appendChild(iframe);
-
-  const docStream = iframe.contentWindow.document;
-  docStream.open();
-  docStream.write(doc);
-  docStream.close();
-
-  return {
-    iframePrint: iframe.contentWindow,
-    iframeEl: iframe
-  };
+  return doc;
 }
 
-// Normal browser print window path
-if (existingWindow) {
-  existingWindow.document.open();
-  existingWindow.document.write(doc);
-  existingWindow.document.close();
-  existingWindow.focus();
-  return existingWindow;
-}
+async function buildPdf(existingWindow = null) {
+  const doc = await buildPdfMarkup();
 
-const w = window.open('', '_blank');
-w.document.open();
-w.document.write(doc);
-w.document.close();
-w.focus();
-return w;
+  const isPWA =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone ||
+    document.referrer.startsWith("android-app://");
+
+  if (isPWA) {
+    const iframe = document.createElement("iframe");
+    Object.assign(iframe.style, {
+      position: "fixed",
+      left: "-10000px",
+      top: "0",
+      width: "794px",
+      height: "1123px",
+      opacity: "0",
+      pointerEvents: "none",
+      border: "0"
+    });
+    document.body.appendChild(iframe);
+
+    const docStream = iframe.contentWindow.document;
+    docStream.open();
+    docStream.write(doc);
+    docStream.close();
+
+    return {
+      iframePrint: iframe.contentWindow,
+      iframeEl: iframe
+    };
+  }
+
+  if (existingWindow) {
+    existingWindow.document.open();
+    existingWindow.document.write(doc);
+    existingWindow.document.close();
+    existingWindow.focus();
+    return existingWindow;
+  }
+
+  const w = window.open("", "_blank");
+  w.document.open();
+  w.document.write(doc);
+  w.document.close();
+  w.focus();
+  return w;
 }
 
 /* ---------- Buttons ---------- */
@@ -5736,7 +5691,6 @@ window.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
-<!-- Clear Form Confirmation Modal -->
 <!-- 🧹 Clear Form Confirmation Modal -->
 <div id="clearConfirmModal"
      style="display:none;position:fixed;inset:0;z-index:6000;
@@ -8745,48 +8699,57 @@ document.addEventListener("DOMContentLoaded", () => {
     saveSignature("sig1");
     saveSignature("sig2");
 
+    let host = null;
+
     try {
-      // Close modal immediately so the UI does not get stuck while building
-  		modal.classList.remove("show");
-  		box.style.transform = "scale(0.85)";
-  		box.style.opacity = "0";
-  		setTimeout(() => (modal.style.display = "none"), 300);
-  		window.unlockScroll?.();
+      modal.classList.remove("show");
+      box.style.transform = "scale(0.85)";
+      box.style.opacity = "0";
+      setTimeout(() => (modal.style.display = "none"), 300);
+      window.unlockScroll?.();
 
-  		// Build a silent printable document in a hidden iframe
-  		const pdfWin = await buildPdf(null, { silent: true });
-  		
-  		const pdfBody = pdfWin?.iframePrint?.document?.body;
-  		if (!pdfBody) {
-    		throw new Error("PDF source body not ready");
-  		}
+      const doc = await buildPdfMarkup();
 
-  		// Give iframe a moment to fully paint
-  		await waitForPrintDocReady(pdfWin.iframePrint);
-      lastPdfBlob = await html2pdf().from(pdfWin.iframePrint.document.body).output('blob');
+      host = document.createElement("div");
+      Object.assign(host.style, {
+        position: "fixed",
+        left: "-10000px",
+        top: "0",
+        width: "794px",
+        background: "#fff",
+        zIndex: "-1"
+      });
 
-  		try {
-    		await commitReportSave();
-    		window.__reportsLastSavedAt = Date.now();
-  		} catch (err) {
-    		console.warn("commitReportSave failed:", err);
-    		showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
-  		}
+      host.innerHTML = doc;
+      document.body.appendChild(host);
 
-  		// Cleanup the hidden iframe after blob generation
-  		try {
-    		pdfWin?.iframeEl?.remove?.();
-  		} catch {}
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      if (typeof ensureHtml2Canvas === "function") {
+        await ensureHtml2Canvas();
+      }
+
+      lastPdfBlob = await html2pdf().from(host).output("blob");
+
+      try {
+        await commitReportSave();
+        window.__reportsLastSavedAt = Date.now();
+      } catch (err) {
+        console.warn("commitReportSave failed:", err);
+        showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
+      }
+
+      bump("success");
+      showToast("✅ PDF saved", "success");
+
+    } catch (err) {
+      console.error("❌ PDF build failed:", err);
+      bump("error");
+      showToast("❌ PDF failed to generate", "error");
+    } finally {
+      try { host?.remove?.(); } catch {}
       window.lastBuiltPdfWindow = null;
-
-  		bump("success");
-  		showToast("✅ PDF saved", "success");
-
-	 } catch (err) {
-  		console.error("❌ PDF build failed:", err);
-  		bump("error");
-  		showToast("❌ PDF failed to generate", "error");
-	 }
+    }
   });
 
   printNow.addEventListener("click", async () => {
