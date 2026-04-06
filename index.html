@@ -8721,6 +8721,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const printNow = document.getElementById("printNow");
   const closeModal = document.getElementById("closeModal");
 
+  if (!saveBtn || !modal || !box || !ok || !cancel || !printNow || !closeModal) {
+    console.warn("Save PDF wiring skipped: missing modal/button elements.");
+    return;
+  }
+
   saveBtn.addEventListener("click", (e) => {
     e.preventDefault();
 
@@ -8730,11 +8735,12 @@ document.addEventListener("DOMContentLoaded", () => {
     bump("info");
     showToast("All fields complete — ready to save", "info");
 
-    step1.style.display = "block";
-    step2.style.display = "none";
+    if (step1) step1.style.display = "block";
+    if (step2) step2.style.display = "none";
 
     modal.style.display = "flex";
     window.lockScroll?.();
+
     setTimeout(() => {
       modal.classList.add("show");
       box.style.transform = "scale(1)";
@@ -8745,11 +8751,15 @@ document.addEventListener("DOMContentLoaded", () => {
   cancel.addEventListener("click", () => {
     bump("info");
     showToast("Save cancelled", "info");
+
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
-    setTimeout(() => (modal.style.display = "none"), 300);
-    window.unlockScroll?.();
+
+    setTimeout(() => {
+      modal.style.display = "none";
+      window.unlockScroll?.();
+    }, 300);
   });
 
   ok.addEventListener("click", async () => {
@@ -8762,12 +8772,16 @@ document.addEventListener("DOMContentLoaded", () => {
     let host = null;
 
     try {
+      // Close modal immediately so UI does not get stuck while building
       modal.classList.remove("show");
       box.style.transform = "scale(0.85)";
       box.style.opacity = "0";
-      setTimeout(() => (modal.style.display = "none"), 300);
-      window.unlockScroll?.();
+      setTimeout(() => {
+        modal.style.display = "none";
+        window.unlockScroll?.();
+      }, 300);
 
+      // Build same-document off-screen source for html2pdf
       const doc = await buildPdfMarkup();
 
       host = document.createElement("div");
@@ -8799,6 +8813,38 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast?.("⚠️ PDF created, but saving/logging failed", "warning");
       }
 
+      // Re-open printable target after successful save so it behaves like before
+      try {
+        const isPWA =
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.navigator.standalone ||
+          document.referrer.startsWith("android-app://");
+
+        const w = isPWA ? null : window.open("", "_blank");
+        const target = await buildPdf(w);
+
+        window.lastBuiltPdfWindow = target;
+
+        setTimeout(() => {
+          try {
+            if (target?.iframePrint) {
+              target.iframePrint.focus();
+              target.iframePrint.print();
+            } else if (target) {
+              target.focus();
+              target.print();
+            }
+          } catch (err) {
+            console.warn("⚠️ Auto print unavailable:", err);
+            showToast("⚠️ PDF saved, but preview/print did not open", "warning");
+          }
+        }, 800);
+
+      } catch (err) {
+        console.warn("⚠️ Could not open printable target after save:", err);
+        showToast("⚠️ PDF saved, but preview/print did not open", "warning");
+      }
+
       bump("success");
       showToast("✅ PDF saved", "success");
 
@@ -8806,9 +8852,9 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("❌ PDF build failed:", err);
       bump("error");
       showToast("❌ PDF failed to generate", "error");
+      window.lastBuiltPdfWindow = null;
     } finally {
       try { host?.remove?.(); } catch {}
-      window.lastBuiltPdfWindow = null;
     }
   });
 
@@ -8831,11 +8877,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (hasSavedPdf()) {
         const isPWA =
-          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia("(display-mode: standalone)").matches ||
           window.navigator.standalone ||
-          document.referrer.startsWith('android-app://');
+          document.referrer.startsWith("android-app://");
 
-        const w = isPWA ? null : window.open('', '_blank');
+        const w = isPWA ? null : window.open("", "_blank");
         const target = await buildPdf(w);
         window.lastBuiltPdfWindow = target;
 
@@ -8867,6 +8913,7 @@ document.addEventListener("DOMContentLoaded", () => {
     modal.classList.remove("show");
     box.style.transform = "scale(0.85)";
     box.style.opacity = "0";
+
     setTimeout(() => {
       modal.style.display = "none";
       window.unlockScroll?.();
