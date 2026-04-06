@@ -2571,7 +2571,7 @@ function readReportMetaFromForm() {
   const poReceived = !!document.getElementById("poReceived")?.checked;
 
   return {
-    id: makeId("rep"),
+    id: getActiveReportId() || makeId("rep"),
     createdAt: new Date().toISOString(),
 
     engineer, date, visitType,
@@ -5179,6 +5179,29 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPhotoBucket("before");
   renderPhotoBucket("after");
 });
+
+async function clearCurrentPhotoSessionData() {
+  const sessionId = localStorage.getItem(PHOTO_SESSION_KEY);
+
+  if (sessionId) {
+    try {
+      const records = await getPhotosByReport(sessionId);
+      for (const rec of records) {
+        if (rec?.id) {
+          await deletePhotoRecord(rec.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed clearing IndexedDB photo session:", err);
+    }
+  }
+
+  writePhotoMeta({ before: [], after: [] });
+  localStorage.removeItem(PHOTO_SESSION_KEY);
+
+  await renderPhotoBucket("before");
+  await renderPhotoBucket("after");
+}
 </script>
 
 <script>
@@ -8587,13 +8610,68 @@ async function syncReportToCloud(report) {
   }
 }
 
+const ACTIVE_REPORT_ID_KEY = "activeReportId";
+
+function getActiveReportId() {
+  return (localStorage.getItem(ACTIVE_REPORT_ID_KEY) || "").trim();
+}
+
+function setActiveReportId(id) {
+  const v = String(id || "").trim();
+  if (!v) {
+    localStorage.removeItem(ACTIVE_REPORT_ID_KEY);
+    window.currentReportId = "";
+    return;
+  }
+  localStorage.setItem(ACTIVE_REPORT_ID_KEY, v);
+  window.currentReportId = v;
+}
+
+function clearActiveReportId() {
+  localStorage.removeItem(ACTIVE_REPORT_ID_KEY);
+  window.currentReportId = "";
+}
+
+function upsertLocalReport(report) {
+  const key = window.LS_KEYS?.reports || "ssco_reports_log";
+  const reports = lsReadArray(key) || [];
+
+  const idx = reports.findIndex(r => String(r.id || "") === String(report.id || ""));
+
+  if (idx >= 0) {
+    reports[idx] = {
+      ...reports[idx],
+      ...report,
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    reports.unshift({
+      ...report,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  const trimmed = reports.slice(0, 500);
+  lsWriteArray(key, trimmed);
+
+  return trimmed.find(r => String(r.id || "") === String(report.id || "")) || report;
+}
+
 // Helper: commit log + actions after PDF saved
 async function commitReportSave() {
   markPdfSaved();
 
   const meta = readReportMetaFromForm();
+  const existingId = getActiveReportId();
+  const isNewReport = !existingId;
+
+  if (existingId && !meta.id) {
+    meta.id = existingId;
+  }
 
   console.log("META CHARGE/PO:", {
+    id: meta.id,
+    isNewReport,
     companyName: meta.companyName,
     visitChargeAmount: meta.visitChargeAmount,
     visitChargeCurrency: meta.visitChargeCurrency,
@@ -8601,53 +8679,68 @@ async function commitReportSave() {
     poReceived: meta.poReceived
   });
 
-  // 1️⃣ Save locally first (offline-first behaviour)
-  const report = addReportToLog(meta);
+  // 1️⃣ Save locally first (upsert, not append)
+  const report = upsertLocalReport(meta);
+  setActiveReportId(report.id);
+
   renderEngineerDashboard?.();
   localStorage.setItem("lastSavedReport", JSON.stringify(report));
 
-  // 2️⃣ Build actions
-  let actions = await addOutstandingAction(meta);
+  // 2️⃣ Only create actions on first save for now
+  // This stops duplicates immediately.
+  let actions = [];
 
-  if (!actions) actions = [];
-  if (!Array.isArray(actions)) actions = [actions];
+  if (isNewReport) {
+    let built = await addOutstandingAction(report);
 
-  const poAction = buildPOOutstandingFromForm();
-  if (poAction) {
-    addPOOutstandingToLocal(poAction); // ✅ make it visible locally immediately
-    actions.push(poAction);
+    if (!built) built = [];
+    if (!Array.isArray(built)) built = [built];
+
+    const poAction = buildPOOutstandingFromForm();
+    if (poAction) {
+      poAction.reportId = report.id;
+      addPOOutstandingToLocal(poAction);
+      built.push(poAction);
+    }
+
+    actions = await Promise.all(built);
+
+    actions = actions
+      .map(a => {
+        if (!a) return a;
+        a.reportId = report.id;
+        return ensureActionHasId(a);
+      })
+      .filter(a => a && typeof a === "object" && a.id);
   }
 
-  actions = await Promise.all(actions);
-
-  actions = actions
-    .map(ensureActionHasId)
-    .filter(a => a && typeof a === "object" && a.id);
-
-  // ✅ Update UI immediately
   window.renderOutstandingActions?.();
 
-  console.log("FollowUps:", meta.followUpTypes);
+  console.log("FollowUps:", report.followUpTypes);
   console.log("Actions to sync:", actions);
 
-  // 3️⃣ Sync each item individually so only failures get queued
+  // 3️⃣ Sync report
   let reportFailed = false;
   let failedActions = [];
 
-  // --- Report sync ---
   try {
-    await syncReportToCloud(report);
+    if (isNewReport) {
+      await syncReportToCloud(report);
+    } else {
+      await patchReportInCloud(report.id, report);
+    }
   } catch (err) {
     reportFailed = true;
     console.warn("Report sync failed:", err);
 
     enqueueSyncItem({
-      type: "report",
+      type: isNewReport ? "report" : "report_patch",
+      id: report.id,
       payload: report
     });
   }
 
-  // --- Actions sync ---
+  // 4️⃣ Sync actions only on first save
   for (const action of actions) {
     try {
       await syncActionToCloud(action);
@@ -8662,9 +8755,9 @@ async function commitReportSave() {
     }
   }
 
-  // 4️⃣ User feedback
+  // 5️⃣ Feedback
   if (!reportFailed && failedActions.length === 0) {
-    showToast?.("☁️ Synced to cloud", "success");
+    showToast?.(isNewReport ? "☁️ Synced to cloud" : "☁️ Report updated", "success");
     refreshCustomerHistory?.();
     return;
   }
@@ -9068,6 +9161,8 @@ if ('serviceWorker' in navigator) {
 // ==========================
 document.addEventListener("DOMContentLoaded", () => {
 
+  window.currentReportId = getActiveReportId();
+
   // ✅ Your actual modal IDs
   const clearModal  = document.getElementById("clearConfirmModal");
   const clearBox    = document.getElementById("clearConfirmBox");
@@ -9132,7 +9227,7 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     closeClearModal();
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         // ✅ Preserve critical localStorage keys (login + lists + admin)
         const KEEP = new Set([
@@ -9142,8 +9237,8 @@ document.addEventListener("DOMContentLoaded", () => {
           "ssco_engineers",
           "ssco_sales_engineers",
           "custCompany",
-          "ssco_outstanding_actions",// ✅ keep outstanding actions
-          "ssco_reports_log",        // ✅ keep report log
+          "ssco_outstanding_actions",
+          "ssco_reports_log",
           "DB_TOKEN"
         ]);
 
@@ -9151,9 +9246,27 @@ document.addEventListener("DOMContentLoaded", () => {
           if (!KEEP.has(k)) localStorage.removeItem(k);
         });
 
-        // 1️⃣ Clear all fields (except file/buttons)
+        // ✅ Reset active report edit session
+        clearActiveReportId();
+        window.currentReportId = "";
+
+        // ✅ Clear IndexedDB + photo session metadata
+        await clearCurrentPhotoSessionData();
+
+        // 1️⃣ Clear all fields properly
         document.querySelectorAll("input, textarea, select").forEach(el => {
-          if (["button","submit","file"].includes(el.type)) return;
+          if (["button", "submit", "file"].includes(el.type)) return;
+
+          if (el.type === "checkbox" || el.type === "radio") {
+            el.checked = false;
+            return;
+          }
+
+          if (el.tagName === "SELECT") {
+            el.value = "";
+            return;
+          }
+
           el.value = "";
         });
 
@@ -9175,26 +9288,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Optional: reset date to today
         const dateEl = document.getElementById("date");
-        if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+        if (dateEl) dateEl.value = new Date().toISOString().slice(0, 10);
 
         // 2️⃣ Clear signatures
-        ["sig1","sig2"].forEach(id => {
+        ["sig1", "sig2"].forEach(id => {
           const c = document.getElementById(id);
-          if (c) c.getContext("2d").clearRect(0,0,c.width,c.height);
+          if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
         });
 
-        // 3️⃣ Clear photos
+        // 3️⃣ Clear any remaining photo UI shells
         document.getElementById("beforeThumbs")?.replaceChildren();
         document.getElementById("afterThumbs")?.replaceChildren();
 
         // 4️⃣ Clear time records
         document.getElementById("timeList")?.replaceChildren();
 
-        // 5️⃣ Clear "pdf saved" flag
+        // 5️⃣ Clear customer history card
+        if (typeof renderCustomerHistory === "function") {
+          renderCustomerHistory([], "");
+        }
+
+        // 6️⃣ Clear plate preview if present
+        const platePreviewWrap = document.getElementById("platePreviewWrap");
+        const platePreviewImg = document.getElementById("platePreviewImg");
+        const platePreviewMeta = document.getElementById("platePreviewMeta");
+        const platePreviewTitle = document.getElementById("platePreviewTitle");
+
+        if (platePreviewWrap) platePreviewWrap.style.display = "none";
+        if (platePreviewImg) platePreviewImg.src = "";
+        if (platePreviewMeta) {
+          platePreviewMeta.textContent = "";
+          platePreviewMeta.style.display = "none";
+        }
+        if (platePreviewTitle) {
+          platePreviewTitle.textContent = "Plate Scan";
+        }
+
+        // 7️⃣ Clear "pdf saved" flag
         window.clearPdfSaved?.();
+
+        // 8️⃣ Re-render empty photo buckets just to be safe
+        await renderPhotoBucket("before");
+        await renderPhotoBucket("after");
 
         showToast?.("🧹 Form cleared successfully", "success");
         bump?.("success");
+
       } catch (err) {
         console.error("Clear form failed:", err);
         showToast?.("❌ Error clearing form", "error");
