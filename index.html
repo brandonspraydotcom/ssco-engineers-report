@@ -2672,7 +2672,7 @@ function addReportToLog(meta) {
 function formatFollowUpType(type) {
   const map = {
     NA: "N/A",
-    QUOTE: "Quote",
+    QUOTE: "Quotation Required",
     PARTS: "Parts Required",
     RETURN_VISIT: "Return Visit",
     TEST: "Test Required",
@@ -2686,42 +2686,37 @@ function formatFollowUpType(type) {
 }
 
 function addOutstandingAction(meta) {
-  if (!meta.followUpTypes || !meta.followUpTypes.length) return [];
+  if (!meta?.id) return [];
 
   const selectedTypes = (meta.followUpTypes || []).filter(t => t && t !== "NA");
   if (!selectedTypes.length) return [];
 
-  const actions = lsReadArray(LS_KEYS.actions);
   const created = [];
 
   for (const rawType of selectedTypes) {
     const action = {
-      id: makeId("act"),
+      id: makeStableFollowUpActionId(meta.id, rawType),
+      reportId: meta.id,
       createdAt: meta.createdAt,
       dueDate: meta.followUpDueDate || "",
       status: "open",
 
-      engineer: meta.engineer,
-      companyName: meta.companyName,
-      customerName: meta.customerName,
-      salesEngineer: meta.salesEngineer,
-      projectNo: meta.projectNo,
-      poNumber: meta.poNumber,
+      followUpType: rawType,
+      followUpNotes: meta.followUpNotes || "",
 
-      // readable label for UI + emails
-      followUpType: formatFollowUpType(rawType),
-
-      // keep original code if useful later
-      followUpRaw: rawType,
-
-      followUpNotes: meta.followUpNotes || ""
+      engineer: meta.engineer || "",
+      salesEngineer: meta.salesEngineer || "",
+      projectNo: meta.projectNo || "",
+      poNumber: meta.poNumber || "",
+      companyName: meta.companyName || "",
+      customerName: meta.customerName || "",
+      visitType: meta.visitType || ""
     };
 
-    actions.unshift(action);
+    upsertOutstandingActionLocal(action);
     created.push(action);
   }
 
-  lsWriteArray(LS_KEYS.actions, actions);
   return created;
 }
 
@@ -2730,6 +2725,44 @@ function normaliseCompanyName(name) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+}
+
+function makeStableFollowUpActionId(reportId, rawType) {
+  return `act_${String(reportId || "").trim()}_${String(rawType || "").trim()}`;
+}
+
+function upsertOutstandingActionLocal(action) {
+  if (!action || !action.id) return null;
+
+  const actions = lsReadArray(LS_KEYS.actions) || [];
+  const idx = actions.findIndex(a => String(a.id || "") === String(action.id || ""));
+
+  if (idx >= 0) {
+    actions[idx] = {
+      ...actions[idx],
+      ...action,
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    actions.unshift({
+      ...action,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  lsWriteArray(LS_KEYS.actions, actions);
+  return actions.find(a => String(a.id || "") === String(action.id || ""));
+}
+
+function removeOutstandingActionLocal(actionId) {
+  const actions = lsReadArray(LS_KEYS.actions) || [];
+  const next = actions.filter(a => String(a.id || "") !== String(actionId || ""));
+  lsWriteArray(LS_KEYS.actions, next);
+}
+
+function getOutstandingActionsForReport(reportId) {
+  const actions = lsReadArray(LS_KEYS.actions) || [];
+  return actions.filter(a => String(a.reportId || "") === String(reportId || ""));
 }
 
 function formatHistoryDate(dateStr, createdAt) {
@@ -2822,7 +2855,7 @@ function renderCustomerHistory(items, currentReportId = "") {
     const visitType = r.visitType || "Visit";
     const engineer = r.engineer || "—";
     const project = r.projectNo || "—";
-    const followUp = r.followUpType || "";
+    const followUp = formatFollowUpType(r.followUpType) || "";
     const poText =
       r.poReceived ? "PO received" :
       r.poRequired ? "PO required" :
@@ -3189,7 +3222,7 @@ function exportRevenueExcel() {
     ReportDetails: r.report || "",
     PartsUsed: r.partsUsed || "",
     PartsRequired: r.partsReq || "",
-    FollowUpType: r.followUpType || "",
+    FollowUpType: formatFollowUpType(r.followUpType) || "",
     FollowUpNotes: r.followUpNotes || "",
     FollowUpDueDate: r.followUpDueDate || "",
     VisitChargeAmount: r.visitChargeAmount || "",
@@ -3208,7 +3241,7 @@ function exportRevenueExcel() {
     Engineer: a.engineer || "",
     Company: a.companyName || "",
     Project: a.projectNo || "",
-    Type: a.followUpType || "",
+    Type: formatFollowUpType(a.followUpType) || "",
     Notes: a.followUpNotes || "",
     Due: a.followUpDueDate || a.dueDate || "",
     Status: a.status || ""
@@ -8669,59 +8702,65 @@ async function commitReportSave() {
     meta.id = existingId;
   }
 
-  console.log("META CHARGE/PO:", {
-    id: meta.id,
-    isNewReport,
-    companyName: meta.companyName,
-    visitChargeAmount: meta.visitChargeAmount,
-    visitChargeCurrency: meta.visitChargeCurrency,
-    poRequired: meta.poRequired,
-    poReceived: meta.poReceived
-  });
-
-  // 1️⃣ Save locally first (upsert, not append)
+  // 1️⃣ Upsert report locally
   const report = upsertLocalReport(meta);
   setActiveReportId(report.id);
 
   renderEngineerDashboard?.();
   localStorage.setItem("lastSavedReport", JSON.stringify(report));
 
-  // 2️⃣ Only create actions on first save for now
-  // This stops duplicates immediately.
-  let actions = [];
+  // 2️⃣ Build the DESIRED action set for this report state
+  const desired = [];
 
-  if (isNewReport) {
-    let built = await addOutstandingAction(report);
+  // Follow-up actions
+  const followUpActions = addOutstandingAction(report) || [];
+  desired.push(...followUpActions.map(a => ({ ...a, reportId: report.id })));
 
-    if (!built) built = [];
-    if (!Array.isArray(built)) built = [built];
+  // PO action
+  const poAction = buildPOOutstandingFromForm();
+  if (poAction) {
+    poAction.reportId = report.id;
 
-    const poAction = buildPOOutstandingFromForm();
-    if (poAction) {
-      poAction.reportId = report.id;
-      addPOOutstandingToLocal(poAction);
-      built.push(poAction);
-    }
+    // ✅ stable PO id so it updates instead of duplicating
+    const poType = String(poAction.followUpType || "").trim().toUpperCase() || "PO_REQUIRED";
+    poAction.id = `act_${report.id}_${poType}`;
 
-    actions = await Promise.all(built);
+    upsertOutstandingActionLocal(poAction);
+    desired.push(poAction);
+  }
 
-    actions = actions
-      .map(a => {
-        if (!a) return a;
-        a.reportId = report.id;
-        return ensureActionHasId(a);
-      })
-      .filter(a => a && typeof a === "object" && a.id);
+  // Desired actions keyed by id
+  const desiredById = new Map(
+    desired
+      .filter(a => a && a.id)
+      .map(a => [String(a.id), ensureActionHasId(a)])
+  );
+
+  // Existing local actions for this report
+  const existingActions = getOutstandingActionsForReport(report.id);
+  const existingIds = new Set(existingActions.map(a => String(a.id || "")));
+  const desiredIds = new Set([...desiredById.keys()]);
+
+  // 3️⃣ Remove actions no longer wanted
+  const staleActions = existingActions.filter(a => !desiredIds.has(String(a.id || "")));
+  for (const stale of staleActions) {
+    removeOutstandingActionLocal(stale.id);
+  }
+
+  // 4️⃣ Upsert desired actions locally
+  for (const action of desiredById.values()) {
+    upsertOutstandingActionLocal(action);
   }
 
   window.renderOutstandingActions?.();
 
-  console.log("FollowUps:", report.followUpTypes);
-  console.log("Actions to sync:", actions);
+  console.log("Report:", report.id, isNewReport ? "(new)" : "(update)");
+  console.log("Desired actions:", [...desiredById.values()]);
+  console.log("Stale actions:", staleActions);
 
-  // 3️⃣ Sync report
+  // 5️⃣ Sync report
   let reportFailed = false;
-  let failedActions = [];
+  let actionFailures = 0;
 
   try {
     if (isNewReport) {
@@ -8740,30 +8779,51 @@ async function commitReportSave() {
     });
   }
 
-  // 4️⃣ Sync actions only on first save
-  for (const action of actions) {
+  // 6️⃣ Sync desired actions (create or patch)
+  for (const action of desiredById.values()) {
     try {
-      await syncActionToCloud(action);
+      if (existingIds.has(String(action.id))) {
+        await patchActionInCloud(action.id, action);
+      } else {
+        await syncActionToCloud(action);
+      }
     } catch (err) {
-      console.warn("Action sync failed:", action?.id, err);
-      failedActions.push(action);
+      actionFailures++;
+      console.warn("Action sync failed:", action.id, err);
 
       enqueueSyncItem({
-        type: "action",
+        type: existingIds.has(String(action.id)) ? "action_patch" : "action",
+        id: action.id,
         payload: action
       });
     }
   }
 
-  // 5️⃣ Feedback
-  if (!reportFailed && failedActions.length === 0) {
-    showToast?.(isNewReport ? "☁️ Synced to cloud" : "☁️ Report updated", "success");
+  // 7️⃣ Sync deletes for removed actions
+  for (const stale of staleActions) {
+    try {
+      await deleteActionInCloud(stale.id);
+    } catch (err) {
+      actionFailures++;
+      console.warn("Action delete failed:", stale.id, err);
+
+      enqueueSyncItem({
+        type: "action_delete",
+        id: stale.id,
+        payload: { id: stale.id }
+      });
+    }
+  }
+
+  // 8️⃣ Feedback
+  if (!reportFailed && actionFailures === 0) {
+    showToast?.(isNewReport ? "☁️ Synced to cloud" : "☁️ Report and actions updated", "success");
     refreshCustomerHistory?.();
     return;
   }
 
-  if (!reportFailed || failedActions.length < actions.length) {
-    showToast?.("⚠️ Saved locally — some items queued for sync", "warning");
+  if (!reportFailed || actionFailures === 0) {
+    showToast?.("⚠️ Saved locally — some sync items queued", "warning");
   } else {
     showToast?.("⚠️ Saved locally — queued for sync", "warning");
   }
