@@ -4387,6 +4387,66 @@ function formatTextForPdf(text) {
   }
 }
 
+async function getPhotoItemsForPdf(bucket) {
+  // Reuse your working download helper
+  const items = await getDownloadItems(bucket);
+  const out = [];
+
+  for (const item of items) {
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({
+        width: img.naturalWidth || 1,
+        height: img.naturalHeight || 1
+      });
+      img.onerror = () => resolve({ width: 1, height: 1 });
+      img.src = item.src;
+    });
+
+    out.push({
+      ...item,
+      width: dims.width,
+      height: dims.height
+    });
+  }
+
+  return out;
+}
+
+async function buildSmartPhotoPagesFromItems(items, label, forceNewPage = false) {
+  if (!Array.isArray(items) || !items.length) return "";
+
+  const orient = (item) => (item.height > item.width ? "portrait" : "landscape");
+
+  let html = "";
+
+  if (forceNewPage) html += `<div class="pb"></div>`;
+
+  for (let i = 0; i < items.length; i += 2) {
+    if (i > 0) html += `<div class="pb"></div>`;
+
+    const img1 = items[i];
+    const img2 = items[i + 1];
+
+    html += `
+      <section class="photo-sheet">
+        ${i === 0 ? `<div class="photo-heading">${label} Photos</div>` : ``}
+
+        <div class="photo-slot">
+          <img src="${img1.src}" alt="${label} ${i + 1}" class="${orient(img1)}">
+        </div>
+
+        ${img2 ? `
+        <div class="photo-slot">
+          <img src="${img2.src}" alt="${label} ${i + 2}" class="${orient(img2)}">
+        </div>` : ``}
+      </section>
+    `;
+  }
+
+  return html;
+}
+
 /* ---------- Prepare clone for PDF (smart photo pagination + no blanks) ---------- */
 async function prepareForPdf(clone, sigData) {
   // Remove UI-only elements
