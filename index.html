@@ -8922,6 +8922,14 @@ document.addEventListener("DOMContentLoaded", () => {
     saveSignature("sig1");
     saveSignature("sig2");
 
+    const isPWA =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone ||
+      document.referrer.startsWith("android-app://");
+
+    // Open immediately while user gesture is still alive
+    const preOpenedTarget = isPWA ? null : window.open("", "_blank");
+
     let host = null;
 
     try {
@@ -8968,14 +8976,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Re-open printable target after successful save so it behaves like before
       try {
-        const isPWA =
-          window.matchMedia("(display-mode: standalone)").matches ||
-          window.navigator.standalone ||
-          document.referrer.startsWith("android-app://");
-
-        const w = isPWA ? null : window.open("", "_blank");
-        const target = await buildPdf(w);
-
+        const target = await buildPdf(preOpenedTarget);
         window.lastBuiltPdfWindow = target;
 
         setTimeout(() => {
@@ -8991,12 +8992,13 @@ document.addEventListener("DOMContentLoaded", () => {
             console.warn("⚠️ Auto print unavailable:", err);
             showToast("⚠️ PDF saved, but preview/print did not open", "warning");
           }
-        }, 800);
+        }, 200);
 
       } catch (err) {
         console.warn("⚠️ Could not open printable target after save:", err);
         showToast("⚠️ PDF saved, but preview/print did not open", "warning");
       }
+
 
       bump("success");
       showToast("✅ PDF saved", "success");
