@@ -3218,12 +3218,12 @@ function exportRevenueExcel() {
     ProjectNumber: r.projectNo || "",
     PONumber: r.poNumber || "",
     VisitType: r.visitType || "",
-    ProjectDescription: r.projectDesc || "",
-    ReportDetails: r.report || "",
-    PartsUsed: r.partsUsed || "",
-    PartsRequired: r.partsReq || "",
+    ProjectDescription: r.projectDesc || r.projectDescription || r.project_description || "",
+    ReportDetails: r.report || r.reportDetails || r.report_details || r.reportText || "",
+    PartsUsed: r.partsUsed || r.parts_used || "",
+    PartsRequired: r.partsReq || r.partsRequired || r.parts_required || "",
     FollowUpType: formatFollowUpType(r.followUpType) || "",
-    FollowUpNotes: r.followUpNotes || "",
+    FollowUpNotes: r.followUpNotes || r.follow_up_notes || "",
     FollowUpDueDate: r.followUpDueDate || "",
     VisitChargeAmount: r.visitChargeAmount || "",
     VisitChargeCurrency: r.visitChargeCurrency || "",
@@ -8631,6 +8631,24 @@ async function deleteActionInCloud(id) {
   }
 }
 
+function getLocalReportById(id) {
+  const reports = getAllLocalReports?.() || [];
+  return reports.find(r => String(r.id || "") === String(id || "")) || null;
+}
+
+function markLocalReportCloudSaved(id, saved = true) {
+  const report = getLocalReportById(id);
+  if (!report) return null;
+
+  const updated = {
+    ...report,
+    cloudSaved: !!saved,
+    cloudSavedAt: saved ? new Date().toISOString() : (report.cloudSavedAt || "")
+  };
+
+  return upsertLocalReport(updated);
+}
+
 // send a report log entry to the database
 async function syncReportToCloud(report) {
   if (!report) return;
@@ -8704,7 +8722,12 @@ async function commitReportSave() {
 
   const meta = readReportMetaFromForm();
   const existingId = getActiveReportId();
-  const isNewReport = !existingId;
+  if (existingId && !meta.id) {
+    meta.id = existingId;
+  }
+
+  const localExisting = meta.id ? getLocalReportById(meta.id) : null;
+  const shouldCreateInCloud = !(localExisting?.cloudSaved === true);
 
   if (existingId && !meta.id) {
     meta.id = existingId;
@@ -8771,17 +8794,19 @@ async function commitReportSave() {
   let actionFailures = 0;
 
   try {
-    if (isNewReport) {
+    if (shouldCreateInCloud) {
       await syncReportToCloud(report);
+      markLocalReportCloudSaved(report.id, true);
     } else {
       await patchReportInCloud(report.id, report);
+      markLocalReportCloudSaved(report.id, true);
     }
   } catch (err) {
     reportFailed = true;
     console.warn("Report sync failed:", err);
 
     enqueueSyncItem({
-      type: isNewReport ? "report" : "report_patch",
+      type: shouldCreateInCloud ? "report" : "report_patch",
       id: report.id,
       payload: report
     });
