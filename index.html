@@ -8729,10 +8729,6 @@ async function commitReportSave() {
   const localExisting = meta.id ? getLocalReportById(meta.id) : null;
   const shouldCreateInCloud = !(localExisting?.cloudSaved === true);
 
-  if (existingId && !meta.id) {
-    meta.id = existingId;
-  }
-
   // 1️⃣ Upsert report locally
   const report = upsertLocalReport(meta);
   setActiveReportId(report.id);
@@ -8785,7 +8781,7 @@ async function commitReportSave() {
 
   window.renderOutstandingActions?.();
 
-  console.log("Report:", report.id, isNewReport ? "(new)" : "(update)");
+  console.log("Report:", report.id, shouldCreateInCloud ? "(new)" : "(update)");
   console.log("Desired actions:", [...desiredById.values()]);
   console.log("Stale actions:", staleActions);
 
@@ -8850,7 +8846,7 @@ async function commitReportSave() {
 
   // 8️⃣ Feedback
   if (!reportFailed && actionFailures === 0) {
-    showToast?.(isNewReport ? "☁️ Synced to cloud" : "☁️ Report and actions updated", "success");
+    showToast?.(shouldCreateInCloud ? "☁️ Synced to cloud" : "☁️ Report and actions updated", "success");
     refreshCustomerHistory?.();
     return;
   }
@@ -9040,6 +9036,11 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("❌ PDF build failed:", err);
       bump("error");
       showToast("❌ PDF failed to generate", "error");
+      try {
+        if (preOpenedTarget && !preOpenedTarget.closed) {
+          preOpenedTarget.close();
+        }
+      } catch {}
       window.lastBuiltPdfWindow = null;
     } finally {
       try { host?.remove?.(); } catch {}
