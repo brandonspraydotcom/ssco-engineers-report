@@ -8740,7 +8740,12 @@ async function commitReportSave() {
   const desired = [];
 
   // Follow-up actions
-  const followUpActions = addOutstandingAction(report) || [];
+  const builtFollowUps = await Promise.resolve(addOutstandingAction(report));
+
+  const followUpActions = Array.isArray(builtFollowUps)
+    ? builtFollowUps
+    : (builtFollowUps ? [builtFollowUps] : []);
+
   desired.push(...followUpActions.map(a => ({ ...a, reportId: report.id })));
 
   // PO action
