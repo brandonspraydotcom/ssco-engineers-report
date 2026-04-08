@@ -1973,6 +1973,32 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
+<!-- ========================= -->
+<!-- 👁️ Report Preview Modal -->
+<!-- ========================= -->
+<div id="reportPreviewModal"
+     style="display:none;position:fixed;inset:0;z-index:6100;
+            background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
+            -webkit-backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;opacity:0;
+            transition:opacity .25s ease;">
+  <div id="reportPreviewBox"
+       style="background:rgba(30,30,31,0.97);
+              border-radius:16px;padding:20px 18px;
+              width:92%;max-width:720px;max-height:85vh;overflow:auto;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;
+              transition:all .25s ease;">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+      <h3 style="margin:0;">👁️ Report Preview</h3>
+      <button id="closeReportPreview" class="btn ghost" type="button">✕</button>
+    </div>
+
+    <div id="reportPreviewContent" style="margin-top:14px;"></div>
+  </div>
+</div>
+
 <!-- 🧑‍💼 Admin Add User Modal -->
 <div id="addUserModal"
      style="display:none;position:fixed;inset:0;z-index:5400;
@@ -12761,6 +12787,187 @@ document.addEventListener("DOMContentLoaded", () => {
     catch { return String(iso); }
   }
 
+  function getAllLocalReports() {
+    try {
+      if (window.LS_KEYS?.reports) {
+        const reports = lsReadArray(window.LS_KEYS.reports);
+        if (Array.isArray(reports) && reports.length) return reports;
+      }
+    } catch {}
+
+    try {
+      const legacy = JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+      if (Array.isArray(legacy)) return legacy;
+    } catch {}
+
+    return [];
+  }
+
+  function getLocalReportById(id) {
+    return getAllLocalReports().find(r => String(r?.id || "") === String(id || "")) || null;
+  }
+
+  function fmtPreviewDate(value) {
+    if (!value) return "—";
+    try {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+        return new Date(value + "T00:00:00").toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric"
+        });
+      }
+      return new Date(value).toLocaleString("en-GB");
+    } catch {
+      return String(value);
+    }
+  }
+
+  function escHtml(v) {
+    return window.escapeHtml ? window.escapeHtml(v) : String(v ?? "");
+  }
+
+  function renderReportPreviewContent(r) {
+    const company =
+      (r.companyName && String(r.companyName).trim()) ||
+      (r.custCompany && String(r.custCompany).trim()) ||
+      "—";
+
+    const addressLines = [
+      r.addr1, r.addr2, r.city, r.region, r.postal, r.country
+    ].filter(Boolean).map(x => `<div>${escHtml(x)}</div>`).join("");
+
+    const chargeAmt = parseFloat(r.visitChargeAmount || 0) || 0;
+    const chargeCur = (r.visitChargeCurrency || "£").trim();
+    const chargeText = chargeAmt > 0 ? `${chargeCur}${chargeAmt.toFixed(2)}` : "—";
+
+    const followUpTypes = Array.isArray(r.followUpTypes)
+      ? r.followUpTypes.filter(Boolean).map(t => formatFollowUpType(t)).join(", ")
+    : (r.followUpType ? formatFollowUpType(r.followUpType) : "—");
+
+    return `
+      <div style="display:grid;gap:14px;">
+
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+        <div style="font-size:18px;font-weight:700;color:#fff;">${escHtml(company)}</div>
+        <div style="font-size:13px;color:#aaa;margin-top:4px;">
+          Saved: <span style="color:#fff">${escHtml(fmtDateTime?.(r.createdAt) || fmtPreviewDate(r.createdAt))}</span>
+          ${r.updatedAt ? ` • Updated: <span style="color:#fff">${escHtml(fmtDateTime?.(r.updatedAt) || fmtPreviewDate(r.updatedAt))}</span>` : ``}
+        </div>
+      </div>
+
+      <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+        <div style="font-weight:700;color:#eee;margin-bottom:8px;">Job Details</div>
+        <div style="font-size:13px;line-height:1.55;color:#ccc;">
+          <div><strong>Engineer:</strong> ${escHtml(r.engineer || "—")}</div>
+          <div><strong>Date:</strong> ${escHtml(r.date || "—")}</div>
+          <div><strong>Visit Type:</strong> ${escHtml(r.visitType || "—")}</div>
+          <div><strong>Project Number:</strong> ${escHtml(r.projectNo || "—")}</div>
+          <div><strong>PO Number:</strong> ${escHtml(r.poNumber || "—")}</div>
+          <div><strong>Charge:</strong> ${escHtml(chargeText)}</div>
+          <div><strong>PO Status:</strong> ${
+            r.poReceived ? "PO Received ✅" :
+            r.poRequired ? "PO Required ⚠️" :
+            "—"
+          }</div>
+        </div>
+      </div>
+
+      <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+        <div style="font-weight:700;color:#eee;margin-bottom:8px;">People & Site</div>
+        <div style="font-size:13px;line-height:1.55;color:#ccc;">
+          <div><strong>Sales Engineer:</strong> ${escHtml(r.salesEngineer || "—")}</div>
+          <div><strong>Sales Email:</strong> ${escHtml(r.salesEmail || "—")}</div>
+          <div><strong>Site Contact:</strong> ${escHtml(r.customerName || "—")}</div>
+          <div><strong>Site Contact Email:</strong> ${escHtml(r.customerEmail || "—")}</div>
+          <div><strong>Company:</strong> ${escHtml(company)}</div>
+          ${addressLines ? `<div style="margin-top:6px;"><strong>Address:</strong><div style="margin-top:4px;">${addressLines}</div></div>` : ``}
+        </div>
+      </div>
+
+      ${r.projectDesc ? `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+          <div style="font-weight:700;color:#eee;margin-bottom:8px;">Project Description</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.projectDesc)}</div>
+        </div>
+      ` : ``}
+
+      ${r.report ? `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+          <div style="font-weight:700;color:#eee;margin-bottom:8px;">Report Details</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.report)}</div>
+        </div>
+      ` : ``}
+
+      ${r.partsUsed ? `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+          <div style="font-weight:700;color:#eee;margin-bottom:8px;">Parts Used</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.partsUsed)}</div>
+        </div>
+      ` : ``}
+
+      ${r.partsReq ? `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+          <div style="font-weight:700;color:#eee;margin-bottom:8px;">Parts Required</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.partsReq)}</div>
+        </div>
+      ` : ``}
+
+      ${
+        (followUpTypes && followUpTypes !== "—") || r.followUpNotes || r.followUpDueDate
+          ? `
+        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+          <div style="font-weight:700;color:#eee;margin-bottom:8px;">Follow-up</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;">
+            <div><strong>Types:</strong> ${escHtml(followUpTypes || "—")}</div>
+            <div><strong>Due:</strong> ${escHtml(r.followUpDueDate || "—")}</div>
+            ${r.followUpNotes ? `<div style="margin-top:6px;white-space:pre-wrap;"><strong>Notes:</strong> ${escHtml(r.followUpNotes)}</div>` : ``}
+          </div>
+        </div>
+      ` : ``
+      }
+
+    </div>
+  `;
+  }
+
+window.openReportPreview = function openReportPreview(reportId) {
+  const modal = document.getElementById("reportPreviewModal");
+  const box = document.getElementById("reportPreviewBox");
+  const content = document.getElementById("reportPreviewContent");
+
+  if (!modal || !box || !content) return;
+
+  const report = getLocalReportById(reportId);
+  if (!report) {
+    showToast?.("⚠️ Could not load report preview", "warning");
+    return;
+  }
+
+  content.innerHTML = renderReportPreviewContent(report);
+
+  modal.style.display = "flex";
+  requestAnimationFrame(() => {
+    modal.style.opacity = "1";
+    box.style.transform = "scale(1)";
+    box.style.opacity = "1";
+  });
+}
+
+window.closeReportPreview = function closeReportPreview() {
+  const modal = document.getElementById("reportPreviewModal");
+  const box = document.getElementById("reportPreviewBox");
+  if (!modal || !box) return;
+
+  modal.style.opacity = "0";
+  box.style.transform = "scale(0.85)";
+  box.style.opacity = "0";
+
+  setTimeout(() => {
+    modal.style.display = "none";
+  }, 250);
+}
+
   function renderReports(items) {
     if (!items || !items.length) {
       listEl.innerHTML = `
@@ -12796,8 +13003,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const esc = window.escapeHtml ? window.escapeHtml : (s) => String(s ?? "");
 
-      return `
-        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+        return `
+  <div
+    data-rep-preview-id="${esc(r.id)}"
+    role="button"
+    tabindex="0"
+    style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);cursor:pointer;transition:background .2s ease;"
+    onmouseover="this.style.background='rgba(255,255,255,0.07)'"
+    onmouseout="this.style.background='rgba(255,255,255,0.04)'">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
             <div style="flex:1;">
               <div style="font-weight:700;color:#eee;">${esc(title)}</div>
@@ -13179,6 +13392,39 @@ window.fetchReports = fetchReports;
 
   });
 
+document.addEventListener("click", (e) => {
+  // Don't open preview if user clicked delete
+  if (e.target.closest("[data-rep-del-id]")) return;
+
+  const card = e.target.closest("[data-rep-preview-id]");
+  if (!card) return;
+
+  const id = card.getAttribute("data-rep-preview-id");
+  if (!id) return;
+
+  window.openReportPreview?.(id);
+});
+
+document.addEventListener("keydown", (e) => {
+  const card = e.target.closest?.("[data-rep-preview-id]");
+  if (!card) return;
+
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    const id = card.getAttribute("data-rep-preview-id");
+    if (id) window.openReportPreview?.(id);
+  }
+});
+
+document.getElementById("closeReportPreview")?.addEventListener("click", () => {
+  window.closeReportPreview?.();
+});
+
+document.getElementById("reportPreviewModal")?.addEventListener("click", (e) => {
+  if (e.target === document.getElementById("reportPreviewModal")) {
+    window.closeReportPreview?.();
+  }
+});
 </script>
 
 <script>
