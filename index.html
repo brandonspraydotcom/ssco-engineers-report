@@ -8528,10 +8528,14 @@ async function patchReportInCloud(id, patch) {
     body: JSON.stringify(patch)
   });
 
+  const raw = await res.text().catch(() => "");
+  console.log("PATCH /reports/" + id + " ->", res.status, raw);
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error("Report patch failed: " + res.status + " " + text);
+    throw new Error("Report patch failed: " + res.status + " " + raw);
   }
+
+  try { return JSON.parse(raw); } catch { return raw; }
 }
 
 // --- Find & update report locally ---
@@ -8637,10 +8641,14 @@ async function syncReportToCloud(report) {
     body: JSON.stringify(report)
   });
 
+  const raw = await res.text().catch(() => "");
+  console.log("POST /reports ->", res.status, raw);
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error("Report sync failed: " + res.status + " " + text);
+    throw new Error("Report sync failed: " + res.status + " " + raw);
   }
+
+  try { return JSON.parse(raw); } catch { return raw; }
 }
 
 const ACTIVE_REPORT_ID_KEY = "activeReportId";
