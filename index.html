@@ -1977,7 +1977,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <!-- 👁️ Report Preview Modal -->
 <!-- ========================= -->
 <div id="reportPreviewModal"
-     style="display:none;position:fixed;inset:0;z-index:6100;
+     style="display:none;position:fixed;inset:0;z-index:7500;
             background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);
             -webkit-backdrop-filter:blur(6px);
             align-items:center;justify-content:center;opacity:0;
@@ -8658,8 +8658,22 @@ async function deleteActionInCloud(id) {
 }
 
 function getLocalReportById(id) {
-  const reports = getAllLocalReports?.() || [];
-  return reports.find(r => String(r.id || "") === String(id || "")) || null;
+  const target = String(id || "").trim();
+  if (!target) return null;
+
+  // 1) Prefer the same merged dataset used by the Reports Log UI
+  const merged = Array.isArray(window.__reportsMergedCache)
+    ? window.__reportsMergedCache
+    : [];
+  const fromMerged = merged.find(r => String(r?.id || "").trim() === target);
+  if (fromMerged) return fromMerged;
+
+  // 2) Fallback to local reports
+  const local = getAllLocalReports();
+  const fromLocal = local.find(r => String(r?.id || "").trim() === target);
+  if (fromLocal) return fromLocal;
+
+  return null;
 }
 
 function markLocalReportCloudSaved(id, saved = true) {
@@ -12787,68 +12801,84 @@ document.addEventListener("DOMContentLoaded", () => {
     catch { return String(iso); }
   }
 
-  function getAllLocalReports() {
-    try {
-      if (window.LS_KEYS?.reports) {
-        const reports = lsReadArray(window.LS_KEYS.reports);
-        if (Array.isArray(reports) && reports.length) return reports;
-      }
-    } catch {}
-
-    try {
-      const legacy = JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
-      if (Array.isArray(legacy)) return legacy;
-    } catch {}
-
-    return [];
-  }
-
-  function getLocalReportById(id) {
-    return getAllLocalReports().find(r => String(r?.id || "") === String(id || "")) || null;
-  }
-
-  function fmtPreviewDate(value) {
-    if (!value) return "—";
-    try {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-        return new Date(value + "T00:00:00").toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "short",
-          year: "numeric"
-        });
-      }
-      return new Date(value).toLocaleString("en-GB");
-    } catch {
-      return String(value);
+function getAllLocalReports() {
+  try {
+    if (window.LS_KEYS?.reports) {
+      const reports = lsReadArray(window.LS_KEYS.reports);
+      if (Array.isArray(reports) && reports.length) return reports;
     }
+  } catch {}
+
+  try {
+    const legacy = JSON.parse(localStorage.getItem("ssco_reports_log") || "[]");
+    if (Array.isArray(legacy)) return legacy;
+  } catch {}
+
+  return [];
+}
+
+// ✅ Preview should use the exact reports currently rendered in the modal
+window.__reportPreviewIndex = new Map();
+
+function getPreviewReportById(id) {
+  return window.__reportPreviewIndex.get(String(id || "").trim()) || null;
+}
+
+function fmtPreviewDate(value) {
+  if (!value) return "—";
+  try {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+      return new Date(value + "T00:00:00").toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    }
+    return new Date(value).toLocaleString("en-GB");
+  } catch {
+    return String(value);
   }
+}
 
-  function escHtml(v) {
-    return window.escapeHtml ? window.escapeHtml(v) : String(v ?? "");
-  }
+function escHtml(v) {
+  return window.escapeHtml ? window.escapeHtml(v) : String(v ?? "");
+}
 
-  function renderReportPreviewContent(r) {
-    const company =
-      (r.companyName && String(r.companyName).trim()) ||
-      (r.custCompany && String(r.custCompany).trim()) ||
-      "—";
+function renderReportPreviewContent(r) {
+  const company =
+    (r.companyName && String(r.companyName).trim()) ||
+    (r.custCompany && String(r.custCompany).trim()) ||
+    "—";
 
-    const addressLines = [
-      r.addr1, r.addr2, r.city, r.region, r.postal, r.country
-    ].filter(Boolean).map(x => `<div>${escHtml(x)}</div>`).join("");
+  const addressLines = [
+    r.addr1, r.addr2, r.city, r.region, r.postal, r.country
+  ].filter(Boolean).map(x => `<div>${escHtml(x)}</div>`).join("");
 
-    const chargeAmt = parseFloat(r.visitChargeAmount || 0) || 0;
-    const chargeCur = (r.visitChargeCurrency || "£").trim();
-    const chargeText = chargeAmt > 0 ? `${chargeCur}${chargeAmt.toFixed(2)}` : "—";
+  const chargeAmt = parseFloat(r.visitChargeAmount || 0) || 0;
+  const chargeCur = (r.visitChargeCurrency || "£").trim();
+  const chargeText = chargeAmt > 0 ? `${chargeCur}${chargeAmt.toFixed(2)}` : "—";
 
-    const followUpTypes = Array.isArray(r.followUpTypes)
-      ? r.followUpTypes.filter(Boolean).map(t => formatFollowUpType(t)).join(", ")
+  const followUpTypes = Array.isArray(r.followUpTypes)
+    ? r.followUpTypes.filter(Boolean).map(t => formatFollowUpType(t)).join(", ")
     : (r.followUpType ? formatFollowUpType(r.followUpType) : "—");
 
-    return `
-      <div style="display:grid;gap:14px;">
+  // ✅ Same fallback logic as export
+  const projectDescText =
+    r.projectDesc || r.projectDescription || r.project_description || "";
 
-        <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
+  const reportDetailsText =
+    r.report || r.reportDetails || r.report_details || r.reportText || "";
+
+  const partsUsedText =
+    r.partsUsed || r.parts_used || "";
+
+  const partsReqText =
+    r.partsReq || r.partsRequired || r.parts_required || "";
+
+  return `
+    <div style="display:grid;gap:14px;">
+
+      <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
         <div style="font-size:18px;font-weight:700;color:#fff;">${escHtml(company)}</div>
         <div style="font-size:13px;color:#aaa;margin-top:4px;">
           Saved: <span style="color:#fff">${escHtml(fmtDateTime?.(r.createdAt) || fmtPreviewDate(r.createdAt))}</span>
@@ -12885,31 +12915,31 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       </div>
 
-      ${r.projectDesc ? `
+      ${projectDescText ? `
         <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
           <div style="font-weight:700;color:#eee;margin-bottom:8px;">Project Description</div>
-          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.projectDesc)}</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(projectDescText)}</div>
         </div>
       ` : ``}
 
-      ${r.report ? `
+      ${reportDetailsText ? `
         <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
           <div style="font-weight:700;color:#eee;margin-bottom:8px;">Report Details</div>
-          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.report)}</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(reportDetailsText)}</div>
         </div>
       ` : ``}
 
-      ${r.partsUsed ? `
+      ${partsUsedText ? `
         <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
           <div style="font-weight:700;color:#eee;margin-bottom:8px;">Parts Used</div>
-          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.partsUsed)}</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(partsUsedText)}</div>
         </div>
       ` : ``}
 
-      ${r.partsReq ? `
+      ${partsReqText ? `
         <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);">
           <div style="font-weight:700;color:#eee;margin-bottom:8px;">Parts Required</div>
-          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(r.partsReq)}</div>
+          <div style="font-size:13px;line-height:1.55;color:#ccc;white-space:pre-wrap;">${escHtml(partsReqText)}</div>
         </div>
       ` : ``}
 
@@ -12929,16 +12959,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     </div>
   `;
-  }
+}
 
 window.openReportPreview = function openReportPreview(reportId) {
   const modal = document.getElementById("reportPreviewModal");
   const box = document.getElementById("reportPreviewBox");
   const content = document.getElementById("reportPreviewContent");
+  const reportsBox = document.getElementById("reportsLogBox");
+  if (reportsBox) reportsBox.style.filter = "blur(1px) brightness(0.85)";
 
   if (!modal || !box || !content) return;
 
-  const report = getLocalReportById(reportId);
+  const report = getPreviewReportById(reportId);
   if (!report) {
     showToast?.("⚠️ Could not load report preview", "warning");
     return;
@@ -12947,6 +12979,7 @@ window.openReportPreview = function openReportPreview(reportId) {
   content.innerHTML = renderReportPreviewContent(report);
 
   modal.style.display = "flex";
+  window.lockScroll?.();
   requestAnimationFrame(() => {
     modal.style.opacity = "1";
     box.style.transform = "scale(1)";
@@ -12957,6 +12990,10 @@ window.openReportPreview = function openReportPreview(reportId) {
 window.closeReportPreview = function closeReportPreview() {
   const modal = document.getElementById("reportPreviewModal");
   const box = document.getElementById("reportPreviewBox");
+  const reportsModal = document.getElementById("reportsLogModal");
+  const reportsBox = document.getElementById("reportsLogBox");
+  if (reportsBox) reportsBox.style.filter = "";
+
   if (!modal || !box) return;
 
   modal.style.opacity = "0";
@@ -12965,10 +13002,27 @@ window.closeReportPreview = function closeReportPreview() {
 
   setTimeout(() => {
     modal.style.display = "none";
+
+    // keep scroll locked if Reports Log is still open underneath
+    if (!(reportsModal && reportsModal.style.display === "flex")) {
+      window.unlockScroll?.();
+    }
   }, 250);
+};
+
+window.__reportPreviewIndex = new Map();
+
+function getPreviewReportById(id) {
+  return window.__reportPreviewIndex.get(String(id || "").trim()) || null;
 }
 
   function renderReports(items) {
+    window.__reportPreviewIndex = new Map(
+      (items || [])
+        .filter(r => r && r.id)
+        .map(r => [String(r.id).trim(), r])
+    );
+
     if (!items || !items.length) {
       listEl.innerHTML = `
         <div style="padding:12px;border-radius:12px;background:rgba(255,255,255,0.04);color:#ccc;">
@@ -13163,38 +13217,62 @@ async function fetchReports() {
   }
 
   // prefer the report version that actually contains new fields
+  function hasRichReportFields(r) {
+    if (!r) return false;
+
+    return !!(
+      String(r.report || r.reportDetails || r.report_details || r.reportText || "").trim() ||
+      String(r.projectDesc || r.projectDescription || r.project_description || "").trim() ||
+      String(r.partsUsed || r.parts_used || "").trim() ||
+      String(r.partsReq || r.partsRequired || r.parts_required || "").trim()
+    );
+  }
+
   function hasChargeFields(r) {
-    return r && (r.visitChargeAmount != null || r.visitChargeCurrency != null || r.poRequired != null || r.poReceived != null);
+    return r && (
+      r.visitChargeAmount != null ||
+      r.visitChargeCurrency != null ||
+      r.poRequired != null ||
+      r.poReceived != null
+    );
   }
 
   function mergeReportsPreferRicher(cloudItems, localItems) {
     const map = new Map();
 
-    // start with cloud
     (cloudItems || []).forEach(r => {
       if (r?.id) map.set(r.id, r);
     });
 
-    // overlay local if richer or cloud missing
     (localItems || []).forEach(lr => {
       if (!lr?.id) return;
-      const cr = map.get(lr.id);
 
+      const cr = map.get(lr.id);
       if (!cr) {
         map.set(lr.id, lr);
         return;
       }
 
-      const cloudRich = hasChargeFields(cr);
-      const localRich = hasChargeFields(lr);
+      const cloudChargeRich = hasChargeFields(cr);
+      const localChargeRich = hasChargeFields(lr);
 
-      // if local has the new fields and cloud doesn’t, prefer local
-      if (localRich && !cloudRich) {
+      const cloudNarrativeRich = hasRichReportFields(cr);
+      const localNarrativeRich = hasRichReportFields(lr);
+
+      // Prefer local if it has better narrative fields
+      if (localNarrativeRich && !cloudNarrativeRich) {
         map.set(lr.id, lr);
-      } else {
-        // otherwise keep cloud (or you can always prefer local if you want)
-        map.set(lr.id, cr);
+        return;
       }
+
+      // Otherwise prefer local if it has charge/PO fields and cloud doesn't
+      if (localChargeRich && !cloudChargeRich) {
+        map.set(lr.id, lr);
+        return;
+      }
+
+      // Otherwise keep cloud
+      map.set(lr.id, cr);
     });
 
     return Array.from(map.values());
