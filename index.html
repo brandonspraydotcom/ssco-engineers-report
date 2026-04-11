@@ -1246,6 +1246,7 @@ document.addEventListener("DOMContentLoaded", () => {
 <div id="testModeContainer" style="position:absolute;top:50px;right:12px;font-size:12px;z-index:999;">
   <label><input type="checkbox" id="testModeToggle"> Test Mode</label>
 </div>
+ <div id="engineersView">
   <div class="container" id="formContainer">
     <h1>Engineers Report</h1>
     <h2>Spraying Systems Co.</h2>
@@ -1655,6 +1656,148 @@ document.addEventListener("DOMContentLoaded", () => {
   <label>Developed By Brandon Phelps</label>
 </div>
 
+</div> <!-- end #formContainer -->
+</div> <!-- end #engineersView -->
+
+<!-- ========================= -->
+<!-- ⚠️ RAMS VIEW (placeholder) -->
+<!-- ========================= -->
+<div id="ramsView" class="container" style="display:none;">
+  <h1>RAMS</h1>
+  <h2>Spraying Systems Co.</h2>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Planned Visit Date</label>
+        <input id="ramsVisitDate" type="date" style="height:22px;max-width:94%;">
+      </div>
+      <div>
+        <label>Engineer</label>
+        <select id="ramsEngineer">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Sales Engineer</label>
+        <select id="ramsSalesEngineer">
+          <option value="">-- Select --</option>
+        </select>
+      </div>
+      <div>
+        <label>Sales Engineer Email</label>
+        <input id="ramsSalesEmail" type="text" placeholder="name.surname@spray.com">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>System Category</label>
+        <select id="ramsSystemCategory">
+          <option value="">-- Select --</option>
+          <option value="industrial">Industrial</option>
+          <option value="food">Food</option>
+        </select>
+      </div>
+      <div>
+        <label>System Type</label>
+        <select id="ramsSystemType">
+          <option value="">-- Select category first --</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Company</label>
+
+      <gmpx-place-autocomplete
+        id="ramsCompany"
+        placeholder="Company"
+        style="
+          display:block;
+          width:100%;
+          height:46px;
+          border-radius:10px;
+          background:#161616;
+          color:#eee;
+          font-size:16px;
+          padding:12px;
+          border:1px solid rgba(255,255,255,0.06);
+          --gmpx-color-surface:#161616;
+          --gmpx-color-on-surface:#fff;
+          --gmpx-color-outline:rgba(255,255,255,0.08);
+          --gmpx-color-primary:#1ea64a;
+          --gmpx-border-radius:10px;
+        ">
+      </gmpx-place-autocomplete>
+
+      <input id="ramsCompanyHidden" type="hidden">
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Site Contact Name</label>
+        <input id="ramsCustomerName" type="text" placeholder="Site contact">
+      </div>
+      <div>
+        <label>Site Contact Email</label>
+        <input id="ramsCustomerEmail" type="text" placeholder="email address">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Address Line 1</label>
+        <input id="ramsAddr1" type="text" placeholder="Address line 1">
+      </div>
+      <div>
+        <label>Address Line 2</label>
+        <input id="ramsAddr2" type="text" placeholder="Address line 2">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>City / Town</label>
+        <input id="ramsCity" type="text" placeholder="City / Town">
+      </div>
+      <div>
+        <label>Region</label>
+        <input id="ramsRegion" type="text" placeholder="Region">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Postal Code</label>
+        <input id="ramsPostal" type="text" placeholder="Postal Code">
+      </div>
+      <div>
+        <label>Country</label>
+        <input id="ramsCountry" type="text" placeholder="Country">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= -->
+<!-- 🧪 SprayAbility VIEW (placeholder) -->
+<!-- ========================= -->
+<div id="sprayabilityView" class="container" style="display:none;">
+  <h1>SprayAbility</h1>
+  <h2>Spraying Systems Co.</h2>
+
+  <div class="card">
+    <div style="font-size:20px;font-weight:700;margin-bottom:10px;">🧪 SprayAbility Form</div>
+    <div style="color:#ccc;line-height:1.6;">
+      SprayAbility form shell coming next.
+    </div>
+  </div>
+</div>
+
 <!-- ⋮ Floating Account Menu -->
 <button id="menuBtn"
         style="display:none;position:fixed;top:101px;right:14px;
@@ -1666,6 +1809,63 @@ document.addEventListener("DOMContentLoaded", () => {
                opacity:0;transform:translateY(-6px);
                transition:opacity .4s ease,transform .4s ease;
                z-index:9999;cursor:pointer;"><span style="font-size: 40px;">⋮</span></button>
+
+<!-- ⋮ Floating Document Menu -->
+<button id="docMenuBtn"
+        type="button"
+        style="display:block;position:fixed;top:101px;left:14px;
+               min-width:52px;min-height:52px;
+               background:rgba(255,255,255,0.02);
+               color:#eee;font-size:30px;border:none;border-radius:12px;
+               padding:6px 10px;backdrop-filter:blur(2px);
+               -webkit-backdrop-filter:blur(2px);
+               box-shadow:0 0 6px rgba(0,0,0,0.4);
+               opacity:0;transform:translateY(-6px);
+               transition:opacity .4s ease,transform .4s ease;
+               z-index:2147483647;cursor:pointer;
+               pointer-events:auto;touch-action:manipulation;
+               -webkit-tap-highlight-color:transparent;">
+  <span style="font-size:40px;line-height:1;">⋮</span>
+</button>
+
+<!-- ========================= -->
+<!-- 📄 Document Modal -->
+<!-- ========================= -->
+<div id="docMenuModal"
+     style="display:none;position:fixed;inset:0;
+            background:rgba(0,0,0,0.55);
+            backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+            align-items:center;justify-content:center;
+            z-index:5001;opacity:0;transition:opacity .3s ease;">
+  <div id="docMenuBox"
+       style="background:rgba(30,30,31,0.95);
+              border-radius:16px;padding:24px 22px;
+              max-width:320px;width:88%;text-align:center;
+              box-shadow:0 12px 40px rgba(0,0,0,.6);
+              transform:scale(0.85);opacity:0;
+              transition:all .25s ease;">
+    <div style="font-size:20px;margin-bottom:12px;">📄 Documents</div>
+    <p style="font-size:15px;color:#ccc;margin-bottom:16px;">
+      Switch document type
+    </p>
+
+    <button type="button" id="openEngineersDocBtn" class="btn" style="width:100%;margin-bottom:10px;">
+      📄 Engineers Report
+    </button>
+
+    <button type="button" id="openRamsDocBtn" class="btn" style="width:100%;margin-bottom:10px;">
+      ⚠️ RAMS
+    </button>
+
+    <button type="button" id="openSprayabilityDocBtn" class="btn" style="width:100%;margin-bottom:14px;">
+      🧪 SprayAbility
+    </button>
+
+    <button type="button" id="closeDocMenuBtn" class="btn ghost" style="width:100%;">
+      Close
+    </button>
+  </div>
+</div>
 
 <!-- ========================= -->
 <!-- ⚙️ Account Modal -->
@@ -2159,7 +2359,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   
 
-  </div>
 
 <script>
 /* ---------- PASTE YOUR BASE64 VALUES (include data:image/...;base64,...) ---------- */
@@ -2505,7 +2704,6 @@ window.markPdfSaved = markPdfSaved;
 window.hasSavedPdf = hasSavedPdf;
 window.clearPdfSaved = clearPdfSaved;
 
-
 // ===============================
 // STORAGE (Outstanding + Reports)
 // ===============================
@@ -2554,6 +2752,174 @@ function lsWriteArray(key, arr) {
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`;
+}
+
+// ==========================
+// 📄 DOCUMENT MODE FOUNDATION
+// ==========================
+const DOC_TYPES = {
+  ENGINEERS: "engineers_report",
+  RAMS: "rams",
+  SPRAYABILITY: "sprayability"
+};
+
+const DOC_LABELS = {
+  [DOC_TYPES.ENGINEERS]: "Engineers Report",
+  [DOC_TYPES.RAMS]: "RAMS",
+  [DOC_TYPES.SPRAYABILITY]: "SprayAbility"
+};
+
+const ACTIVE_DOC_KEY = "ssco_active_doc_type";
+
+function getActiveDocType() {
+  const saved = localStorage.getItem(ACTIVE_DOC_KEY);
+  if (saved && Object.values(DOC_TYPES).includes(saved)) return saved;
+  return DOC_TYPES.ENGINEERS;
+}
+
+function setActiveDocType(docType) {
+  if (!Object.values(DOC_TYPES).includes(docType)) return;
+  localStorage.setItem(ACTIVE_DOC_KEY, docType);
+}
+
+window.currentDocType = getActiveDocType();
+
+const RAMS_SYSTEMS = {
+  industrial: [
+    "E1850+",
+    "E2150+",
+    "E2850+",
+    "Lubrication system"
+  ],
+  food: [
+    "F1850+",
+    "F2150+",
+    "F2850+"
+  ]
+};
+
+function wireRamsSalesEmailAutofill() {
+  const ramsSales = document.getElementById("ramsSalesEngineer");
+  const ramsSalesEmail = document.getElementById("ramsSalesEmail");
+
+  if (!ramsSales || !ramsSalesEmail) return;
+
+  function updateRamsSalesEmail() {
+    const fullName = String(ramsSales.value || "").trim();
+
+    if (!fullName) {
+      ramsSalesEmail.value = "";
+      return;
+    }
+
+    const parts = fullName.toLowerCase().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      ramsSalesEmail.value = `${parts[0]}.${parts[parts.length - 1]}@spray.com`;
+    } else {
+      ramsSalesEmail.value = "";
+    }
+  }
+
+  ramsSales.addEventListener("change", updateRamsSalesEmail);
+}
+
+function wireRamsSystemTypeDropdown() {
+  const category = document.getElementById("ramsSystemCategory");
+  const type = document.getElementById("ramsSystemType");
+
+  if (!category || !type) return;
+
+  window.refreshRamsSystemTypes = function refreshRamsSystemTypes() {
+    const selected = String(category.value || "").trim().toLowerCase();
+    const options = RAMS_SYSTEMS[selected] || [];
+
+    if (!options.length) {
+      type.innerHTML = `<option value="">-- Select category first --</option>`;
+      return;
+    }
+
+    type.innerHTML =
+      `<option value="">-- Select --</option>` +
+      options.map(v => `<option value="${v}">${v}</option>`).join("");
+  };
+
+  category.addEventListener("change", window.refreshRamsSystemTypes);
+  category.addEventListener("input", window.refreshRamsSystemTypes);
+
+  window.refreshRamsSystemTypes();
+}
+
+function updateDocSwitchButtons() {
+  const btnEngineers = document.getElementById("openEngineersDocBtn");
+  const btnRams = document.getElementById("openRamsDocBtn");
+  const btnSprayability = document.getElementById("openSprayabilityDocBtn");
+
+  if (!btnEngineers || !btnRams || !btnSprayability) return;
+
+  const current = window.currentDocType || getActiveDocType();
+
+  // hide all first
+  btnEngineers.style.display = "none";
+  btnRams.style.display = "none";
+  btnSprayability.style.display = "none";
+
+  if (current === DOC_TYPES.ENGINEERS) {
+    btnRams.style.display = "block";
+    btnSprayability.style.display = "block";
+  } else if (current === DOC_TYPES.RAMS) {
+    btnEngineers.style.display = "block";
+    btnSprayability.style.display = "block";
+  } else if (current === DOC_TYPES.SPRAYABILITY) {
+    btnEngineers.style.display = "block";
+    btnRams.style.display = "block";
+  }
+}
+
+function switchDocumentType(docType) {
+  if (!Object.values(DOC_TYPES).includes(docType)) return;
+
+  window.currentDocType = docType;
+  setActiveDocType(docType);
+
+  if (docType === DOC_TYPES.RAMS) {
+    
+    const ramsSales = document.getElementById("ramsSalesEngineer");
+    if (ramsSales) {
+      ramsSales.dispatchEvent(new Event("change"));
+    }
+
+    setTimeout(() => {
+      window.refreshRamsSystemTypes?.();
+    }, 0);
+
+  }
+
+  updateDocSwitchButtons();
+  updateDocumentView();
+
+  console.log("Active document switched to:", docType);
+}
+
+function updateDocumentView() {
+  const engineersView = document.getElementById("engineersView");
+  const ramsView = document.getElementById("ramsView");
+  const sprayabilityView = document.getElementById("sprayabilityView");
+
+  if (!engineersView || !ramsView || !sprayabilityView) return;
+
+  engineersView.style.display = "none";
+  ramsView.style.display = "none";
+  sprayabilityView.style.display = "none";
+
+  const current = window.currentDocType || getActiveDocType();
+
+  if (current === DOC_TYPES.ENGINEERS) {
+    engineersView.style.display = "";
+  } else if (current === DOC_TYPES.RAMS) {
+    ramsView.style.display = "";
+  } else if (current === DOC_TYPES.SPRAYABILITY) {
+    sprayabilityView.style.display = "";
+  }
 }
 
 // ---- Follow-up checklist helper ----
@@ -5597,6 +5963,23 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("custCompany", clean);
   }
 
+  function setRamsCompanyName(name){
+    const clean = (name || "").trim();
+
+    const hidden = document.getElementById("ramsCompanyHidden");
+    const gmpx   = document.getElementById("ramsCompany");
+
+    if (hidden) hidden.value = clean;
+
+    try {
+      if (gmpx && clean) {
+        gmpx.setAttribute("value", clean);
+      }
+    } catch {}
+
+    localStorage.setItem("ramsCompany", clean);
+  }
+
   // Keep hidden/localStorage updated if user types (fallback input)
   const fallbackCompany = document.getElementById("custCompanyFallback");
   if (fallbackCompany) {
@@ -5615,6 +5998,42 @@ document.addEventListener("DOMContentLoaded", () => {
         "";
       setCompanyName(companyName);
       setTimeout(refreshCustomerHistory, 50);
+    });
+  }
+
+  const ramsCompanyField = document.getElementById("ramsCompany");
+  if (ramsCompanyField) {
+    ramsCompanyField.addEventListener("gmpx-placechange", (e) => {
+      const place = e?.detail?.place;
+      if (!place) return;
+
+      const companyName =
+        place.displayName ||
+        place.name ||
+        "";
+
+      setRamsCompanyName(companyName);
+
+      const ramsAddr1 = document.getElementById("ramsAddr1");
+      const ramsCity = document.getElementById("ramsCity");
+      const ramsRegion = document.getElementById("ramsRegion");
+      const ramsPostal = document.getElementById("ramsPostal");
+      const ramsCountry = document.getElementById("ramsCountry");
+
+      if (ramsAddr1) {
+        ramsAddr1.value = place.formattedAddress || "";
+      }
+
+      if (place.addressComponents) {
+        const comps = place.addressComponents;
+        const get = (type) =>
+          comps.find(c => c.types.includes(type))?.longText || "";
+
+        if (ramsCity) ramsCity.value = get("locality");
+        if (ramsRegion) ramsRegion.value = get("administrative_area_level_1");
+        if (ramsPostal) ramsPostal.value = get("postal_code");
+        if (ramsCountry) ramsCountry.value = get("country");
+      }
     });
   }
 
@@ -5676,6 +6095,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // On load, if we already have a saved company, re-apply it
   const savedCompany = localStorage.getItem("custCompany");
   if (savedCompany) setCompanyName(savedCompany);
+
+  const savedRamsCompany = localStorage.getItem("ramsCompany");
+  if (savedRamsCompany) setRamsCompanyName(savedRamsCompany);
 
   // Restore / resize resizeSignatureCanvases();
   restoreFields();
@@ -9303,6 +9725,12 @@ if ('serviceWorker' in navigator) {
 document.addEventListener("DOMContentLoaded", () => {
 
   window.currentReportId = getActiveReportId();
+  window.currentDocType = getActiveDocType();
+  updateDocSwitchButtons();
+  updateDocumentView();
+  
+  wireRamsSystemTypeDropdown();
+  wireRamsSalesEmailAutofill();
 
   // ✅ Your actual modal IDs
   const clearModal  = document.getElementById("clearConfirmModal");
@@ -10110,6 +10538,14 @@ const box       = document.getElementById("accountBox");
 const logoutNow = document.getElementById("logoutNow");
 const loggedInAs = document.getElementById("loggedInAs")?.querySelector("strong");
 
+const docMenuBtn = document.getElementById("docMenuBtn");
+const docModal   = document.getElementById("docMenuModal");
+const docBox     = document.getElementById("docMenuBox");
+const closeDocMenuBtn = document.getElementById("closeDocMenuBtn");
+const openEngineersDocBtn = document.getElementById("openEngineersDocBtn");
+const openRamsDocBtn = document.getElementById("openRamsDocBtn");
+const openSprayabilityDocBtn = document.getElementById("openSprayabilityDocBtn");
+
 // ✅ ONE login handler only
 function normalizeName(s) {
   return String(s || "").trim().toLowerCase();
@@ -10212,16 +10648,32 @@ if (togglePass && loginPass) {
 }
 
 // ---------- SHOW MENU ----------
-function showMenu(username, isAdminFlag=false) {
+function showMenu(username, isAdminFlag = false) {
+  const docMenuBtn = document.getElementById("docMenuBtn");
+
   if (!menuBtn) return;
 
   loggedInAs.textContent = username;
+
   menuBtn.style.display = "inline-block";
+  menuBtn.style.pointerEvents = "auto";
+
+  if (docMenuBtn) {
+    docMenuBtn.style.display = "inline-block";
+    docMenuBtn.style.pointerEvents = "auto";
+  }
 
   requestAnimationFrame(() => {
     menuBtn.style.opacity = "1";
     menuBtn.style.transform = "translateY(0)";
+
+    if (docMenuBtn) {
+      docMenuBtn.style.opacity = "1";
+      docMenuBtn.style.transform = "translateY(0)";
+    }
   });
+
+  updateAdminButtons?.();
 
   // Only Brandon Phelps gets admin panel
   if (isAdminFlag) {
@@ -10542,6 +10994,9 @@ async function refreshPeopleDropdowns() {
   populateSelect("engineer", engineers, loggedFullName || "Brandon Phelps");
   populateSelect("salesName", sales, sales[0] || "");
 
+  populateSelect("ramsEngineer", engineers, loggedFullName || "Brandon Phelps");
+  populateSelect("ramsSalesEngineer", sales, sales[0] || "");
+
   if (engSelect && loggedFullName) {
     if (engineers.includes(loggedFullName)) {
       engSelect.value = loggedFullName;
@@ -10676,10 +11131,18 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", async
 
   // === 📜 Menu visibility ===
   window.addEventListener("scroll", () => {
-    if (!menuBtn) return;
+    const docMenuBtn = document.getElementById("docMenuBtn");
     const atTop = window.scrollY < 150;
-    menuBtn.style.opacity = atTop ? "1" : "0";
-    menuBtn.style.pointerEvents = atTop ? "auto" : "none";
+
+    if (menuBtn) {
+      menuBtn.style.opacity = atTop ? "1" : "0";
+      menuBtn.style.pointerEvents = atTop ? "auto" : "none";
+    }
+
+    if (docMenuBtn) {
+      docMenuBtn.style.opacity = atTop ? "1" : "0";
+      docMenuBtn.style.pointerEvents = atTop ? "auto" : "none";
+    }
   });
 
   // === 🧊 Account Modal Handling ===
@@ -10731,6 +11194,73 @@ document.getElementById("saveSalesEngineerBtn")?.addEventListener("click", async
       showToast(`👋 See you next time, ${name}`);
       location.reload();
     }, 350);
+  });
+
+  // === 📄 Document Modal Handling ===
+  docMenuBtn?.addEventListener("click", () => {
+    updateDocSwitchButtons();
+    docModal.style.display = "flex";
+    window.lockScroll?.();
+    requestAnimationFrame(() => {
+      docModal.style.opacity = "1";
+      docBox.style.transform = "scale(1)";
+      docBox.style.opacity = "1";
+    });
+  });
+
+  docModal?.addEventListener("click", (e) => {
+    if (e.target === docModal) {
+      docModal.style.opacity = "0";
+      docBox.style.transform = "scale(0.85)";
+      docBox.style.opacity = "0";
+      setTimeout(() => {
+        docModal.style.display = "none";
+        window.unlockScroll?.();
+      }, 300);
+    }
+  });
+
+  closeDocMenuBtn?.addEventListener("click", () => {
+    docModal.style.opacity = "0";
+    docBox.style.transform = "scale(0.85)";
+    docBox.style.opacity = "0";
+    setTimeout(() => {
+      docModal.style.display = "none";
+      window.unlockScroll?.();
+    }, 300);
+  });
+
+  openEngineersDocBtn?.addEventListener("click", () => {
+    switchDocumentType(DOC_TYPES.ENGINEERS);
+    docModal.style.opacity = "0";
+    docBox.style.transform = "scale(0.85)";
+    docBox.style.opacity = "0";
+    setTimeout(() => {
+      docModal.style.display = "none";
+      window.unlockScroll?.();
+    }, 300);
+  });
+
+  openRamsDocBtn?.addEventListener("click", () => {
+    switchDocumentType(DOC_TYPES.RAMS);
+    docModal.style.opacity = "0";
+    docBox.style.transform = "scale(0.85)";
+    docBox.style.opacity = "0";
+    setTimeout(() => {
+      docModal.style.display = "none";
+      window.unlockScroll?.();
+    }, 300);
+  });
+
+  openSprayabilityDocBtn?.addEventListener("click", () => {
+    switchDocumentType(DOC_TYPES.SPRAYABILITY);
+    docModal.style.opacity = "0";
+    docBox.style.transform = "scale(0.85)";
+    docBox.style.opacity = "0";
+    setTimeout(() => {
+      docModal.style.display = "none";
+      window.unlockScroll?.();
+    }, 300);
   });
 
   // === 🧑‍💼 ADMIN ADD USER ===
