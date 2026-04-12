@@ -1660,17 +1660,29 @@ document.addEventListener("DOMContentLoaded", () => {
 </div> <!-- end #engineersView -->
 
 <!-- ========================= -->
-<!-- ⚠️ RAMS VIEW (placeholder) -->
+<!-- ⚠️ RAMS VIEW -->
 <!-- ========================= -->
 <div id="ramsView" class="container" style="display:none;">
   <h1>RAMS</h1>
   <h2>Spraying Systems Co.</h2>
 
   <div class="card">
+
     <div class="row">
       <div>
         <label>Planned Visit Date</label>
         <input id="ramsVisitDate" type="date" style="height:22px;max-width:94%;">
+      </div>
+      <div>
+        <label>Visit Duration</label>
+        <select id="ramsVisitDuration">
+          <option value="">-- Select --</option>
+          <option value="1 day">1 day</option>
+          <option value="2 days">2 days</option>
+          <option value="3 days">3 days</option>
+          <option value="4 days">4 days</option>
+          <option value="5 days">5 days</option>
+        </select>
       </div>
       <div>
         <label>Engineer</label>
@@ -1695,6 +1707,101 @@ document.addEventListener("DOMContentLoaded", () => {
 
     <div class="row" style="margin-top:10px;">
       <div>
+        <label>Company</label>
+
+        <gmpx-place-autocomplete
+          id="ramsCompanyAuto"
+          placeholder="Company"
+          style="
+            display:block;
+            width:100%;
+            height:46px;
+            border-radius:10px;
+            background:#161616;
+            color:#eee;
+            font-size:16px;
+            padding:12px;
+            border:1px solid rgba(255,255,255,0.06);
+            --gmpx-color-surface: #161616;
+            --gmpx-color-on-surface: #fff;
+            --gmpx-color-outline: rgba(255,255,255,0.08);
+            --gmpx-color-primary: #1ea64a;
+            --gmpx-border-radius: 10px;
+          ">
+         </gmpx-place-autocomplete>
+
+        <input id="ramsCompany" type="hidden">
+        <input id="ramsCompanyHidden" type="hidden">
+      </div>
+
+      <div>
+        <label>Site Contact</label>
+        <input id="ramsContactName" type="text" placeholder="Site contact name">
+      </div>
+
+      <div>
+        <label>Site Contact Email</label>
+         <input id="ramsContactEmail" type="text" placeholder="site.contact@company.com">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Address Line 1</label>
+        <input id="ramsAddr1" type="text" placeholder="Address Line 1">
+      </div>
+      <div>
+        <label>Address Line 2</label>
+        <input id="ramsAddr2" type="text" placeholder="Address Line 2">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>City / Town</label>
+        <input id="ramsCity" type="text" placeholder="City / Town">
+      </div>
+      <div>
+        <label>Region</label>
+        <input id="ramsRegion" type="text" placeholder="Region / County">
+      </div>
+      <div>
+        <label>Postal Code</label>
+        <input id="ramsPostal" type="text" placeholder="Postal Code">
+      </div>
+      <div>
+        <label>Country</label>
+        <input id="ramsCountry" type="text" placeholder="Country">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Task Type</label>
+        <select id="ramsTaskType">
+          <option value="">-- Select --</option>
+          <option value="Installation">Installation</option>
+          <option value="Commissioning">Commissioning</option>
+          <option value="Service">Service</option>
+          <option value="Inspection">Inspection</option>
+          <option value="Testing">Testing</option>
+          <option value="Training">Training</option>
+          <option value="Maintenance">Maintenance</option>
+          <option value="Repair">Repair</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Planned Works Description</label>
+      <textarea id="ramsPlannedWorks"
+                rows="4"
+                placeholder="Describe the exact job planned on site, e.g. install mixer assembly, commission spray header, replace valve, adjust timer settings, inspect control panel, verify spray performance..."
+                style="min-height:110px;"></textarea>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
         <label>System Category</label>
         <select id="ramsSystemCategory">
           <option value="">-- Select --</option>
@@ -1711,75 +1818,123 @@ document.addEventListener("DOMContentLoaded", () => {
     </div>
 
     <div style="margin-top:10px;">
-      <label>Company</label>
-
-      <gmpx-place-autocomplete
-        id="ramsCompany"
-        placeholder="Company"
-        style="
-          display:block;
-          width:100%;
-          height:46px;
-          border-radius:10px;
-          background:#161616;
-          color:#eee;
-          font-size:16px;
-          padding:12px;
-          border:1px solid rgba(255,255,255,0.06);
-          --gmpx-color-surface:#161616;
-          --gmpx-color-on-surface:#fff;
-          --gmpx-color-outline:rgba(255,255,255,0.08);
-          --gmpx-color-primary:#1ea64a;
-          --gmpx-border-radius:10px;
-        ">
-      </gmpx-place-autocomplete>
-
-      <input id="ramsCompanyHidden" type="hidden">
+      <label>System Summary</label>
+      <textarea id="ramsSystemSummary"
+                rows="6"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:140px;"></textarea>
     </div>
 
-    <div class="row" style="margin-top:10px;">
-      <div>
-        <label>Site Contact Name</label>
-        <input id="ramsCustomerName" type="text" placeholder="Site contact">
-      </div>
-      <div>
-        <label>Site Contact Email</label>
-        <input id="ramsCustomerEmail" type="text" placeholder="email address">
-      </div>
+    <div style="margin-top:10px;">
+      <label>Work Scope</label>
+      <textarea id="ramsWorkScope"
+                rows="5"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:120px;"></textarea>
     </div>
 
-    <div class="row" style="margin-top:10px;">
-      <div>
-        <label>Address Line 1</label>
-        <input id="ramsAddr1" type="text" placeholder="Address line 1">
-      </div>
-      <div>
-        <label>Address Line 2</label>
-        <input id="ramsAddr2" type="text" placeholder="Address line 2">
-      </div>
+    <div style="margin-top:10px;">
+      <label>Utilities Required</label>
+      <textarea id="ramsUtilities"
+                rows="5"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:120px;"></textarea>
     </div>
 
-    <div class="row" style="margin-top:10px;">
-      <div>
-        <label>City / Town</label>
-        <input id="ramsCity" type="text" placeholder="City / Town">
-      </div>
-      <div>
-        <label>Region</label>
-        <input id="ramsRegion" type="text" placeholder="Region">
-      </div>
+    <div style="margin-top:10px;">
+      <label>Key Hazards</label>
+      <textarea id="ramsHazards"
+                rows="6"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:140px;"></textarea>
     </div>
 
-    <div class="row" style="margin-top:10px;">
-      <div>
-        <label>Postal Code</label>
-        <input id="ramsPostal" type="text" placeholder="Postal Code">
-      </div>
-      <div>
-        <label>Country</label>
-        <input id="ramsCountry" type="text" placeholder="Country">
-      </div>
+    <div style="margin-top:10px;">
+      <label>Control Measures</label>
+      <textarea id="ramsControls"
+                rows="6"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:140px;"></textarea>
     </div>
+
+    <div style="margin-top:10px;">
+      <label>Required PPE</label>
+      <textarea id="ramsPPE"
+                rows="5"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:120px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Isolation Requirements</label>
+      <textarea id="ramsIsolation"
+                rows="5"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:120px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Emergency / Shutdown</label>
+      <textarea id="ramsEmergency"
+                rows="5"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:120px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Required Competence</label>
+      <textarea id="ramsCompetence"
+                rows="5"
+                placeholder="Will auto-fill from selected system..."
+                readonly
+                style="min-height:120px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Site Specific Notes</label>
+      <textarea id="ramsSiteNotes"
+                rows="6"
+                placeholder="Enter any customer-specific, site-specific, access, hygiene, permit, welfare or coordination notes here..."
+                style="min-height:140px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Permits / Site Controls (if known)</label>
+      <textarea id="ramsPermits"
+                rows="4"
+                placeholder="Enter any customer-advised permits, approvals, inductions, hygiene controls, escort requirements or access restrictions known before the visit. If not yet known, write: To be confirmed on arrival."
+                style="min-height:110px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label>Tools / Equipment Required</label>
+      <textarea id="ramsTools"
+                rows="4"
+                placeholder="Enter any tools, access equipment, test equipment, lifting aids, cleaning materials, hygiene items or other kit expected to be required for the visit..."
+                style="min-height:110px;"></textarea>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <span>Method Statement</span>
+        <button type="button" id="regenRamsMethodBtn" class="btn ghost" style="padding:8px 12px;font-size:14px;">
+          ↻ Generate / Refresh
+        </button>
+      </label>
+      <textarea id="ramsMethodStatement"
+                rows="8"
+                placeholder="Describe the planned work step-by-step, including arrival, isolation, inspection, service/commissioning/testing activities, reinstatement and handover..."
+                style="min-height:180px;"></textarea>
+    </div>
+
   </div>
 </div>
 
@@ -2753,7 +2908,9 @@ function lsWriteArray(key, arr) {
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`;
 }
+</script>
 
+<script>
 // ==========================
 // 📄 DOCUMENT MODE FOUNDATION
 // ==========================
@@ -2786,10 +2943,18 @@ window.currentDocType = getActiveDocType();
 
 const RAMS_SYSTEMS = {
   industrial: [
+    "2008+ PulsaJet Control Panel",
+    "2300 Spray Controller",
     "E1850+",
     "E2150+",
     "E2850+",
-    "Lubrication system"
+    "Carcass spray chilling system (E2850+)",
+    "L210/220 Multi-Lube",
+    "P400 Multi-Lube",
+    "LEOXk",
+    "LEOXk-HT",
+    "Lubrication system",
+    "PanelSpray forming line"
   ],
   food: [
     "F1850+",
@@ -2797,6 +2962,401 @@ const RAMS_SYSTEMS = {
     "F2850+"
   ]
 };
+
+const RAMS_SYSTEM_DETAILS = {
+  "2008+ PulsaJet Control Panel": {
+    family: "industrial",
+    docKey: "2008+",
+    summary: "PulsaJet control panel for spray timing / sequencing applications."
+  },
+  "2300 Spray Controller": {
+    family: "industrial",
+    docKey: "2300",
+    summary: "2300 spray controller hardware for automated spray control applications."
+  },
+  "E1850+": {
+    family: "industrial",
+    docKey: "E1850+",
+    summary: "Electric spray controller system for industrial spray applications."
+  },
+  "E2150+": {
+    family: "industrial",
+    docKey: "E2150+",
+    summary: "Electric spray controller system for industrial spray applications."
+  },
+  "E2850+": {
+    family: "industrial",
+    docKey: "E2850+",
+    summary: "Electric spray controller system for industrial spray applications."
+  },
+  "Carcass spray chilling system (E2850+)": {
+    family: "industrial",
+    docKey: "carcass-chilling-e2850",
+    summary: "Automated carcass spray chilling system.",
+    scope: "Installation, commissioning, inspection, service, testing and adjustment of the carcass spray chilling main system, water cooling tank, chiller units, headers and associated controls.",
+    utilities: [
+      "Electrical power supply",
+      "Compressed instrument air",
+      "Water supply",
+      "Chilled process water (3–5 °C)"
+    ],
+    hazards: [
+      "Electrical shock risk within control cabinets and powered equipment",
+      "Pressurised fluid / spray system hazard",
+      "Hot parts or hot fluids may be present during operation / service",
+      "Wet working environment and splashing water around process equipment",
+      "Pneumatic valve / actuator movement during operation",
+      "Residual electrical energy after isolation"
+    ],
+    controls: [
+      "Only trained and qualified personnel to operate, inspect, service or repair the system.",
+      "Isolate and lock off electrical power before opening panels or working on equipment.",
+      "Allow residual electrical energy to discharge before access to frequency drive / powered equipment.",
+      "Do not open pipework, filters or connections while the system is pressurised.",
+      "Use suitable PPE and follow site hygiene / food-area safety requirements.",
+      "Confirm electrical power, water supply and instrument air are correctly connected and within specification before operation.",
+      "Do not hose down control cabinets unless specifically rated for that duty; IP54 cabinets are splash-resistant only.",
+      "Use only approved / genuine replacement parts and maintain the system in safe working condition."
+    ],
+    ppe: [
+      "Site-mandated PPE in accordance with local rules and hygiene requirements",
+      "Suitable protective gloves for service, cleaning and maintenance tasks",
+      "Eye / face protection when working on pressurised or sprayed fluid systems",
+      "Protective footwear suitable for wet industrial / food-process areas",
+      "Any additional product-specific PPE required by the MSDS or site procedures"
+    ],
+    isolation: [
+      "Isolate and lock off the main electrical supply before opening control panels or working on equipment.",
+      "Allow residual electrical energy to discharge before access to VFD-driven or powered equipment.",
+      "Prevent accidental re-energisation while inspection, service or repair is in progress.",
+      "Isolate water, chilled water and instrument air supplies before opening filters, valves, pipework or connections.",
+      "Do not break into any pressurised part of the system until pressure is safely relieved."
+    ],
+    emergency: [
+      "Use the emergency stop to stop the complete process immediately where required.",
+      "Stop the system and place it into a safe standby state before inspection, intervention or maintenance.",
+      "Investigate and rectify active faults or alarms before returning the system to service.",
+      "Where unsafe conditions exist, stop spraying and isolate relevant utilities until the issue is resolved.",
+      "Follow site emergency, food safety and reporting procedures at all times."
+    ],
+    competence: [
+      "Work to be carried out by trained and competent Spraying Systems personnel or equivalent authorised personnel.",
+      "Operators to be familiar with the system manual, site rules and local safety procedures.",
+      "Electrical access, isolation and fault-finding to be carried out by qualified electrical personnel only.",
+      "Maintenance and repair to be carried out only by personnel authorised for this equipment.",
+      "Personnel to understand pressurised system risks, hygiene controls and safe shutdown / isolation procedures."
+    ]
+  },
+  "L210/220 Multi-Lube": {
+    family: "industrial",
+    docKey: "L210/220",
+    summary: "Multi-lube lubrication system for industrial lubrication applications."
+  },
+  "P400 Multi-Lube": {
+    family: "industrial",
+    docKey: "P400",
+    summary: "Multi-lube lubrication system for industrial lubrication applications."
+  },
+  "LEOXk": {
+    family: "industrial",
+    docKey: "LEOXk",
+    summary: "Electrostatic lubrication control system."
+  },
+  "LEOXk-HT": {
+    family: "industrial",
+    docKey: "LEOXk-HT",
+    summary: "High-temperature electrostatic lubrication control system."
+  },
+  "Lubrication system": {
+    family: "industrial",
+    docKey: "lubrication-generic",
+    summary: "General lubrication system installation / service application."
+  },
+  "PanelSpray forming line": {
+    family: "industrial",
+    docKey: "PanelSpray",
+    summary: "PanelSpray forming-line spray control system."
+  },
+  "F1850+": {
+    family: "food",
+    docKey: "F1850+",
+    summary: "Food-grade spray controller system."
+  },
+  "F2150+": {
+    family: "food",
+    docKey: "F2150+",
+    summary: "Food-grade spray controller system."
+  },
+  "F2850+": {
+    family: "food",
+    docKey: "F2850+",
+    summary: "Food-grade spray controller system."
+  }
+};
+
+const RAMS_TASK_METHODS = {
+  Installation: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm access, permits, welfare arrangements and local site rules before starting work.",
+    "Review the installation area and verify services, mounting positions, interfaces and safe access.",
+    "Unload, position and install the equipment/components in accordance with the agreed layout and system requirements.",
+    "Connect mechanical, electrical, pneumatic and process services as required for the scope of work.",
+    "Carry out checks on connections, fixings, alignment and general installation condition before energisation.",
+    "Reinstate the work area, remove packaging / waste and provide a handover update to the customer."
+  ],
+  Commissioning: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm safe access, permits, utilities and site readiness before commencing commissioning activities.",
+    "Inspect the installed system and verify that mechanical, electrical, pneumatic and process connections are complete and safe.",
+    "Carry out controlled energisation / start-up checks in line with safe isolation and commissioning procedures.",
+    "Set up, adjust and verify system parameters, control functions, interlocks and operating performance.",
+    "Test the system through the required operating sequence and record any faults, adjustments or outstanding issues.",
+    "Leave the system in a safe condition and provide a handover / update to the customer."
+  ],
+  Service: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm access, system status and any known issues before starting service work.",
+    "Isolate the system where required and carry out visual inspection, routine service and condition checks.",
+    "Inspect key components, services, controls and safety-related items for wear, damage or abnormal operation.",
+    "Clean, adjust or replace service items within the agreed scope where required.",
+    "Function test the system after service activities where safe and appropriate.",
+    "Leave the equipment in a safe condition and report findings / recommendations to the customer."
+  ],
+  Inspection: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm the inspection scope, safe access and system status before starting.",
+    "Carry out a visual and functional inspection of the relevant equipment, controls, utilities and installation condition.",
+    "Record observed defects, damage, missing items, unsafe conditions or non-conformances.",
+    "Where possible, verify key operating functions without exceeding the agreed inspection scope.",
+    "Document findings and advise the customer of any issues requiring corrective action.",
+    "Leave the system in a safe condition on completion of the inspection."
+  ],
+  Testing: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm test scope, utilities, materials and safe operating conditions before starting.",
+    "Prepare the system for controlled testing and verify that all relevant safety measures are in place.",
+    "Carry out the agreed functional / performance tests in a controlled manner.",
+    "Observe, record and assess test results, system responses and any deviations from expected operation.",
+    "Make minor adjustments within the agreed scope where required and re-test if appropriate.",
+    "Leave the equipment in a safe condition and communicate the outcome of testing to the customer."
+  ],
+  Training: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm attendees, training scope, safe working arrangements and access to the equipment.",
+    "Provide an overview of the system, intended operation, key controls and important safety requirements.",
+    "Demonstrate correct operation, checks, good working practice and any agreed maintenance points.",
+    "Allow attendees to observe and, where appropriate, participate under supervision.",
+    "Answer questions and clarify operating, safety and basic fault-response requirements.",
+    "Leave the system in a safe condition and confirm completion of the training session."
+  ],
+  Maintenance: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm maintenance scope, safe access and system status before work starts.",
+    "Apply isolation as required and carry out the planned maintenance activities.",
+    "Inspect, clean, adjust and replace maintenance items/components within the agreed scope.",
+    "Check associated controls, utilities and connections for safe continued operation.",
+    "Function test the system after maintenance where safe and appropriate.",
+    "Leave the equipment in a safe condition and advise the customer of any further actions required."
+  ],
+  Repair: [
+    "Attend site and report to the customer/site contact on arrival.",
+    "Confirm the reported fault, system condition and safe access before starting repair work.",
+    "Apply isolation as required and investigate the fault using safe diagnostic methods.",
+    "Repair or replace defective components/items within the agreed scope of work.",
+    "Inspect associated parts / connections to confirm the fault has been properly addressed.",
+    "Function test the repaired system where safe and appropriate.",
+    "Leave the equipment in a safe condition and advise the customer of the repair outcome and any further recommendations."
+  ]
+};
+
+function wireRamsSystemSummary() {
+  const type = document.getElementById("ramsSystemType");
+  const duration = document.getElementById("ramsVisitDuration");
+
+  const summary = document.getElementById("ramsSystemSummary");
+  const workScope = document.getElementById("ramsWorkScope");
+  const utilities = document.getElementById("ramsUtilities");
+  const hazards = document.getElementById("ramsHazards");
+  const controls = document.getElementById("ramsControls");
+  const ppe = document.getElementById("ramsPPE");
+  const isolation = document.getElementById("ramsIsolation");
+  const emergency = document.getElementById("ramsEmergency");
+  const competence = document.getElementById("ramsCompetence");
+  const siteNotes = document.getElementById("ramsSiteNotes");
+  const permits = document.getElementById("ramsPermits");
+  const tools = document.getElementById("ramsTools");
+  const methodStatement = document.getElementById("ramsMethodStatement");
+  const taskType = document.getElementById("ramsTaskType");
+  const plannedWorks = document.getElementById("ramsPlannedWorks");
+  const regenBtn = document.getElementById("regenRamsMethodBtn");
+
+  if (
+    !type || !duration || !summary || !workScope || !utilities ||
+    !hazards || !controls || !ppe || !isolation || !emergency ||
+    !competence || !taskType || !plannedWorks || !methodStatement || !regenBtn
+  ) return;
+
+  const autoFields = [
+    summary,
+    workScope,
+    utilities,
+    hazards,
+    controls,
+    ppe,
+    isolation,
+    emergency,
+    competence
+  ];
+
+  const growFields = [
+    ...autoFields,
+    plannedWorks,
+    siteNotes,
+    permits,
+    tools,
+    methodStatement
+  ].filter(Boolean);
+
+  function autoGrow(el) {
+    if (!el) return;
+    el.style.height = "auto";
+
+    const minHeight = parseInt(el.style.minHeight || "120", 10);
+    const target = Math.max(el.scrollHeight, isNaN(minHeight) ? 120 : minHeight);
+
+    el.style.height = target + "px";
+  }
+
+  autoFields.forEach(el => {
+    el.removeAttribute("readonly");
+  });
+
+  growFields.forEach(el => {
+    el.style.overflowY = "hidden";
+    el.addEventListener("input", () => autoGrow(el));
+  });
+
+  function refreshRamsSystemSummary() {
+    const selected = String(type.value || "").trim();
+    const visitDuration = String(duration.value || "").trim();
+    const details = RAMS_SYSTEM_DETAILS[selected];
+
+    const parts = [];
+
+    if (details?.summary) parts.push(details.summary);
+    if (visitDuration) parts.push(`Planned site duration: ${visitDuration}.`);
+
+    summary.value = parts.join("\n\n");
+    workScope.value = details?.scope || "";
+    utilities.value = Array.isArray(details?.utilities) ? details.utilities.join("\n") : "";
+    hazards.value = Array.isArray(details?.hazards) ? details.hazards.join("\n") : "";
+    controls.value = Array.isArray(details?.controls) ? details.controls.join("\n") : "";
+    ppe.value = Array.isArray(details?.ppe) ? details.ppe.join("\n") : "";
+    isolation.value = Array.isArray(details?.isolation) ? details.isolation.join("\n") : "";
+    emergency.value = Array.isArray(details?.emergency) ? details.emergency.join("\n") : "";
+    competence.value = Array.isArray(details?.competence) ? details.competence.join("\n") : "";
+
+    growFields.forEach(autoGrow);
+  }
+
+  function generateRamsMethodStatement() {
+    const selected = String(type.value || "").trim();
+    const visitDuration = String(duration.value || "").trim();
+    const selectedTaskType = String(taskType.value || "").trim();
+    const companyText = String(document.getElementById("ramsCompany")?.value || "").trim();
+    const contactNameText = String(document.getElementById("ramsContactName")?.value || "").trim();
+    const plannedWorksText = String(plannedWorks.value || "").trim();
+    const siteNotesText = String(siteNotes?.value || "").trim();
+    const permitsText = String(permits?.value || "").trim();
+    const toolsText = String(tools?.value || "").trim();
+    const details = RAMS_SYSTEM_DETAILS[selected];
+
+    const methodLines = [];
+
+    if (companyText) {
+      methodLines.push(`Customer / company: ${companyText}`);
+    }
+
+    if (contactNameText) {
+      methodLines.push(`Site contact: ${contactNameText}`);
+    }
+
+    if (selected) {
+      methodLines.push(`System: ${selected}`);
+    }
+
+    if (selectedTaskType) {
+      methodLines.push(`Task type: ${selectedTaskType}`);
+    }
+
+    if (visitDuration) {
+      methodLines.push(`Planned duration: ${visitDuration}`);
+    }
+
+    if (plannedWorksText) {
+      methodLines.push("");
+      methodLines.push("Planned works description:");
+      methodLines.push(plannedWorksText);
+    }
+
+    if (siteNotesText) {
+      methodLines.push("");
+      methodLines.push("Site-specific requirements / notes:");
+      methodLines.push(siteNotesText);
+    }
+
+    if (permitsText) {
+      methodLines.push("");
+      methodLines.push("Permits / site controls:");
+      methodLines.push(permitsText);
+    }
+
+    if (toolsText) {
+      methodLines.push("");
+      methodLines.push("Tools / equipment required:");
+      methodLines.push(toolsText);
+    }
+
+    if (details?.scope) {
+      methodLines.push("");
+      methodLines.push("Planned scope of works:");
+      methodLines.push(details.scope);
+    }
+
+    const safetyLines = [
+      ...(Array.isArray(details?.controls) ? details.controls.slice(0, 3) : []),
+      ...(Array.isArray(details?.isolation) ? details.isolation.slice(0, 2) : [])
+    ];
+
+    if (safetyLines.length) {
+      methodLines.push("");
+      methodLines.push("Critical safety requirements:");
+      safetyLines.forEach(line => methodLines.push(`- ${line}`));
+    }
+
+    const taskSteps = RAMS_TASK_METHODS[selectedTaskType] || [];
+    if (taskSteps.length) {
+      methodLines.push("");
+      methodLines.push("Method sequence:");
+      taskSteps.forEach((step, idx) => {
+        methodLines.push(`${idx + 1}. ${step}`);
+      });
+    }
+
+    methodStatement.value = methodLines.join("\n");
+    autoGrow(methodStatement);
+  }
+
+  type.addEventListener("change", refreshRamsSystemSummary);
+  duration.addEventListener("change", refreshRamsSystemSummary);
+  taskType.addEventListener("change", refreshRamsSystemSummary);
+  plannedWorks.addEventListener("input", refreshRamsSystemSummary);
+
+  regenBtn.addEventListener("click", generateRamsMethodStatement);
+
+  window.refreshRamsSystemSummary = refreshRamsSystemSummary;
+  window.generateRamsMethodStatement = generateRamsMethodStatement;
+}
 
 function wireRamsSalesEmailAutofill() {
   const ramsSales = document.getElementById("ramsSalesEngineer");
@@ -2890,6 +3450,7 @@ function switchDocumentType(docType) {
 
     setTimeout(() => {
       window.refreshRamsSystemTypes?.();
+      window.refreshRamsSystemSummary?.();
     }, 0);
 
   }
@@ -2921,6 +3482,10 @@ function updateDocumentView() {
     sprayabilityView.style.display = "";
   }
 }
+</script>
+
+
+<script>
 
 // ---- Follow-up checklist helper ----
 function getSelectedFollowUps() {
@@ -5967,12 +6532,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const clean = (name || "").trim();
 
     const hidden = document.getElementById("ramsCompanyHidden");
-    const gmpx   = document.getElementById("ramsCompany");
+    const input  = document.getElementById("ramsCompany");
+    const gmpx   = document.getElementById("ramsCompanyAuto");
 
     if (hidden) hidden.value = clean;
+    if (input) input.value = clean;
 
     try {
-      if (gmpx && clean) {
+      if (gmpx && typeof gmpx.setAttribute === "function") {
         gmpx.setAttribute("value", clean);
       }
     } catch {}
@@ -6001,39 +6568,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const ramsCompanyField = document.getElementById("ramsCompany");
+  const ramsCompanyField = document.getElementById("ramsCompanyAuto");
   if (ramsCompanyField) {
     ramsCompanyField.addEventListener("gmpx-placechange", (e) => {
       const place = e?.detail?.place;
-      if (!place) return;
-
       const companyName =
-        place.displayName ||
-        place.name ||
+        place?.displayName ||
+        place?.name ||
         "";
-
       setRamsCompanyName(companyName);
-
-      const ramsAddr1 = document.getElementById("ramsAddr1");
-      const ramsCity = document.getElementById("ramsCity");
-      const ramsRegion = document.getElementById("ramsRegion");
-      const ramsPostal = document.getElementById("ramsPostal");
-      const ramsCountry = document.getElementById("ramsCountry");
-
-      if (ramsAddr1) {
-        ramsAddr1.value = place.formattedAddress || "";
-      }
-
-      if (place.addressComponents) {
-        const comps = place.addressComponents;
-        const get = (type) =>
-          comps.find(c => c.types.includes(type))?.longText || "";
-
-        if (ramsCity) ramsCity.value = get("locality");
-        if (ramsRegion) ramsRegion.value = get("administrative_area_level_1");
-        if (ramsPostal) ramsPostal.value = get("postal_code");
-        if (ramsCountry) ramsCountry.value = get("country");
-      }
     });
   }
 
@@ -6089,6 +6632,57 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // run once on load
   sync();
+})();
+
+(function wireRamsCompanyMirror() {
+  const gmpx   = document.getElementById("ramsCompanyAuto");
+  const hidden = document.getElementById("ramsCompanyHidden");
+  const mirror = document.getElementById("ramsCompany");
+
+  function bestGuessRamsCompany() {
+    let v = (hidden?.value || "").trim() || (mirror?.value || "").trim();
+    if (v) return v;
+
+    if (gmpx) {
+      v = String(gmpx.value || gmpx.getAttribute?.("value") || "").trim();
+
+      if (!v) {
+        try { v = (gmpx.querySelector("input")?.value || "").trim(); } catch {}
+      }
+
+      if (!v) {
+        try { v = (gmpx.shadowRoot?.querySelector("input")?.value || "").trim(); } catch {}
+      }
+    }
+
+    return v;
+  }
+
+  function syncRams() {
+    const name = bestGuessRamsCompany();
+    if (name) setRamsCompanyName(name);
+  }
+
+  gmpx?.addEventListener("gmpx-placechange", syncRams);
+
+  function hookInnerInput() {
+    if (!gmpx) return;
+
+    const inp =
+      gmpx.querySelector("input") ||
+      gmpx.shadowRoot?.querySelector("input");
+
+    if (!inp) return;
+
+    inp.addEventListener("input", syncRams);
+    inp.addEventListener("blur", syncRams);
+  }
+
+  hookInnerInput();
+  setTimeout(hookInnerInput, 400);
+  setTimeout(hookInnerInput, 1200);
+
+  syncRams();
 })();
 
 
@@ -9731,6 +10325,7 @@ document.addEventListener("DOMContentLoaded", () => {
   
   wireRamsSystemTypeDropdown();
   wireRamsSalesEmailAutofill();
+  wireRamsSystemSummary();
 
   // ✅ Your actual modal IDs
   const clearModal  = document.getElementById("clearConfirmModal");
@@ -10252,7 +10847,8 @@ function fillAddress(place) {
 document.addEventListener("DOMContentLoaded", () => {
   const fields = [
     { id: "custCompany", type: "establishment", placeholder: "Company" },
-    { id: "addr1", type: "geocode", placeholder: "Address Line 1" }
+    { id: "addr1", type: "geocode", placeholder: "Address Line 1" },
+    { id: "ramsCompanyAuto", type: "establishment", placeholder: "Company" }
   ];
 
   fields.forEach(({ id, type, placeholder }) => {
@@ -10283,9 +10879,11 @@ document.addEventListener("DOMContentLoaded", () => {
         el.insertAdjacentElement("afterend", fallback);
         el.style.display = "none";
 
-        fallback.addEventListener("change", () => refreshCustomerHistory?.());
-        fallback.addEventListener("input", () => refreshCustomerHistory?.());
-        fallback.addEventListener("blur", () => refreshCustomerHistory?.());
+        if (id === "custCompany") {
+          fallback.addEventListener("change", () => refreshCustomerHistory?.());
+          fallback.addEventListener("input", () => refreshCustomerHistory?.());
+          fallback.addEventListener("blur", () => refreshCustomerHistory?.());
+        }
 
         const autocomplete = new google.maps.places.Autocomplete(fallback, {
           fields: ["address_components", "geometry", "name"],
@@ -10310,20 +10908,73 @@ document.addEventListener("DOMContentLoaded", () => {
               try { saveField(hiddenCompany); } catch {}
             }
 
+            setCompanyName(cleanName);
+            fillAddress(place);
+
             setTimeout(() => {
               refreshCustomerHistory?.();
             }, 50);
 
-          } else {
-            const addressParts = [];
-            if (place.address_components) {
-              place.address_components.forEach(c => {
-                if (c.types.includes("street_number")) addressParts.unshift(c.long_name);
-                if (c.types.includes("route")) addressParts.push(c.long_name);
-              });
-            }
-            fallback.value = addressParts.join(" ").trim();
+            return;
           }
+
+          if (id === "ramsCompanyAuto") {
+            const cleanName = (place.name || "")
+    				.replace(/,.*/g, "")
+    				.replace(/\s+\d+.*/, "")
+    				.trim();
+
+  				fallback.value = cleanName;
+  				setRamsCompanyName(cleanName);
+
+  				const parts = {
+    				streetNumber: "",
+    				route: "",
+    				locality: "",
+    				postalTown: "",
+    				admin1: "",
+    				postalCode: "",
+    				country: ""
+  				};
+
+  				(place.address_components || []).forEach(c => {
+    				if (c.types.includes("street_number")) parts.streetNumber = c.long_name;
+    				if (c.types.includes("route")) parts.route = c.long_name;
+    				if (c.types.includes("locality")) parts.locality = c.long_name;
+    				if (c.types.includes("postal_town")) parts.postalTown = c.long_name;
+    				if (c.types.includes("administrative_area_level_1")) parts.admin1 = c.long_name;
+    				if (c.types.includes("postal_code")) parts.postalCode = c.long_name;
+    				if (c.types.includes("country")) parts.country = c.long_name;
+  				});
+
+  				const addr1 = [parts.streetNumber, parts.route].filter(Boolean).join(" ").trim();
+  				const city = parts.locality || parts.postalTown || "";
+
+  				const ramsAddr1 = document.getElementById("ramsAddr1");
+  				const ramsAddr2 = document.getElementById("ramsAddr2");
+  				const ramsCity = document.getElementById("ramsCity");
+  				const ramsRegion = document.getElementById("ramsRegion");
+  				const ramsPostal = document.getElementById("ramsPostal");
+  				const ramsCountry = document.getElementById("ramsCountry");
+
+  				if (ramsAddr1) ramsAddr1.value = addr1;
+  				if (ramsAddr2 && !ramsAddr2.value) ramsAddr2.value = "";
+  				if (ramsCity) ramsCity.value = city;
+  				if (ramsRegion) ramsRegion.value = parts.admin1;
+  				if (ramsPostal) ramsPostal.value = parts.postalCode;
+  				if (ramsCountry) ramsCountry.value = parts.country;
+
+  				return;
+			}
+
+          const addressParts = [];
+          if (place.address_components) {
+            place.address_components.forEach(c => {
+              if (c.types.includes("street_number")) addressParts.unshift(c.long_name);
+              if (c.types.includes("route")) addressParts.push(c.long_name);
+            });
+          }
+          fallback.value = addressParts.join(" ").trim();
 
           fillAddress(place);
         });
