@@ -6547,6 +6547,9 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("ramsCompany", clean);
   }
 
+  window.setCompanyName = setCompanyName;
+  window.setRamsCompanyName = setRamsCompanyName;
+
   // Keep hidden/localStorage updated if user types (fallback input)
   const fallbackCompany = document.getElementById("custCompanyFallback");
   if (fallbackCompany) {
@@ -10886,7 +10889,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const autocomplete = new google.maps.places.Autocomplete(fallback, {
-          fields: ["address_components", "geometry", "name"],
+          fields: ["address_components", "geometry", "name", "place_id"],
           types: [type]
         });
 
@@ -10919,7 +10922,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           if (id === "ramsCompanyAuto") {
-            const cleanName = (place.name || "")
+  				const cleanName = (place.name || "")
     				.replace(/,.*/g, "")
     				.replace(/\s+\d+.*/, "")
     				.trim();
@@ -10927,42 +10930,56 @@ document.addEventListener("DOMContentLoaded", () => {
   				fallback.value = cleanName;
   				setRamsCompanyName(cleanName);
 
-  				const parts = {
-    				streetNumber: "",
-    				route: "",
-    				locality: "",
-    				postalTown: "",
-    				admin1: "",
-    				postalCode: "",
-    				country: ""
-  				};
+  				function applyRamsAddress(addressComponents) {
+    				const parts = {
+      				streetNumber: "",
+      				route: "",
+      				locality: "",
+      				postalTown: "",
+      				admin1: "",
+     	 				postalCode: "",
+      				country: ""
+    				};
 
-  				(place.address_components || []).forEach(c => {
-    				if (c.types.includes("street_number")) parts.streetNumber = c.long_name;
-    				if (c.types.includes("route")) parts.route = c.long_name;
-    				if (c.types.includes("locality")) parts.locality = c.long_name;
-    				if (c.types.includes("postal_town")) parts.postalTown = c.long_name;
-    				if (c.types.includes("administrative_area_level_1")) parts.admin1 = c.long_name;
-    				if (c.types.includes("postal_code")) parts.postalCode = c.long_name;
-    				if (c.types.includes("country")) parts.country = c.long_name;
-  				});
+    				(addressComponents || []).forEach(c => {
+      				if (c.types.includes("street_number")) parts.streetNumber = c.long_name;
+      				if (c.types.includes("route")) parts.route = c.long_name;
+      				if (c.types.includes("locality")) parts.locality = c.long_name;
+      				if (c.types.includes("postal_town")) parts.postalTown = c.long_name;
+      				if (c.types.includes("administrative_area_level_1")) parts.admin1 = c.long_name;
+      				if (c.types.includes("postal_code")) parts.postalCode = c.long_name;
+      				if (c.types.includes("country")) parts.country = c.long_name;
+    				});
 
-  				const addr1 = [parts.streetNumber, parts.route].filter(Boolean).join(" ").trim();
-  				const city = parts.locality || parts.postalTown || "";
+    				const addr1 = [parts.streetNumber, parts.route].filter(Boolean).join(" ").trim();
+    				const city = parts.locality || parts.postalTown || "";
 
-  				const ramsAddr1 = document.getElementById("ramsAddr1");
-  				const ramsAddr2 = document.getElementById("ramsAddr2");
-  				const ramsCity = document.getElementById("ramsCity");
-  				const ramsRegion = document.getElementById("ramsRegion");
-  				const ramsPostal = document.getElementById("ramsPostal");
-  				const ramsCountry = document.getElementById("ramsCountry");
+    				const ramsAddr1 = document.getElementById("ramsAddr1");
+    				const ramsCity = document.getElementById("ramsCity");
+    				const ramsRegion = document.getElementById("ramsRegion");
+    				const ramsPostal = document.getElementById("ramsPostal");
+    				const ramsCountry = document.getElementById("ramsCountry");
 
-  				if (ramsAddr1) ramsAddr1.value = addr1;
-  				if (ramsAddr2 && !ramsAddr2.value) ramsAddr2.value = "";
-  				if (ramsCity) ramsCity.value = city;
-  				if (ramsRegion) ramsRegion.value = parts.admin1;
-  				if (ramsPostal) ramsPostal.value = parts.postalCode;
-  				if (ramsCountry) ramsCountry.value = parts.country;
+    				if (ramsAddr1) ramsAddr1.value = addr1;
+    				if (ramsCity) ramsCity.value = city;
+    				if (ramsRegion) ramsRegion.value = parts.admin1;
+    				if (ramsPostal) ramsPostal.value = parts.postalCode;
+    				if (ramsCountry) ramsCountry.value = parts.country;
+  				}
+
+  				if (Array.isArray(place.address_components) && place.address_components.length) {
+    				applyRamsAddress(place.address_components);
+    				return;
+  				}
+
+  				if (place.place_id && google.maps.Geocoder) {
+    				const geocoder = new google.maps.Geocoder();
+    				geocoder.geocode({ placeId: place.place_id }, (results, status) => {
+      				if (status === "OK" && results && results[0] && results[0].address_components) {
+        				applyRamsAddress(results[0].address_components);
+      				}
+    				});
+  				}
 
   				return;
 			}
