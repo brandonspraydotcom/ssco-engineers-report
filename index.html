@@ -1730,7 +1730,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ">
          </gmpx-place-autocomplete>
 
-        <input id="ramsCompany" type="hidden">
+        <label for="ramsCompany">Company name (editable without address search)</label><input id="ramsCompany" type="text" placeholder="Customer / company">
         <input id="ramsCompanyHidden" type="hidden">
       </div>
 
@@ -1935,6 +1935,42 @@ document.addEventListener("DOMContentLoaded", () => {
                 style="min-height:180px;"></textarea>
     </div>
 
+
+    <h3>Document details</h3>
+    <div class="row">
+      <div><label for="ramsProject">Project title</label><input id="ramsProject" placeholder="Site works / project"></div>
+      <div><label for="ramsReference">Document reference</label><input id="ramsReference" placeholder="RAMS reference"></div>
+      <div><label for="ramsRevision">Revision</label><input id="ramsRevision" value="1.0"></div>
+    </div>
+    <h3>Risk assessment</h3>
+    <p>Assess the hazards relevant to this job. Template entries are starting points; record who may be harmed, site controls and any further actions. Residual risk starts as unassessed.</p>
+    <div id="ramsRiskRows"></div>
+    <button type="button" class="btn ghost" id="ramsAddRisk">+ Add hazard</button>
+    <button type="button" class="btn ghost" id="ramsTemplateRisks">Add template hazards</button>
+    <h3>Site arrangements</h3>
+    <label for="ramsIndustryControls">Industry-specific controls</label><textarea id="ramsIndustryControls" placeholder="Applicable hygiene, contamination, process and hazardous-area requirements"></textarea>
+    <label for="ramsEnvironment">Environmental considerations</label><textarea id="ramsEnvironment" placeholder="Site-specific spill containment, drains, waste segregation and disposal arrangements"></textarea>
+    <div class="row">
+      <div><label for="ramsEmergencyContact">Emergency contact and telephone</label><input id="ramsEmergencyContact"></div>
+      <div><label for="ramsAssemblyPoint">Evacuation assembly point</label><input id="ramsAssemblyPoint"></div>
+      <div><label for="ramsFirstAid">First aid / medical arrangements</label><input id="ramsFirstAid"></div>
+    </div>
+    <h3>Review and sign-off</h3>
+    <p>The export is a draft for review. Signature spaces are included for completion after review.</p>
+    <div class="row">
+      <div><label for="ramsReviewer">Reviewer name</label><input id="ramsReviewer"></div>
+      <div><label for="ramsReviewDate">Review date</label><input id="ramsReviewDate" type="date"></div>
+      <div><label for="ramsClientRep">Client representative</label><input id="ramsClientRep"></div>
+    </div>
+    <p id="ramsDraftStatus" role="status" aria-live="polite"></p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:20px">
+      <button type="button" class="btn" id="ramsPreview">Preview / Print PDF</button>
+      <button type="button" class="btn ghost" id="ramsSaveDraft">Save draft</button>
+      <button type="button" class="btn ghost" id="ramsBackup">Download draft backup</button>
+      <button type="button" class="btn ghost" id="ramsImport">Restore backup</button>
+      <button type="button" class="btn remove" id="ramsNew">New RAMS</button>
+    </div>
+    <input id="ramsImportFile" type="file" accept=".json,application/json" hidden>
   </div>
 </div>
 
@@ -3236,6 +3272,13 @@ function wireRamsSystemSummary() {
     el.addEventListener("input", () => autoGrow(el));
   });
 
+  function applyDefault(field, value) {
+    if (!field.value || (field.dataset.ramsAuto !== undefined && field.value === field.dataset.ramsAuto)) {
+      field.value = value;
+      field.dataset.ramsAuto = value;
+    }
+  }
+
   function refreshRamsSystemSummary() {
     const selected = String(type.value || "").trim();
     const visitDuration = String(duration.value || "").trim();
@@ -3246,15 +3289,15 @@ function wireRamsSystemSummary() {
     if (details?.summary) parts.push(details.summary);
     if (visitDuration) parts.push(`Planned site duration: ${visitDuration}.`);
 
-    summary.value = parts.join("\n\n");
-    workScope.value = details?.scope || "";
-    utilities.value = Array.isArray(details?.utilities) ? details.utilities.join("\n") : "";
-    hazards.value = Array.isArray(details?.hazards) ? details.hazards.join("\n") : "";
-    controls.value = Array.isArray(details?.controls) ? details.controls.join("\n") : "";
-    ppe.value = Array.isArray(details?.ppe) ? details.ppe.join("\n") : "";
-    isolation.value = Array.isArray(details?.isolation) ? details.isolation.join("\n") : "";
-    emergency.value = Array.isArray(details?.emergency) ? details.emergency.join("\n") : "";
-    competence.value = Array.isArray(details?.competence) ? details.competence.join("\n") : "";
+    applyDefault(summary, parts.join("\n\n"));
+    applyDefault(workScope, details?.scope || "");
+    applyDefault(utilities, Array.isArray(details?.utilities) ? details.utilities.join("\n") : "");
+    applyDefault(hazards, Array.isArray(details?.hazards) ? details.hazards.join("\n") : "");
+    applyDefault(controls, Array.isArray(details?.controls) ? details.controls.join("\n") : "");
+    applyDefault(ppe, Array.isArray(details?.ppe) ? details.ppe.join("\n") : "");
+    applyDefault(isolation, Array.isArray(details?.isolation) ? details.isolation.join("\n") : "");
+    applyDefault(emergency, Array.isArray(details?.emergency) ? details.emergency.join("\n") : "");
+    applyDefault(competence, Array.isArray(details?.competence) ? details.competence.join("\n") : "");
 
     growFields.forEach(autoGrow);
   }
@@ -3317,15 +3360,15 @@ function wireRamsSystemSummary() {
       methodLines.push(toolsText);
     }
 
-    if (details?.scope) {
+    if (workScope.value.trim()) {
       methodLines.push("");
       methodLines.push("Planned scope of works:");
-      methodLines.push(details.scope);
+      methodLines.push(workScope.value.trim());
     }
 
     const safetyLines = [
-      ...(Array.isArray(details?.controls) ? details.controls.slice(0, 3) : []),
-      ...(Array.isArray(details?.isolation) ? details.isolation.slice(0, 2) : [])
+      ...controls.value.split("\n").filter(Boolean),
+      ...isolation.value.split("\n").filter(Boolean)
     ];
 
     if (safetyLines.length) {
@@ -3343,14 +3386,15 @@ function wireRamsSystemSummary() {
       });
     }
 
+    if (methodStatement.value.trim() && !confirm("Replace the current method statement with a new generated draft?")) return;
     methodStatement.value = methodLines.join("\n");
+    methodStatement.dispatchEvent(new Event("input", { bubbles: true }));
     autoGrow(methodStatement);
   }
 
   type.addEventListener("change", refreshRamsSystemSummary);
   duration.addEventListener("change", refreshRamsSystemSummary);
-  taskType.addEventListener("change", refreshRamsSystemSummary);
-  plannedWorks.addEventListener("input", refreshRamsSystemSummary);
+
 
   regenBtn.addEventListener("click", generateRamsMethodStatement);
 
@@ -3391,6 +3435,7 @@ function wireRamsSystemTypeDropdown() {
 
   window.refreshRamsSystemTypes = function refreshRamsSystemTypes() {
     const selected = String(category.value || "").trim().toLowerCase();
+    const previous = type.value;
     const options = RAMS_SYSTEMS[selected] || [];
 
     if (!options.length) {
@@ -3401,9 +3446,10 @@ function wireRamsSystemTypeDropdown() {
     type.innerHTML =
       `<option value="">-- Select --</option>` +
       options.map(v => `<option value="${v}">${v}</option>`).join("");
+    if (options.includes(previous)) type.value = previous;
   };
 
-  category.addEventListener("change", window.refreshRamsSystemTypes);
+  category.addEventListener("change", () => { window.refreshRamsSystemTypes(); window.refreshRamsSystemSummary?.(); });
   category.addEventListener("input", window.refreshRamsSystemTypes);
 
   window.refreshRamsSystemTypes();
@@ -3443,10 +3489,6 @@ function switchDocumentType(docType) {
 
   if (docType === DOC_TYPES.RAMS) {
     
-    const ramsSales = document.getElementById("ramsSalesEngineer");
-    if (ramsSales) {
-      ramsSales.dispatchEvent(new Event("change"));
-    }
 
     setTimeout(() => {
       window.refreshRamsSystemTypes?.();
@@ -6458,12 +6500,13 @@ async function buildPdf(existingWindow = null) {
 /* ---------- Auto-Save + Restore Form Data ---------- */
 
 function saveField(el) {
+  if (el.closest("#ramsView")) return;
   localStorage.setItem(el.id, el.value);
 }
 
 function restoreFields() {
   document.querySelectorAll("input, textarea, select").forEach(el => {
-    if (el.id && localStorage.getItem(el.id)) {
+    if (!el.closest("#ramsView") && el.id && localStorage.getItem(el.id)) {
       el.value = localStorage.getItem(el.id);
     }
   });
@@ -7288,6 +7331,7 @@ testToggle?.addEventListener('change', e => {
 
     // Clear all inputs & textareas
     document.querySelectorAll('input, textarea').forEach(el => {
+      if (el.closest('#ramsView')) return;
       if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
       else el.value = '';
     });
@@ -10410,7 +10454,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ]);
 
         Object.keys(localStorage).forEach(k => {
-          if (!KEEP.has(k)) localStorage.removeItem(k);
+          if (!KEEP.has(k) && !k.startsWith("rams") && !k.startsWith("ssco_rams")) localStorage.removeItem(k);
         });
 
         // ✅ Reset active report edit session
@@ -10422,7 +10466,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // 1️⃣ Clear all fields properly
         document.querySelectorAll("input, textarea, select").forEach(el => {
-          if (["button", "submit", "file"].includes(el.type)) return;
+          if (el.closest("#ramsView") || ["button", "submit", "file"].includes(el.type)) return;
 
           if (el.type === "checkbox" || el.type === "radio") {
             el.checked = false;
@@ -11662,8 +11706,10 @@ async function refreshPeopleDropdowns() {
   populateSelect("engineer", engineers, loggedFullName || "Brandon Phelps");
   populateSelect("salesName", sales, sales[0] || "");
 
-  populateSelect("ramsEngineer", engineers, loggedFullName || "Brandon Phelps");
-  populateSelect("ramsSalesEngineer", sales, sales[0] || "");
+  const ramsEng = document.getElementById("ramsEngineer")?.value;
+  const ramsSales = document.getElementById("ramsSalesEngineer")?.value;
+  populateSelect("ramsEngineer", [...new Set([...engineers, ramsEng].filter(Boolean))], ramsEng || loggedFullName || "Brandon Phelps");
+  populateSelect("ramsSalesEngineer", [...new Set([...sales, ramsSales].filter(Boolean))], ramsSales || sales[0] || "");
 
   if (engSelect && loggedFullName) {
     if (engineers.includes(loggedFullName)) {
@@ -15031,6 +15077,228 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 })();
+</script>
+
+
+<script>
+const RAMS_TEMPLATE_RISKS = [{"hazard": "Manual handling of equipment", "harm": "Strain, injury", "industry": "All", "controls": "Team lifts, handling aids, training"}, {"hazard": "Electrical work", "harm": "Shock, arc flash", "industry": "All", "controls": "LOTO procedures, qualified staff only, use of insulated tools"}, {"hazard": "Compressed air release", "harm": "Injury, noise", "industry": "All", "controls": "Pressure testing, proper fittings, PPE"}, {"hazard": "Fluid leaks or spills", "harm": "Slip hazard, contamination", "industry": "Food, Pharma", "controls": "Secondary containment, hygienic design, spill kits"}, {"hazard": "Chemical spray exposure", "harm": "Irritation, inhalation risk", "industry": "All, especially pharma", "controls": "Respirators, splash guards, extraction systems"}, {"hazard": "Contamination (product area)", "harm": "Product recall, shutdown", "industry": "Food, Pharma", "controls": "Cleanroom practices, hygienic installation, material certificates (e.g. FDA, 3-A)"}, {"hazard": "Equipment incompatibility", "harm": "Downtime, rework", "industry": "All", "controls": "Pre-install verification, equipment spec matching"}, {"hazard": "Noise from air spray", "harm": "Hearing damage", "industry": "Automotive, General Mfg", "controls": "Ear protection, soundproofing if required"}, {"hazard": "Trip hazards (hoses, cables)", "harm": "Injury", "industry": "All", "controls": "Cable trays, clear walkways, cable covers"}, {"hazard": "Sharp edges or tools", "harm": "Cuts", "industry": "All", "controls": "Gloves, tool training, inspections"}, {"hazard": "ATEX/hazardous zone violations", "harm": "Explosion, fire", "industry": "Pharma, Chemical", "controls": "Use of certified ATEX-rated equipment, zoning plan, gas monitoring"}, {"hazard": "Inadequate documentation", "harm": "Misuse or damage", "industry": "All", "controls": "Provide manuals, training, commissioning reports"}];
+// RAMS workflow v1 — independent from the engineer report.
+document.addEventListener("DOMContentLoaded", () => {
+  const root = document.getElementById("ramsView");
+  const $ = id => document.getElementById(id);
+  const key = "ssco_rams_draft_v1";
+  const fields = () => [...root.querySelectorAll("input[id],select[id],textarea[id]")]
+    .filter(el => el.type !== "file");
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const columns = [
+    ["hazard","Hazard"],["harm","Risk / potential harm"],["people","People affected"],
+    ["industry","Industry / area"],["controls","Controls"],
+    ["actions","Further actions, owner and deadline"],["residual","Residual risk"]
+  ];
+  let restoring = false;
+  let saveTimer;
+  const status = text => { $("ramsDraftStatus").textContent = text; };
+  function addRisk(data = {}) {
+    const card = document.createElement("fieldset");
+    card.style.cssText = "margin:16px 0;padding:16px;border:1px solid #777;border-radius:12px;min-width:0";
+    const legend = document.createElement("legend");
+    legend.textContent = "Hazard assessment";
+    card.append(legend);
+    columns.forEach(([name, label]) => {
+      const wrap = document.createElement("label");
+      wrap.style.display = "block";
+      wrap.textContent = label;
+      const input = document.createElement(name === "residual" ? "select" : "textarea");
+      input.dataset.riskField = name;
+      input.style.cssText = "width:100%;box-sizing:border-box;min-height:46px";
+      if (name === "residual") {
+        ["Unassessed","Low","Medium","High"].forEach(v => input.add(new Option(v,v)));
+      } else input.rows = 2;
+      input.value = data[name] || (name === "residual" ? "Unassessed" : "");
+      wrap.append(input); card.append(wrap);
+    });
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "btn remove"; remove.textContent = "Remove hazard";
+    remove.addEventListener("click", () => {
+      if (!confirm("Remove this hazard assessment?")) return;
+      card.remove(); save();
+    });
+    card.append(remove); $("ramsRiskRows").append(card);
+  }
+  function collect() {
+    const values = {}, defaults = {};
+    fields().forEach(el => {
+      values[el.id] = el.value;
+      if (el.dataset.ramsAuto !== undefined) defaults[el.id] = el.dataset.ramsAuto;
+    });
+    const risks = [...$("ramsRiskRows").children].map(row =>
+      Object.fromEntries([...row.querySelectorAll("[data-risk-field]")].map(el => [el.dataset.riskField,el.value])));
+    return { kind:"ssco-rams", version:1, savedAt:new Date().toISOString(), fields:values, defaults, risks };
+  }
+  function save() {
+    if (restoring) return;
+    clearTimeout(saveTimer);
+    try {
+      localStorage.setItem(key,JSON.stringify(collect()));
+      status("Draft saved on this device at " + new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}) + ".");
+      return true;
+    } catch {
+      status("Draft could not be saved on this device. Download a backup to keep your work.");
+      return false;
+    }
+  }
+  function validate(data) {
+    if (!data || data.kind !== "ssco-rams" || data.version !== 1 ||
+        !data.fields || typeof data.fields !== "object" || Array.isArray(data.fields) ||
+        !Array.isArray(data.risks) || data.risks.length > 200)
+      throw Error("This is not a supported RAMS backup.");
+    if (Object.values(data.fields).some(v => typeof v !== "string"))
+      throw Error("Invalid field values.");
+    if (data.defaults && (typeof data.defaults !== "object" ||
+        Object.values(data.defaults).some(v => typeof v !== "string"))) throw Error("Invalid defaults.");
+    data.risks.forEach(row => {
+      if (!row || typeof row !== "object" || columns.some(([name]) => typeof row[name] !== "string") ||
+          !["Unassessed","Low","Medium","High"].includes(row.residual)) throw Error("Invalid hazard assessment.");
+    });
+  }
+  function restore(data) {
+    validate(data);
+    restoring = true;
+    try {
+      $("ramsSystemCategory").value = data.fields.ramsSystemCategory || "";
+      window.refreshRamsSystemTypes?.();
+      fields().forEach(el => {
+        const value = data.fields[el.id] || "";
+        if (el.tagName === "SELECT" && ["ramsEngineer","ramsSalesEngineer"].includes(el.id) &&
+            value && ![...el.options].some(o => o.value === value)) el.add(new Option(value,value));
+        el.value = value;
+        delete el.dataset.ramsAuto;
+        if (typeof data.defaults?.[el.id] === "string") el.dataset.ramsAuto = data.defaults[el.id];
+      });
+      $("ramsRiskRows").replaceChildren();
+      data.risks.forEach(addRisk);
+      // Keep the address-search mirror in step with the editable company field.
+      $("ramsCompanyHidden").value = $("ramsCompany").value;
+      const search = $("ramsCompanyAuto");
+      if (search) search.value = $("ramsCompany").value;
+      root.querySelectorAll("textarea[id]").forEach(el => {
+        el.style.height = "auto";
+        el.style.height = Math.max(110,el.scrollHeight) + "px";
+      });
+    } finally { restoring = false; }
+  }
+  root.addEventListener("input", () => { clearTimeout(saveTimer); saveTimer = setTimeout(save,300); });
+  root.addEventListener("change", save);
+  $("ramsCompanyAuto")?.addEventListener("gmpx-placechange", () => setTimeout(save,0));
+  $("ramsCompany").addEventListener("input", () => {
+    $("ramsCompanyHidden").value = $("ramsCompany").value;
+  });
+  $("ramsSaveDraft").addEventListener("click",save);
+  $("ramsAddRisk").addEventListener("click", () => { addRisk(); save(); });
+  $("ramsTemplateRisks").addEventListener("click", () => {
+    const existing = new Set(collect().risks.map(r => r.hazard));
+    RAMS_TEMPLATE_RISKS.forEach(row => {
+      if (!existing.has(row.hazard)) addRisk({...row, people:"", actions:"", residual:"Unassessed"});
+    });
+    save();
+  });
+  $("ramsBackup").addEventListener("click", () => {
+    save();
+    const blob = new Blob([JSON.stringify(collect(),null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = "RAMS-draft-" + new Date().toISOString().slice(0,10) + ".json";
+    link.click(); setTimeout(() => URL.revokeObjectURL(url),30000);
+  });
+  $("ramsImport").addEventListener("click", () => $("ramsImportFile").click());
+  $("ramsImportFile").addEventListener("change",async event => {
+    const file = event.target.files[0]; if (!file) return;
+    try {
+      if (file.size > 5 * 1024 * 1024) throw Error("Backup exceeds 5 MB.");
+      const data = JSON.parse(await file.text()); validate(data);
+      if (!confirm("Replace the current RAMS draft with this backup?")) return;
+      restore(data); save();
+    } catch(error) { status("Could not restore backup: " + error.message); }
+    finally { event.target.value = ""; }
+  });
+  $("ramsNew").addEventListener("click", () => {
+    if (!confirm("Clear this RAMS draft and start a new one? Download a backup first if you need to retain it.")) return;
+    restore({kind:"ssco-rams",version:1,fields:{ramsRevision:"1.0"},risks:[]});
+    // Remove the legacy company value so it cannot return after a reload.
+    localStorage.removeItem("ramsCompany");
+    save();
+  });
+  function previewHTML(data) {
+    const f = data.fields;
+    const value = id => esc(f[id]?.trim() || "Not entered");
+    const section = (heading, ids) => "<h2>" + heading + "</h2>" + ids.map(([label,id]) =>
+      "<h3>" + label + "</h3><div class='text'>" + value(id) + "</div>").join("");
+    const details = [
+      ["Company","Spraying Systems UK Ltd"],["Project",f.ramsProject],["Reference",f.ramsReference],
+      ["Revision",f.ramsRevision],["Client",f.ramsCompany],
+      ["Location",["ramsAddr1","ramsAddr2","ramsCity","ramsRegion","ramsPostal","ramsCountry"].map(id=>f[id]).filter(Boolean).join(", ")],
+      ["Visit date",f.ramsVisitDate],["Duration",f.ramsVisitDuration],["Prepared by",f.ramsEngineer],
+      ["Site contact",f.ramsContactName],["Contact email",f.ramsContactEmail],
+      ["Sales engineer",f.ramsSalesEngineer],["Sales email",f.ramsSalesEmail],
+      ["System category",f.ramsSystemCategory],["System",f.ramsSystemType],["Task type",f.ramsTaskType]
+    ];
+    const risks = data.risks.map((r,i) => "<article><h3>" + (i+1) + ". " + esc(r.hazard || "Hazard not entered") +
+      "</h3><table>" + columns.slice(1).map(([name,label])=>"<tr><th>"+label+"</th><td class='text'>"+
+      esc(r[name] || "Not entered")+"</td></tr>").join("") + "</table></article>").join("");
+    const missing = ["ramsCompany","ramsVisitDate","ramsEngineer","ramsPlannedWorks","ramsMethodStatement",
+      "ramsEmergencyContact","ramsAssemblyPoint"].filter(id=>!f[id]?.trim()).length;
+    const incompleteRisks = data.risks.filter(r => r.residual === "Unassessed" ||
+      ["hazard","harm","people","controls"].some(name=>!r[name].trim())).length;
+    return "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"+
+      "<title>RAMS - "+esc(f.ramsCompany || "Draft")+"</title><style>"+
+      "*{box-sizing:border-box}body{font:11pt Arial,sans-serif;color:#18222a;max-width:190mm;margin:20px auto;padding:12px;line-height:1.45}"+
+      "h1{font-size:23pt;margin:0 0 6px}h2{font-size:16pt;border-bottom:2px solid #18733a;margin-top:26px;padding-bottom:5px;break-after:avoid}"+
+      "h3{font-size:11pt;margin:14px 0 5px;break-after:avoid}.text{white-space:pre-wrap;overflow-wrap:anywhere}"+
+      "table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd1d6;padding:8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}"+
+      "th{width:30%;background:#eef3ef}tr{break-inside:avoid}.banner{padding:12px;border:1px solid #b78117;background:#fff8e8;margin:16px 0}"+
+      "button{padding:12px 20px;cursor:pointer}.sign{margin:24px 0;padding:16px;border:1px solid #777;break-inside:avoid}"+
+      "@page{size:A4;margin:15mm}@media print{body{padding:0;margin:0;max-width:none}.toolbar{display:none}}"+
+      "</style></head><body><div class='toolbar'><button onclick='window.print()'>Print / Save as PDF</button><p>Use your browser’s print or share options to save a PDF.</p></div>"+
+      "<h1>Risk Assessment and Method Statement</h1><p>Spraying Systems UK Ltd</p>"+
+      "<div class='banner'><strong>DRAFT — FOR SITE-SPECIFIC REVIEW</strong><br>"+
+      (missing ? missing+" key job / emergency fields not entered. " : "")+
+      (!data.risks.length ? "No hazard assessments entered. " : incompleteRisks+" hazard assessments incomplete or unassessed. ")+
+      "Confirm the work, hazards and controls with the responsible persons before authorisation.</div>"+
+      "<h2>1. Job details</h2><table>"+details.map(([label,text])=>"<tr><th>"+label+"</th><td>"+esc(text||"Not entered")+"</td></tr>").join("")+"</table>"+
+      section("2. Scope of work",[["Planned works","ramsPlannedWorks"],["System summary","ramsSystemSummary"],["Scope","ramsWorkScope"],["Utilities","ramsUtilities"]])+
+      section("3. Method statement",[["Work sequence","ramsMethodStatement"],["Isolation","ramsIsolation"],["Permits","ramsPermits"],["Tools and equipment","ramsTools"],["Competence","ramsCompetence"]])+
+      "<h2>4. Risk assessment</h2>"+(risks||"<p>No hazard assessments entered.</p>")+
+      section("Additional hazard information",[["System hazards","ramsHazards"],["System controls","ramsControls"]])+
+      section("5. Industry-specific controls",[["Controls","ramsIndustryControls"],["Site notes","ramsSiteNotes"]])+
+      section("6. PPE requirements",[["PPE","ramsPPE"]])+
+      section("7. Emergency procedures",[["Procedures","ramsEmergency"],["Emergency contact","ramsEmergencyContact"],["Assembly point","ramsAssemblyPoint"],["First aid / medical arrangements","ramsFirstAid"]])+
+      section("8. Environmental considerations",[["Environmental controls","ramsEnvironment"]])+
+      "<h2>9. Review and sign-off</h2><p>Review date: "+value("ramsReviewDate")+"</p>"+
+      [["Prepared by","ramsEngineer"],["Reviewed by","ramsReviewer"],["Client representative","ramsClientRep"]].map(([label,id])=>
+        "<div class='sign'>"+label+": "+value(id)+"<br><br>Signature: _________________________ &nbsp; Date: ______________</div>").join("")+
+      "<p>Draft generated "+esc(new Date(data.savedAt).toLocaleString())+". Typed names are not signatures.</p></body></html>";
+  }
+  $("ramsPreview").addEventListener("click", () => {
+    save();
+    const preview = window.open("","_blank");
+    if (!preview) { status("Preview was blocked. Allow pop-ups for this site, then try again."); return; }
+    preview.opener = null;
+    preview.document.open(); preview.document.write(previewHTML(collect())); preview.document.close();
+  });
+  // Initialise after the existing RAMS setup. Preserve legacy drafts on migration.
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) { restore(JSON.parse(raw)); status("Saved RAMS draft restored."); }
+    else {
+      const data = collect();
+      fields().forEach(el => { const old = localStorage.getItem(el.id); if (old !== null) data.fields[el.id] = old; });
+      restore(data); status("RAMS draft ready. Changes are saved on this device.");
+    }
+  } catch { status("Saved RAMS draft could not be restored. Restore a downloaded backup if available."); }
+  document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+  window.addEventListener("pagehide", save);
+});
+
 </script>
 
 </body>
